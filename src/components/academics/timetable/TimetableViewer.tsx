@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useEffect, useState } from 'react';
-import { toast } from 'sonner';
 import { FormField } from '@/components/ui/FormField';
+import { LoadError } from '@/components/ui/LoadError';
 import { LookupSelect, SearchableSelect } from '@/components/ops/SearchableSelect';
 import { useOpsList } from '@/hooks/useOpsList';
 import { errorText, opsFetch } from '@/lib/ops/client';
@@ -17,18 +17,26 @@ import { timetablePdfUrl } from '@/lib/timetable/pdf-url';
 export function TimetableViewer({ canBrowse }: { canBrowse: boolean }) {
     const [view, setView] = useState<View>('mine');
     const [targetId, setTargetId] = useState('');
-    const [data, setData] = useState<ViewResult | null>(null);
+    // Results are kept with the timetable they answer, so switching shows a
+    // placeholder rather than the previous timetable, and a failure shows a retry
+    // rather than a placeholder that never ends.
+    const query = `${view}:${targetId}`;
+    const [result, setResult] = useState<{ query: string; data?: ViewResult; error?: string } | null>(null);
+    const [attempt, setAttempt] = useState(0);
+    const data = result?.query === query ? result.data ?? null : null;
+    const loadError = result?.query === query ? result.error ?? null : null;
     const rooms = useOpsList<{ id: string; name: string }>('rooms', {}, { enabled: canBrowse && view === 'room' });
 
     useEffect(() => {
         if (view !== 'mine' && !targetId) return;
         const q = new URLSearchParams({ view, ...(targetId ? { id: targetId } : {}) });
+        const key = `${view}:${targetId}`;
         let live = true;
         opsFetch<ViewResult>(`/api/academics/timetable/view?${q}`)
-            .then(r => { if (live) setData(r); })
-            .catch(err => toast.error(errorText(err)));
+            .then(r => { if (live) setResult({ query: key, data: r }); })
+            .catch(err => { if (live) setResult({ query: key, error: errorText(err) }); });
         return () => { live = false; };
-    }, [view, targetId]);
+    }, [view, targetId, attempt]);
 
     const summary = data && data.lessons.length > 0 ? weekSummary(data.lessons) : null;
 
@@ -67,7 +75,9 @@ export function TimetableViewer({ canBrowse }: { canBrowse: boolean }) {
                     </div>
                 </div>
             </section>
-            {!data ? (
+            {loadError ? (
+                <LoadError title="The timetable did not load" message={loadError} onRetry={() => { setResult(null); setAttempt(n => n + 1); }} />
+            ) : !data ? (
                 view !== 'mine' && !targetId
                     ? <p className="rounded-2xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">Choose a {view} to see its week.</p>
                     : <div className="skeleton-bone h-72 rounded-2xl" />

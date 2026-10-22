@@ -2,8 +2,9 @@
 
 import React, { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { Target, Plus, Trash2, CheckCircle2, Circle } from 'lucide-react';
+import { Target, Plus, Trash2, CheckCircle2, Circle, RotateCcw } from 'lucide-react';
 import { Modal } from '@/components/ui';
+import { ConfirmDialog } from '@/components/ui/Modal';
 import EmptyState from '@/components/dashboard/EmptyState';
 
 interface Goal {
@@ -37,6 +38,8 @@ export default function StudyGoalsCard() {
     const [goals, setGoals] = useState<Goal[]>([]);
     const [subjects, setSubjects] = useState<SubjectOption[]>([]);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState(false);
+    const [confirmDelete, setConfirmDelete] = useState<Goal | null>(null);
     const [modalOpen, setModalOpen] = useState(false);
     const [saving, setSaving] = useState(false);
 
@@ -45,14 +48,33 @@ export default function StudyGoalsCard() {
     const [targetValue, setTargetValue] = useState('');
     const [deadline, setDeadline] = useState('');
 
+    // A failed load is not "No goals yet".
     const fetchGoals = () => {
-        fetch('/api/school/student/goals').then(r => r.json()).then(j => setGoals(j.data || [])).catch(() => {}).finally(() => setLoading(false));
+        fetch('/api/school/student/goals')
+            .then(async r => {
+                const j: { data?: Goal[] } = await r.json().catch(() => ({}));
+                if (!r.ok) throw new Error(String(r.status));
+                setGoals(j.data || []);
+                setLoadError(false);
+            })
+            .catch(() => setLoadError(true))
+            .finally(() => setLoading(false));
     };
 
-    useEffect(() => {
-        fetchGoals();
-        fetch('/api/school/student/subjects').then(r => r.json()).then(j => setSubjects((j.data || []).map((s: { id: string; name: string }) => ({ id: s.id, name: s.name })))).catch(() => {});
-    }, []);
+    useEffect(() => { fetchGoals(); }, []);
+
+    // The subject list is only for the "New goal" form: fetch it when the form
+    // opens, not with every page that shows this card.
+    const subjectsRequested = React.useRef(false);
+    const openNewGoal = () => {
+        setModalOpen(true);
+        if (subjectsRequested.current) return;
+        subjectsRequested.current = true;
+        fetch('/api/school/student/subjects')
+            .then(r => r.json())
+            .then(j => setSubjects((j.data || []).map((s: { id: string; name: string }) => ({ id: s.id, name: s.name }))))
+            .catch(() => { subjectsRequested.current = false; });
+    };
 
     const resetForm = () => {
         setTitle('');
@@ -126,8 +148,9 @@ export default function StudyGoalsCard() {
                     <h3 className="text-[15px] font-semibold text-foreground">Study Goals</h3>
                 </div>
                 <button
-                    onClick={() => setModalOpen(true)}
-                    className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border bg-muted px-2.5 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-muted/70"
+                    type="button"
+                    onClick={openNewGoal}
+                    className="inline-flex h-9 shrink-0 items-center gap-1 rounded-lg border border-border bg-muted px-3 text-xs font-semibold text-primary transition-colors hover:bg-muted/70"
                 >
                     <Plus size={14} /> Add
                 </button>
@@ -137,6 +160,13 @@ export default function StudyGoalsCard() {
                 <div className="flex flex-col gap-2">
                     {[1, 2].map(i => <div key={i} className="skeleton-bone h-10 rounded-lg" />)}
                 </div>
+            ) : loadError ? (
+                <div role="alert" className="flex flex-col items-start gap-2 rounded-lg border border-dashed border-border p-3 text-sm">
+                    <p className="text-muted-foreground">Your goals did not load.</p>
+                    <button type="button" className="btn-secondary h-9 text-xs" onClick={() => { setLoading(true); fetchGoals(); }}>
+                        <RotateCcw className="size-3.5" aria-hidden="true" />Try again
+                    </button>
+                </div>
             ) : goals.length === 0 ? (
                 <EmptyState icon={<Target className="h-6 w-6" />} title="No goals yet" description="Set a personal target to stay on track this term." />
             ) : (
@@ -144,24 +174,45 @@ export default function StudyGoalsCard() {
                     {goals.map((goal) => {
                         const deadlineLabel = getDeadlineLabel(goal.deadline);
                         return (
-                            <div key={goal.id} className={`flex items-center gap-2.5 rounded-lg border border-border/60 px-3 py-2 ${goal.completed ? 'opacity-60' : ''}`}>
-                                <button onClick={() => toggleComplete(goal)} className="shrink-0 text-primary" title={goal.completed ? 'Mark incomplete' : 'Mark complete'}>
+                            <div key={goal.id} className={`flex items-center gap-1.5 rounded-lg border border-border/60 py-1 pr-1 pl-1 ${goal.completed ? 'opacity-60' : ''}`}>
+                                <button
+                                    type="button"
+                                    onClick={() => toggleComplete(goal)}
+                                    className="btn-icon text-primary"
+                                    aria-label={goal.completed ? `Mark "${goal.title}" not done` : `Mark "${goal.title}" done`}
+                                    aria-pressed={goal.completed}
+                                >
                                     {goal.completed ? <CheckCircle2 size={18} /> : <Circle size={18} className="text-muted-foreground" />}
                                 </button>
-                                <div className="min-w-0 flex-1">
-                                    <div className={`truncate text-[13px] font-semibold text-foreground ${goal.completed ? 'line-through' : ''}`}>{goal.title}</div>
-                                    <div className="truncate text-[11px] text-muted-foreground">
+                                <div className="min-w-0 flex-1 py-1">
+                                    <div className={`text-[13px] font-semibold text-foreground wrap-anywhere ${goal.completed ? 'line-through' : ''}`}>{goal.title}</div>
+                                    <div className="text-[11px] text-muted-foreground">
                                         {[goal.subjectName, goal.targetValue != null ? `Target ${goal.targetValue}%` : null, deadlineLabel].filter(Boolean).join(' · ')}
                                     </div>
                                 </div>
-                                <button onClick={() => deleteGoal(goal.id)} className="shrink-0 text-muted-foreground hover:text-destructive" title="Delete goal">
-                                    <Trash2 size={14} />
+                                <button
+                                    type="button"
+                                    onClick={() => setConfirmDelete(goal)}
+                                    className="btn-icon hover:text-destructive"
+                                    aria-label={`Delete "${goal.title}"`}
+                                >
+                                    <Trash2 size={15} />
                                 </button>
                             </div>
                         );
                     })}
                 </div>
             )}
+
+            <ConfirmDialog
+                isOpen={!!confirmDelete}
+                onClose={() => setConfirmDelete(null)}
+                onConfirm={() => { if (confirmDelete) void deleteGoal(confirmDelete.id); setConfirmDelete(null); }}
+                title="Delete this goal?"
+                message={confirmDelete?.title ?? ''}
+                confirmText="Delete"
+                variant="danger"
+            />
 
             <Modal
                 isOpen={modalOpen}

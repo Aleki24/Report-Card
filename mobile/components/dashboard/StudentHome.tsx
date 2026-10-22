@@ -15,7 +15,7 @@ import { useSchoolPassMark } from '@/lib/usePassMark';
 import { daysUntil, gradeTone, errorMessage, fileSafe, formatCurrency, getTimeAgo, pluralize } from '@/lib/format';
 import { fonts, makeStyles, radius, spacing, useTheme, type Palette } from '@/lib/theme';
 import type { DashboardData, FeeRecord } from '@/lib/types';
-import { Notice } from '@/components/ui';
+import { ErrorBanner } from '@/components/ui';
 import { useToast } from '@/components/Toast';
 import { AssignmentItem, sortHomework } from '@/components/student/AssignmentItem';
 import { useFileViewer } from '@/components/FileViewer';
@@ -151,7 +151,7 @@ export function StudentHome() {
                 </HeroFrame>
             </Reveal>
 
-            {dash.error ? <Notice tone="danger" message="Some of your data couldn’t be loaded. Pull down to try again." /> : null}
+            {dash.error ? <ErrorBanner message="Some of your data couldn’t be loaded." onRetry={() => { dash.refresh(); fees.refresh(); }} /> : null}
 
             <Reveal index={i++}>
                 <SectionTitle title="At a glance" />

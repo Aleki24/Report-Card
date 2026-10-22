@@ -68,8 +68,11 @@ function ExamMarksTab() {
             {error ? <ErrorBanner message={error} onRetry={reload} /> : null}
             {loading ? (
                 <LoadingView />
-            ) : results.length === 0 ? (
-                <EmptyState title="No results yet" description="Results appear once your teachers release exam marks." />
+            ) : error && data == null ? null : results.length === 0 ? (
+                // Filters that match nothing are not "no results yet".
+                year || term || subject
+                    ? <EmptyState title="Nothing matches these filters" description="Try another year, term or subject." />
+                    : <EmptyState title="No results yet" description="Results appear once your teachers release exam marks." />
             ) : (
                 groups.map((t) => (
                     <View key={t.key}>

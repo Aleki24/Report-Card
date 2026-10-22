@@ -5,7 +5,7 @@ import { useApiQuery } from '@/lib/useApiQuery';
 import { formatPercent, scoreColor } from '@/lib/format';
 import { spacing, fonts, makeStyles, useTheme } from '@/lib/theme';
 import {
-    BackLink, Badge, Card, EmptyState, ListCard, ListRow, LoadingView, ProgressBar, Screen, SectionLabel, StatGrid, StatTile,
+    BackLink, Badge, Card, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView, ProgressBar, Screen, SectionLabel, StatGrid, StatTile,
 } from '@/components/ui';
 import { SubjectTypeBadge } from '@/components/student/SubjectTypeBadge';
 import { AssignmentItem, sortHomework } from '@/components/student/AssignmentItem';
@@ -35,6 +35,20 @@ export default function SubjectDetailScreen() {
     );
 
     if (subjects.loading || perf.loading || dash.loading) return <LoadingView />;
+
+    // A failed load is not "Subject not found": say what failed and offer a retry.
+    const failed = [subjects, perf, dash].find((q) => q.error && q.data == null);
+    if (failed) {
+        return (
+            <Screen>
+                <BackLink label="Subjects" />
+                <ErrorBanner
+                    message={failed.error ?? 'Could not load this subject.'}
+                    onRetry={() => { subjects.reload(); perf.reload(); dash.reload(); }}
+                />
+            </Screen>
+        );
+    }
 
     if (!subject) {
         return (

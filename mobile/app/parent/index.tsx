@@ -4,7 +4,7 @@ import { ScrollView, Text, View } from 'react-native';
 import { MODULES } from '@shared/platform/modules';
 import { date, dateTime, humanize, money, personName } from '@shared/ops/format';
 import {
-    ATTENDANCE_TONES, FEE_STATUS_TONES, absences, feeBalance, reportTermLabel, rideLine,
+    ATTENDANCE_TONES, FEE_STATUS_TONES, absences, balanceLine, feeBalance, reportTermLabel, rideLine,
     type ChildLink, type ChildOverview,
 } from '@shared/ops/forms/platform';
 import { Bus, CalendarCheck, CalendarDays, GraduationCap, Users, Wallet } from 'lucide-react-native';
@@ -105,7 +105,7 @@ function Overview({ childId }: { childId: string }) {
                         {data.fees.map((f, n) => (
                             <View key={f.id} style={[styles.row, n > 0 && styles.rowBorder]}>
                                 <Text style={[styles.title, { flex: 1 }]}>{f.term?.name ?? 'Term'}</Text>
-                                <Text style={styles.body}>{money(Number(f.total_fee) - Number(f.paid_amount))} owed</Text>
+                                <Text style={styles.body}>{balanceLine(Number(f.total_fee) - Number(f.paid_amount))}</Text>
                                 <StatusPill status={f.status} tones={FEE_STATUS_TONES} />
                             </View>
                         ))}
@@ -208,7 +208,8 @@ export default function ParentHomeScreen() {
                 </HeroFrame>
             </Reveal>
             {error ? <ErrorBanner message={error} onRetry={() => void reload()} /> : null}
-            {loading && !children ? <LoadingView /> : linked.length === 0 ? (
+            {/* After a failed load the banner above says so: "No children linked yet" sent parents to the school. */}
+            {loading && !children ? <LoadingView /> : error && !children ? null : linked.length === 0 ? (
                 <EmptyState icon={Users} title="No children linked yet" description="Ask the school to link your account to your child." />
             ) : current ? (
                 <View style={{ marginTop: spacing.md }}>

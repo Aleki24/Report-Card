@@ -24,7 +24,7 @@ import { OptionTiles, PickerField, SegmentedChoice, layoutFor, useInFilterGrid, 
 import { screenIconFor } from '@/lib/roles';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { KeyboardAvoidingView, KeyboardAwareScrollView } from 'react-native-keyboard-controller';
-import { ArrowLeft, ChevronLeft, ChevronRight, Inbox, Search, X, type LucideIcon } from 'lucide-react-native';
+import { ArrowLeft, ChevronLeft, ChevronRight, Inbox, RotateCcw, Search, X, type LucideIcon } from 'lucide-react-native';
 import { radius, spacing, fonts, makeStyles, useTheme, shadowFor, type Hue, type Palette } from '@/lib/theme';
 import { formatDate, parseISODate, shiftISODate, toISODate } from '@/lib/format';
 import { ScreenRefreshProvider, useScreenRefreshRegistry } from '@/lib/screenRefresh';
@@ -306,9 +306,17 @@ export function ErrorBanner({ message, onRetry }: { message: string; onRetry?: (
         <View style={[styles.banner, { backgroundColor: colors.dangerBg, borderColor: colors.danger }]}>
             <Text style={[styles.bannerText, { color: colors.danger }]}>{message}</Text>
             {onRetry ? (
-                <Text onPress={onRetry} style={[styles.bannerAction, { color: colors.danger }]}>
-                    Retry
-                </Text>
+                // A real button: a bare 13px "Retry" link was hard to hit with a thumb.
+                <Pressable
+                    onPress={onRetry}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel="Try again"
+                    style={({ pressed }) => [styles.bannerButton, { borderColor: colors.danger, opacity: pressed ? 0.6 : 1 }]}
+                >
+                    <RotateCcw size={14} color={colors.danger} />
+                    <Text style={[styles.bannerAction, { color: colors.danger }]}>Try again</Text>
+                </Pressable>
             ) : null}
         </View>
     );
@@ -659,7 +667,8 @@ const useStyles = makeStyles((colors) => ({
     loading: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.xl * 2 },
     banner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: radius.md, borderWidth: 1, padding: spacing.md, marginBottom: spacing.md },
     bannerText: { fontFamily: fonts.regular, fontSize: 13, flex: 1, marginRight: spacing.sm },
-    bannerAction: { fontSize: 13, fontFamily: fonts.bold, textDecorationLine: 'underline' },
+    bannerAction: { fontSize: 13, fontFamily: fonts.bold },
+    bannerButton: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 40, paddingHorizontal: spacing.md, marginLeft: spacing.sm, borderRadius: radius.md, borderWidth: 1 },
     progressTrack: { height: 10, borderRadius: 999, overflow: 'hidden', width: '100%' },
     progressFill: { height: '100%', borderRadius: 999 },
     button: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, borderWidth: 1, borderRadius: radius.xl, paddingVertical: 11, paddingHorizontal: spacing.lg, minHeight: 44 },

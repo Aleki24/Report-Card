@@ -1,16 +1,16 @@
 "use client";
 
 import React, { useEffect, useState } from 'react';
-import { toast } from 'sonner';
 import { Bell, Bus, CalendarCheck, CalendarDays, DollarSign, FileText, GraduationCap, Users } from 'lucide-react';
 import { StatTile } from '@/components/ui/StatTile';
+import { LoadError } from '@/components/ui/LoadError';
 import EmptyState from '@/components/dashboard/EmptyState';
 import { ModulePage } from '@/components/ops/ModulePage';
 import { StatusPill } from '@/components/ops/StatusPill';
 import { errorText, opsFetch } from '@/lib/ops/client';
 import { date, dateTime, humanize, money, personName } from '@/lib/ops/format';
 import {
-    ATTENDANCE_TONES, FEE_STATUS_TONES as FEE_TONES, absences as countAbsences, feeBalance, reportTermLabel, rideLine,
+    ATTENDANCE_TONES, FEE_STATUS_TONES as FEE_TONES, absences as countAbsences, balanceLine, feeBalance, reportTermLabel, rideLine,
     type ChildLink, type ChildOverview as Overview,
 } from '@/lib/ops/forms/platform';
 import { cn } from '@/lib/utils';
@@ -26,12 +26,18 @@ function Section({ title, icon: Icon, children }: { title: string; icon: React.C
 
 function ChildOverview({ childId }: { childId: string }) {
     const [data, setData] = useState<Overview | null>(null);
+    // A failed load used to leave the placeholder up for good, with only a passing toast.
+    const [error, setError] = useState<string | null>(null);
+    const [attempt, setAttempt] = useState(0);
     useEffect(() => {
         let live = true;
-        opsFetch<Overview>(`/api/parent/children/${childId}`).then(d => { if (live) setData(d); }).catch(err => toast.error(errorText(err)));
+        opsFetch<Overview>(`/api/parent/children/${childId}`)
+            .then(d => { if (live) setData(d); })
+            .catch(err => { if (live) setError(errorText(err)); });
         return () => { live = false; };
-    }, [childId]);
+    }, [childId, attempt]);
 
+    if (error) return <LoadError title="Your child's details did not load" message={error} onRetry={() => { setError(null); setAttempt(n => n + 1); }} />;
     if (!data) return <div className="skeleton-bone h-72 rounded-2xl" />;
     const balance = feeBalance(data);
     const absences = countAbsences(data);
@@ -75,7 +81,7 @@ function ChildOverview({ childId }: { childId: string }) {
                             {data.fees.map(f => (
                                 <li key={f.id} className="flex items-center justify-between gap-3 py-2 text-sm">
                                     <span>{f.term?.name ?? 'Term'}</span>
-                                    <span className="flex items-center gap-2 tabular-nums">{money(Number(f.total_fee) - Number(f.paid_amount))} owed <StatusPill status={f.status} tones={FEE_TONES} /></span>
+                                    <span className="flex items-center gap-2 tabular-nums">{balanceLine(Number(f.total_fee) - Number(f.paid_amount))} <StatusPill status={f.status} tones={FEE_TONES} /></span>
                                 </li>
                             ))}
                         </ul>
@@ -136,12 +142,18 @@ function ChildOverview({ childId }: { childId: string }) {
 function Children() {
     const [children, setChildren] = useState<ChildLink[] | null>(null);
     const [active, setActive] = useState<string | null>(null);
+    // Not "No children linked yet": that sent parents to the school over a dropped connection.
+    const [error, setError] = useState<string | null>(null);
+    const [attempt, setAttempt] = useState(0);
     useEffect(() => {
+        let live = true;
         opsFetch<ChildLink[]>('/api/parent/children')
-            .then(c => { setChildren(c); setActive(c[0]?.student?.id ?? null); })
-            .catch(err => { toast.error(errorText(err)); setChildren([]); });
-    }, []);
+            .then(c => { if (!live) return; setChildren(c); setActive(c[0]?.student?.id ?? null); })
+            .catch(err => { if (live) setError(errorText(err)); });
+        return () => { live = false; };
+    }, [attempt]);
 
+    if (error) return <LoadError title="Your children did not load" message={error} onRetry={() => { setError(null); setAttempt(n => n + 1); }} />;
     if (children === null) return <div className="skeleton-bone h-40 rounded-2xl" />;
     if (children.length === 0) return <EmptyState icon={<Users className="size-6" />} title="No children linked yet" description="Ask the school to link your account to your child." hue="rose" />;
 
