@@ -27,7 +27,11 @@ export function TimetableGrid({ config, lessons, mode, selectedId, onCellPress }
     const { colors } = useTheme();
     const styles = useStyles();
     const { width } = useWindowDimensions();
-    const [phoneDay, setPhoneDay] = useState(config.days[0]);
+    // Opens on today (1 = Monday … 7 = Sunday), or the next school day, rather than always on Monday.
+    const [phoneDay, setPhoneDay] = useState(() => {
+        const today = ((new Date().getDay() + 6) % 7) + 1;
+        return config.days.find((d) => d >= today) ?? config.days[0];
+    });
     const rows = useMemo(() => gridRows(config, lessons), [config, lessons]);
 
     const cell = (day: number, row: GridRow) => {

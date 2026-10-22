@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { HomeScreen } from '@/components/dashboard/Hero';
-import { ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { MODULES } from '@shared/platform/modules';
 import { date, dateTime, humanize, money, personName } from '@shared/ops/format';
 import {
@@ -51,6 +51,7 @@ function Overview({ childId }: { childId: string }) {
     const { colors } = useTheme();
     const styles = useStyles();
     const { data, loading, error, reload } = useOpsData<ChildOverview>(`/api/parent/children/${childId}`);
+    const [openNotice, setOpenNotice] = useState<string | null>(null);
     if (loading && !data) return <LoadingView />;
     if (error) return <ErrorBanner message={error} onRetry={() => void reload()} />;
     if (!data) return null;
@@ -150,10 +151,17 @@ function Overview({ childId }: { childId: string }) {
                 {data.summary && data.summary.announcements.length > 0 ? (
                     <InsightCard title="Notices">
                         {data.summary.announcements.map((a, n) => (
-                            <View key={a.id} style={[styles.report, n > 0 && styles.rowBorder]}>
+                            // Tap opens a notice in full; it was cut to four lines with no way to read on.
+                            <Pressable
+                                key={a.id}
+                                onPress={() => setOpenNotice(openNotice === a.id ? null : a.id)}
+                                accessibilityRole="button"
+                                accessibilityState={{ expanded: openNotice === a.id }}
+                                style={[styles.report, n > 0 && styles.rowBorder]}
+                            >
                                 <Text style={styles.title}>{a.isImportant ? <Text style={{ color: colors.danger }}>Important · </Text> : null}{a.title}</Text>
-                                <Text style={styles.muted} numberOfLines={4}>{a.content}</Text>
-                            </View>
+                                <Text style={styles.muted} numberOfLines={openNotice === a.id ? undefined : 4}>{a.content}</Text>
+                            </Pressable>
                         ))}
                     </InsightCard>
                 ) : null}

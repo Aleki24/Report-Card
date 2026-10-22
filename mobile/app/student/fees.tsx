@@ -58,19 +58,6 @@ export default function StudentFeesScreen() {
                 <StatTile label="Overdue" value={known ? overdue : '—'} tone={known && overdue > 0 ? colors.danger : undefined} />
             </StatGrid>
 
-            {paying ? (
-                <PayPanel
-                    // A fresh panel per fee: the amount, state and any poll belonged to the first fee opened.
-                    key={paying.id}
-                    fee={paying}
-                    provider={provider}
-                    onClose={() => setPaying(null)}
-                    onPaid={() => {
-                        refresh();
-                    }}
-                />
-            ) : null}
-
             <SectionLabel>Fee records</SectionLabel>
             {loading ? (
                 <LoadingView />
@@ -82,13 +69,31 @@ export default function StudentFeesScreen() {
                         <View key={f.id}>
                             <ListRow
                                 title={f.termName ?? '—'}
-                                subtitle={`Billed ${formatCurrency(f.totalFee)} · Paid ${formatCurrency(f.paidAmount)}${f.dueDate ? ` · due ${formatDate(f.dueDate)}` : ''}`}
+                                subtitle={`Billed ${formatCurrency(f.totalFee)} · Paid ${formatCurrency(f.paidAmount)}${f.dueDate ? ` · due ${formatDate(f.dueDate)}` : ''} · tap for receipts`}
                                 meta={f.balance > 0 ? `Balance ${formatCurrency(f.balance)}` : 'Paid in full'}
                                 right={isOverdue(f.dueDate, f.balance) ? <Badge label="Overdue" variant="danger" /> : <Badge label={STATUS_META[f.status]?.label ?? f.status} variant={STATUS_META[f.status]?.variant ?? 'warning'} />}
                                 onPress={() => setOpen(open === f.id ? null : f.id)}
                             />
-                            {open === f.id ? (
+                            {/* The payment form opens under the term being paid, not at the
+                                top of the page above where the learner tapped. */}
+                            {paying?.id === f.id ? (
+                                <PayPanel
+                                    // A fresh panel per fee: the amount, state and any poll belonged to the first fee opened.
+                                    key={paying.id}
+                                    fee={paying}
+                                    provider={provider}
+                                    onClose={() => setPaying(null)}
+                                    onPaid={() => {
+                                        refresh();
+                                    }}
+                                />
+                            ) : open === f.id ? (
                                 <FeeHistory fee={f} canPay={provider !== 'NONE' && f.balance > 0} onPay={() => setPaying(f)} />
+                            ) : provider !== 'NONE' && f.balance > 0 ? (
+                                // Paying used to hide behind an unmarked tap on the row.
+                                <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.sm, paddingBottom: spacing.md }}>
+                                    <Button size="sm" label={`Pay ${formatCurrency(f.balance)}`} onPress={() => setPaying(f)} />
+                                </View>
                             ) : null}
                         </View>
                     ))}
@@ -241,7 +246,7 @@ function PayPanel({ fee, provider, onClose, onPaid }: { fee: FeeRecord; provider
             <Text style={styles.hint}>Balance {formatCurrency(fee.balance)}</Text>
             {error ? (unconfirmed ? <Notice tone="info" message={error} /> : <ErrorBanner message={error} />) : null}
             {state === 'success' ? (
-                <Notice message="Payment received — thank you. Your balance has been updated." />
+                <Notice message="Payment received — thank you. Your balance below updates in a moment." />
             ) : state === 'waiting' ? (
                 <Notice tone="info" message={provider === 'PESAPAL' ? 'Complete the payment in the checkout page. Waiting for confirmation…' : 'Check your phone and enter your M-Pesa PIN. Waiting for confirmation…'} />
             ) : (
