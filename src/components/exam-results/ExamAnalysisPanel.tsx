@@ -3,7 +3,7 @@
 import { RankBadge } from '@/components/ui/RankBadge';
 import React from 'react';
 import { gradeSymbolRank } from '@/lib/analytics';
-import { GradeDistributionChart } from '@/components/charts/GradeDistribution';
+import { GradeDistributionChart } from '@/components/charts/lazy';
 import type { MarkRow } from './ExamResultsTable';
 import { useSchoolPassMark } from '@/hooks/useSchoolPassMark';
 

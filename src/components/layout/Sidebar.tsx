@@ -8,6 +8,7 @@ import { ChevronLeft, ChevronRight, LayoutGrid, Search, X } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import { Avatar } from "@/components/Avatar";
 import { Wordmark } from "@/components/Wordmark";
+import { LinkPending } from "@/components/layout/LinkPending";
 import { ROLE_LABELS, homePathForRole } from "@/lib/roles";
 import { cn } from "@/lib/utils";
 import { findNavItem, getHelpItem, getMobileNav, getNavGroups, getPinnedItems, roleBadgeColors, routeMatches, type NavItem } from "./sidebar/navItems";
@@ -77,6 +78,7 @@ function NavLink({ item, collapsed, active, badge, onHint }: NavLinkProps) {
                 {!!badge && collapsed && <span className="absolute -top-1 -right-1 size-2 rounded-full bg-destructive ring-2 ring-sidebar" />}
             </span>
             {!collapsed && <span className="min-w-0 flex-1 truncate">{item.label}</span>}
+            <LinkPending className={collapsed ? "absolute top-1 right-1 size-2.5 border-[1.5px]" : undefined} />
             {!collapsed && !!badge && (
                 <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-destructive px-1.5 text-[10px] font-bold text-white">
                     {badge > 9 ? "9+" : badge}
@@ -377,6 +379,7 @@ function BottomTab({ label, fullLabel, icon, active, href, badge, onClick, expan
             )}>
                 {icon}
                 {!!badge && <span className="absolute top-0.5 right-3 size-2 rounded-full bg-destructive ring-2 ring-[var(--color-surface)]" />}
+                {href && <LinkPending className="absolute -top-0.5 -right-0.5 size-3 text-primary" />}
             </span>
             <span className={cn("max-w-full truncate px-0.5 text-[11px] leading-none", active ? "font-semibold text-foreground" : "font-medium text-muted-foreground")}>
                 {label}

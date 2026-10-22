@@ -10,6 +10,7 @@ import { StudentPickerModal } from '@/components/reports/StudentPickerModal';
 import { ReportActionCards } from '@/components/reports/ReportActionCards';
 import { ReportSettings } from '@/components/reports/ReportSettings';
 import { ProgressOverlay } from '@/components/ui/ProgressOverlay';
+import { LoadError } from '@/components/ui/LoadError';
 import { apiErrorMessage } from '@/lib/api-error-message';
 import { useAuth } from '@/components/AuthProvider';
 import type { ReportCardData } from '@/lib/pdfGenerator';
@@ -69,12 +70,22 @@ export default function ReportsPage() {
   const yearLabel = academicYears.find(y => y.id === selectedAcademicYear)?.name ?? '';
   const examLabel = [termLabel, roundLabel, yearLabel].filter(Boolean).join(' ');
 
+  // A failed load must not read as "No classes assigned to you".
+  const [setupError, setSetupError] = useState<string | null>(null);
+  const [setupReload, setSetupReload] = useState(0);
+
   // ── Data fetching ──
   useEffect(() => {
     const fetchDropdownData = async () => {
       try {
+        setSetupError(null);
         const [gsRes, ayRes, tRes] = await Promise.all([fetch(MANAGED_STREAMS_URL), fetch('/api/school/data?type=academic_years'), fetch('/api/school/data?type=terms')]);
-        const [gsJson, ayJson, tJson] = await Promise.all([gsRes.json(), ayRes.json(), tRes.json()]);
+        const [gsJson, ayJson, tJson] = await Promise.all([gsRes.json().catch(() => null), ayRes.json().catch(() => null), tRes.json().catch(() => null)]);
+        const failed = [gsRes, ayRes, tRes].findIndex(r => !r.ok);
+        if (failed !== -1) {
+          setSetupError(apiErrorMessage([gsJson, ayJson, tJson][failed], 'Could not load your classes and terms.'));
+          return;
+        }
         const termList: ComparisonTerm[] = tJson.data || [];
         // Only the classes this user runs: a teacher's list used to include
         // classes they only teach a subject in, which every report refuses.
@@ -86,7 +97,7 @@ export default function ReportsPage() {
         if (activeId) setSelectedTerm(activeId);
       } catch (err) {
         console.error('Failed to fetch dropdown data:', err);
-        toast.error('Could not load your classes and terms. Refresh to try again.');
+        setSetupError('Could not load your classes and terms. Check your connection.');
       }
     };
     void fetchDropdownData();
@@ -110,7 +121,7 @@ export default function ReportsPage() {
       } catch { /* pathway extras are optional */ }
     };
     void fetchPathwayConfig();
-  }, []);
+  }, [setupReload]);
 
   // Which rounds (Opener, Midterm, End Term, …) this class sat this term, how
   // much of each is entered, and which is the most recent. That one is chosen
@@ -401,6 +412,11 @@ export default function ReportsPage() {
         description="Download report cards and mark sheets, text results to parents and compare terms."
       />
 
+      {setupError && (
+        <div className="mb-4">
+          <LoadError title="Your classes and terms did not load" message={setupError} onRetry={() => setSetupReload(n => n + 1)} />
+        </div>
+      )}
       <ReportSettings selectedTerm={selectedTerm} setSelectedTerm={setSelectedTerm} selectedGradeStream={selectedGradeStream} setSelectedGradeStream={setSelectedGradeStream} customReportTitle={customReportTitle} setCustomReportTitle={setCustomReportTitle} selectedTemplate={selectedTemplate} setSelectedTemplate={setSelectedTemplate} selectedExamType={selectedExamType} setSelectedExamType={setSelectedExamType} rounds={rounds} suggestedRound={suggestedRound} academicYears={academicYears} terms={terms} gradeStreams={gradeStreams} />
 
       {hasCombinations && (

@@ -9,7 +9,7 @@ import {
     FileText, GraduationCap, Megaphone, Minus, RefreshCw, TrendingUp, Wallet,
 } from 'lucide-react';
 import type { StudentDashboardSummary } from '@/types';
-import { PerformanceTrendChart } from '@/components/charts/PerformanceTrend';
+import { PerformanceTrendChart } from '@/components/charts/lazy';
 import KpiTile from '@/components/dashboard/KpiTile';
 import SectionTitle from '@/components/dashboard/SectionTitle';
 import { Bone } from '@/components/dashboard/LoadingSkeleton';

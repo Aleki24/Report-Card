@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Activity, AlertTriangle, BedSingle, ClipboardList, FileHeart, HeartPulse, MessageSquare, Pill, Package } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { StatTile } from '@/components/ui/StatTile';
+import { LoadError } from '@/components/ui/LoadError';
 import { useAuth } from '@/components/AuthProvider';
 import { ModulePage } from '@/components/ops/ModulePage';
 import { ResourceManager } from '@/components/ops/ResourceManager';
@@ -21,7 +22,12 @@ import {
 /** Today at a glance for any staff: who is in sick bay or went home, no clinical detail. */
 function TodayPanel() {
     const [status, setStatus] = useState<HealthStatus | null>(null);
-    useEffect(() => { opsFetch<HealthStatus>('/api/health/status').then(setStatus).catch(err => toast.error(errorText(err))); }, []);
+    const [error, setError] = useState<string | null>(null);
+    const load = useCallback(() => opsFetch<HealthStatus>('/api/health/status')
+        .then(next => { setStatus(next); setError(null); })
+        .catch(err => setError(errorText(err))), []);
+    useEffect(() => { void load(); }, [load]);
+    if (error) return <LoadError title="Today's clinic summary did not load" message={error} onRetry={() => { setError(null); void load(); }} />;
     if (!status) return <div className="skeleton-bone h-48 rounded-2xl" />;
     const list = (rows: StatusVisit[], empty: string) => rows.length === 0 ? <p className="text-sm text-muted-foreground">{empty}</p> : (
         <ul className="flex flex-col gap-2">
