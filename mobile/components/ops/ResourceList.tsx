@@ -122,7 +122,7 @@ export function ResourceList<R extends ResourceName, T extends { id: string }>({
 
             {loading ? (
                 <LoadingView />
-            ) : shown.length === 0 ? (
+            ) : error ? null : shown.length === 0 ? (
                 <EmptyState title={query ? 'Nothing matches your search.' : emptyText ?? `No ${def.label.plural.toLowerCase()} yet.`} />
             ) : (
                 shown.map((row) => {
