@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { CheckCircle2, ChevronDown, Plus, Sparkles, Trash2 } from 'lucide-react';
 import { Drawer } from '@/components/ui/Drawer';
@@ -29,14 +29,19 @@ export function SchemeEditor({ schemeId, canReview, userId, onClose, onChanged }
     const [draft, setDraft] = useState({ weeks: '12', lessons: '4', topics: '' });
     const [comment, setComment] = useState('');
 
+    // onClose comes in as a new function each render. As a dependency it gave
+    // `load` a new identity whenever the page re-rendered (after every save),
+    // which refetched the scheme and wiped what the teacher had typed since.
+    const onCloseRef = useRef(onClose);
+    useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
     const load = useCallback(async () => {
         try {
             const s = await opsFetch<SchemeDetail>(`/api/academics/schemes/${schemeId}`);
             setScheme(s);
             setEntries(s.entries);
             setDirty(false);
-        } catch (err) { toast.error(errorText(err)); onClose(); }
-    }, [schemeId, onClose]);
+        } catch (err) { toast.error(errorText(err)); onCloseRef.current(); }
+    }, [schemeId]);
     useEffect(() => { void load(); }, [load]);
 
     const edit = (i: number, patch: Partial<Entry>) => { setEntries(es => es.map((e, j) => (j === i ? { ...e, ...patch } : e))); setDirty(true); };
@@ -77,14 +82,17 @@ export function SchemeEditor({ schemeId, canReview, userId, onClose, onChanged }
         finally { setBusy(false); }
     };
 
+    // Busy while recording, so a second tap can't record the lesson twice.
     const markTaught = async (e: Entry & { id: string }) => {
-        if (!scheme) return;
+        if (!scheme || busy) return;
+        setBusy(true);
         try {
             await opsFetch('/api/ops/records-of-work', { method: 'POST', json: taughtRecord(scheme, e) });
             toast.success('Recorded as taught.');
             await load();
             onChanged();
         } catch (err) { toast.error(errorText(err)); }
+        finally { setBusy(false); }
     };
 
     const isOwner = scheme?.teacher_id === userId;
@@ -128,7 +136,7 @@ export function SchemeEditor({ schemeId, canReview, userId, onClose, onChanged }
                                             <InputField aria-label={`Topic, week ${e.week} lesson ${e.lesson}`} className="min-w-0 flex-1" value={e.topic} placeholder="Topic" onChange={ev => edit(i, { topic: ev.target.value })} />
                                         ) : <span className="min-w-0 flex-1 text-sm font-medium">{e.topic}{e.sub_topic && <span className="text-muted-foreground"> · {e.sub_topic}</span>}</span>}
                                         {taught && <CheckCircle2 className="size-4 text-emerald-600" aria-label="Taught" />}
-                                        {!taught && e.id && isOwner && !dirty && <Button size="xs" variant="outline" onClick={() => void markTaught(e as Entry & { id: string })}>Taught</Button>}
+                                        {!taught && e.id && isOwner && !dirty && <Button size="xs" variant="outline" disabled={busy} onClick={() => void markTaught(e as Entry & { id: string })}>Taught</Button>}
                                         <Button size="icon-xs" variant="ghost" aria-label="Details" aria-expanded={open === i} onClick={() => setOpen(open === i ? null : i)}><ChevronDown className={cn(open === i && 'rotate-180')} /></Button>
                                         {scheme.editable && <Button size="icon-xs" variant="ghost" aria-label="Remove row" onClick={() => { setEntries(es => es.filter((_, j) => j !== i)); setDirty(true); }}><Trash2 className="text-destructive" /></Button>}
                                     </div>

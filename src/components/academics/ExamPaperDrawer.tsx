@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Download, FileText, Upload } from 'lucide-react';
 import { Drawer } from '@/components/ui/Drawer';
@@ -32,12 +32,18 @@ export function ExamPaperDrawer({ paperId, moderators, onClose, onChanged }: Pro
     const [comment, setComment] = useState('');
     const [busy, setBusy] = useState(false);
     const [replace, setReplace] = useState<{ paper: File | null; scheme: File | null }>({ paper: null, scheme: null });
+    // Bumped after a successful replacement so the file inputs clear too.
+    const [fileInputs, setFileInputs] = useState(0);
 
+    // onClose is a new function each parent render; as a dependency it made
+    // `load` refetch the paper a second time after every action.
+    const onCloseRef = useRef(onClose);
+    useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
     const load = useCallback(async () => {
         if (!paperId) return;
         try { setPaper(await opsFetch(`/api/academics/exam-papers/${paperId}`)); }
-        catch (err) { toast.error(errorText(err)); onClose(); }
-    }, [paperId, onClose]);
+        catch (err) { toast.error(errorText(err)); onCloseRef.current(); }
+    }, [paperId]);
 
     // The parent keys this drawer by paper, so state starts fresh for each one.
     useEffect(() => { void load(); }, [load]);
@@ -56,14 +62,16 @@ export function ExamPaperDrawer({ paperId, moderators, onClose, onChanged }: Pro
         finally { setBusy(false); }
     };
 
-    const patch = async (body: FormData | Record<string, unknown>, success: string) => {
+    /** Resolves true when the change was saved. */
+    const patch = async (body: FormData | Record<string, unknown>, success: string): Promise<boolean> => {
         setBusy(true);
         try {
             await opsFetch(`/api/academics/exam-papers/${paperId}`, body instanceof FormData ? { method: 'PATCH', body } : { method: 'PATCH', json: body });
             toast.success(success);
             await load();
             onChanged();
-        } catch (err) { toast.error(errorText(err)); }
+            return true;
+        } catch (err) { toast.error(errorText(err)); return false; }
         finally { setBusy(false); }
     };
 
@@ -79,8 +87,11 @@ export function ExamPaperDrawer({ paperId, moderators, onClose, onChanged }: Pro
             setBusy(false);
             return;
         }
-        await patch(form, 'Files replaced.');
-        setReplace({ paper: null, scheme: null });
+        // Kept after a failure, so Upload can simply be tapped again.
+        if (await patch(form, 'Files replaced.')) {
+            setReplace({ paper: null, scheme: null });
+            setFileInputs(n => n + 1);
+        }
     };
 
     const openFile = (kind: PaperFileKind) => window.open(`/api/academics/exam-papers/${paperId}/file?kind=${kind}`, '_blank', 'noopener');
@@ -120,10 +131,10 @@ export function ExamPaperDrawer({ paperId, moderators, onClose, onChanged }: Pro
                             <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold"><Upload className="size-4" aria-hidden />Replace files</h3>
                             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                                 <FormField label="Paper" htmlFor="replace-paper">
-                                    <InputField id="replace-paper" type="file" accept=".pdf,.doc,.docx" onChange={e => setReplace(r => ({ ...r, paper: e.target.files?.[0] ?? null }))} />
+                                    <InputField key={`paper-${fileInputs}`} id="replace-paper" type="file" accept=".pdf,.doc,.docx" onChange={e => setReplace(r => ({ ...r, paper: e.target.files?.[0] ?? null }))} />
                                 </FormField>
                                 <FormField label="Marking scheme" htmlFor="replace-scheme">
-                                    <InputField id="replace-scheme" type="file" accept=".pdf,.doc,.docx" onChange={e => setReplace(r => ({ ...r, scheme: e.target.files?.[0] ?? null }))} />
+                                    <InputField key={`scheme-${fileInputs}`} id="replace-scheme" type="file" accept=".pdf,.doc,.docx" onChange={e => setReplace(r => ({ ...r, scheme: e.target.files?.[0] ?? null }))} />
                                 </FormField>
                             </div>
                             <Button className="mt-3" size="sm" onClick={() => void uploadReplacements()} disabled={busy || (!replace.paper && !replace.scheme)}>Upload</Button>

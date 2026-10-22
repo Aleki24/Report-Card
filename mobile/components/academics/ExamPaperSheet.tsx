@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { dateTime, humanize, personName } from '@shared/ops/format';
 import { EDITABLE_BY_OWNER, PRINT_STATUSES, TRANSITIONS, canAct, canOpenFiles, paperNextStep, type PaperAction, type PaperFileKind, type PaperModerator } from '@shared/academics/exam-papers';
@@ -36,10 +36,14 @@ export function ExamPaperSheet({ paperId, moderators, onClose, onChanged }: {
     const [busy, setBusy] = useState(false);
     const [replace, setReplace] = useState<{ paper: PickedFile | null; scheme: PickedFile | null }>({ paper: null, scheme: null });
 
+    // The parent passes a fresh onClose each render: kept in a ref so that
+    // does not refetch the paper on every parent update.
+    const onCloseRef = useRef(onClose);
+    useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
     const load = useCallback(async () => {
         try { setPaper(await opsGet<Detail>(api, `/api/academics/exam-papers/${paperId}`)); }
-        catch (err) { toast.error(errorMessage(err, 'Could not open the paper')); onClose(); }
-    }, [api, paperId, toast, onClose]);
+        catch (err) { toast.error(errorMessage(err, 'Could not open the paper')); onCloseRef.current(); }
+    }, [api, paperId, toast]);
     useEffect(() => { void load(); }, [load]);
 
     const actor = { userId: profile?.id ?? '', can };

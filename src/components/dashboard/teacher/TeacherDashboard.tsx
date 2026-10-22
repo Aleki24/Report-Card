@@ -67,9 +67,15 @@ export default function TeacherDashboard({ variant }: { variant: Variant }) {
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [classStats, setClassStats] = useState<ClassStats | null>(null);
   const [subjectStats, setSubjectStats] = useState<SubjectStats | null>(null);
+  // Failures are told apart from empty: they used to read as "No exams to mark"
+  // and as zero learners and marks.
+  const [statsFailed, setStatsFailed] = useState(false);
+  const [markingFailed, setMarkingFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+  const userId = user?.id ?? null;
 
   useEffect(() => {
-    if (!user) return;
+    if (!userId) return;
     let cancelled = false;
     (async () => {
       const [dash, stats] = await Promise.all([
@@ -81,6 +87,7 @@ export default function TeacherDashboard({ variant }: { variant: Variant }) {
       if (cancelled) return;
       setSummary(dash);
       if (variant === 'class') setClassStats(stats as ClassStats | null); else setSubjectStats(stats as SubjectStats | null);
+      setStatsFailed(stats === null);
       setLoading(false);
     })();
     // Marking progress is the slowest call; the page shows without it.
@@ -88,10 +95,15 @@ export default function TeacherDashboard({ variant }: { variant: Variant }) {
       const progress = await getJson<MarkingProgressResponse>('/api/school/teacher/marking');
       if (cancelled) return;
       setMarking(progress);
+      setMarkingFailed(progress === null);
       setMarkingLoading(false);
     })();
     return () => { cancelled = true; };
-  }, [user, variant]);
+    // The user's id, not the user object: AuthProvider rebuilds that object on
+    // unrelated changes, which restarted all three requests.
+  }, [userId, variant, attempt]);
+
+  const retry = () => { setMarkingLoading(true); setMarkingFailed(false); setAttempt(n => n + 1); };
 
   const items = useMemo(() => marking?.items ?? [], [marking]);
   const progress = useMemo(() => {
@@ -112,7 +124,9 @@ export default function TeacherDashboard({ variant }: { variant: Variant }) {
   const avgText = avg && avg !== '—' ? `${avg}%` : '—';
   const markingSummary = markingLoading
     ? null
-    : progress.left > 0
+    : markingFailed
+      ? 'Your marking progress did not load.'
+      : progress.left > 0
       ? `You have ${progress.left.toLocaleString()} mark${progress.left !== 1 ? 's' : ''} left to enter this term.`
       : items.length > 0
         ? 'All your marks are in for this term. Nice work.'
@@ -144,7 +158,7 @@ export default function TeacherDashboard({ variant }: { variant: Variant }) {
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <KpiTile
             title="Marks to enter"
-            value={markingLoading ? '…' : progress.left.toLocaleString()}
+            value={markingLoading ? '…' : markingFailed ? '—' : progress.left.toLocaleString()}
             icon={<ClipboardList size={17} />}
             hue="amber"
             href={progress.next ? markEntryHref(progress.next.termId, progress.next.examId) : '/dashboard/exams-marks'}
@@ -152,7 +166,7 @@ export default function TeacherDashboard({ variant }: { variant: Variant }) {
           />
           <KpiTile
             title="Exams fully marked"
-            value={markingLoading ? '…' : `${progress.complete}/${items.length}`}
+            value={markingLoading ? '…' : markingFailed ? '—' : `${progress.complete}/${items.length}`}
             icon={<CheckCircle2 size={17} />}
             hue="emerald"
             href="/dashboard/exams-marks"
@@ -160,13 +174,13 @@ export default function TeacherDashboard({ variant }: { variant: Variant }) {
           />
           {variant === 'class' ? (
             <>
-              <KpiTile title={streamName ? `Learners in ${streamName}` : 'Learners'} value={classStats?.studentCount ?? 0} icon={<GraduationCap size={17} />} href="/dashboard/people" hue="orange" />
+              <KpiTile title={streamName ? `Learners in ${streamName}` : 'Learners'} value={statsFailed ? '—' : classStats?.studentCount ?? 0} icon={<GraduationCap size={17} />} href="/dashboard/people" hue="orange" />
               <KpiTile title="Class average" value={avgText} icon={<BarChart3 size={17} />} href="/dashboard/exams-marks?tab=results" hue="violet" />
             </>
           ) : (
             <>
               <KpiTile title="Subject average" value={avgText} icon={<BarChart3 size={17} />} href="/dashboard/exams-marks?tab=results" hue="violet" />
-              <KpiTile title="Marks entered" value={(subjectStats?.markCount ?? 0).toLocaleString()} icon={<Hash size={17} />} href="/dashboard/exams-marks" hue="sky" />
+              <KpiTile title="Marks entered" value={statsFailed ? '—' : (subjectStats?.markCount ?? 0).toLocaleString()} icon={<Hash size={17} />} href="/dashboard/exams-marks" hue="sky" />
             </>
           )}
         </div>
@@ -174,7 +188,7 @@ export default function TeacherDashboard({ variant }: { variant: Variant }) {
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
         <div className="lg:col-span-2">
-          <MarkingProgressPanel items={items} termName={marking?.term?.name ?? null} loading={markingLoading} />
+          <MarkingProgressPanel items={items} termName={marking?.term?.name ?? null} loading={markingLoading} error={markingFailed} onRetry={retry} />
         </div>
 
         <div className="flex flex-col gap-5">

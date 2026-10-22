@@ -1,8 +1,8 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Text, View } from 'react-native';
 import { addDays, date as fmtDate, today } from '@shared/ops/format';
 import { TEACHING_DAY_NOTE, nextStep, type TeachingDay, type TeachingDayAction, type TeachingDayLesson } from '@shared/academics/teaching-day';
-import { Badge, Button, ButtonRow, Card, EmptyState, LoadingView } from '@/components/ui';
+import { Badge, Button, ButtonRow, Card, EmptyState, ErrorBanner, LoadingView } from '@/components/ui';
 import { DateField } from '@/components/DateField';
 import { useToast } from '@/components/Toast';
 import { useRefreshSignal } from '@/components/ops/bits';
@@ -46,11 +46,22 @@ export function TeachingDayList({ onChanged }: { onChanged?: () => void }) {
     const [day, setDay] = useState(today());
     const [data, setData] = useState<TeachingDay | null>(null);
     const [busy, setBusy] = useState<string | null>(null);
+    const [error, setError] = useState<string | null>(null);
 
+    // Stepping through days quickly fires several loads: only the latest day's
+    // answer may fill the list, or Monday's lessons could show under Tuesday.
+    const request = useRef(0);
     const load = useCallback(async () => {
-        try { setData(await opsGet<TeachingDay>(api, `${URL}?date=${day}`)); }
-        catch (err) { toast.error(errorMessage(err, 'Could not load your day')); }
-    }, [api, day, toast]);
+        const id = ++request.current;
+        setError(null);
+        try {
+            const next = await opsGet<TeachingDay>(api, `${URL}?date=${day}`);
+            if (id === request.current) setData(next);
+        } catch (err) {
+            // Without this the list sat on its loader for good after a failure.
+            if (id === request.current) setError(errorMessage(err, 'Could not load your day'));
+        }
+    }, [api, day]);
     useEffect(() => { setData(null); void load(); }, [load]);
     useRefreshSignal(load);
 
@@ -75,7 +86,8 @@ export function TeachingDayList({ onChanged }: { onChanged?: () => void }) {
                 <Button size="sm" variant="secondary" label="Next day ›" onPress={() => setDay((d) => addDays(d, 1))} />
             </ButtonRow>
             <View style={{ marginTop: spacing.md }}>
-                {!data ? <LoadingView />
+                {error && !data ? <ErrorBanner message={error} onRetry={() => void load()} />
+                    : !data ? <LoadingView />
                     : !data.published ? <EmptyState title="Your lessons appear here once the school publishes a timetable." />
                         : data.lessons.length === 0 ? <EmptyState title={`No lessons on ${fmtDate(day)}.`} />
                             : data.lessons.map((l) => <LessonCard key={l.lessonId} lesson={l} busy={busy === l.lessonId} onAction={(a) => void act(l, a)} />)}

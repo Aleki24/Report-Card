@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { personName } from '@shared/ops/format';
 import {
@@ -33,14 +33,18 @@ export function SchemeSheet({ schemeId, canReview, userId, onClose, onChanged }:
     const [showDraft, setShowDraft] = useState(false);
     const [comment, setComment] = useState('');
 
+    // The parent passes a fresh onClose each render; depending on it re-ran
+    // the load and replaced entries being typed with the saved ones.
+    const onCloseRef = useRef(onClose);
+    useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
     const load = useCallback(async () => {
         try {
             const s = await opsGet<SchemeDetail>(api, `/api/academics/schemes/${schemeId}`);
             setScheme(s);
             setEntries(s.entries);
             setDirty(false);
-        } catch (err) { toast.error(errorMessage(err, 'Could not open the scheme')); onClose(); }
-    }, [api, schemeId, toast, onClose]);
+        } catch (err) { toast.error(errorMessage(err, 'Could not open the scheme')); onCloseRef.current(); }
+    }, [api, schemeId, toast]);
     useEffect(() => { void load(); }, [load]);
 
     const edit = (i: number, patch: Partial<SchemeEntry>) => { setEntries((es) => es.map((e, j) => (j === i ? { ...e, ...patch } : e))); setDirty(true); };
@@ -81,7 +85,8 @@ export function SchemeSheet({ schemeId, canReview, userId, onClose, onChanged }:
     ).then((ok) => { if (ok) setComment(''); });
 
     const markTaught = (e: SchemeEntry & { id: string }) => {
-        if (scheme) void work(() => api.post('/api/ops/records-of-work', taughtRecord(scheme, e)), 'Recorded as taught.');
+        // One record per lesson: a second tap while the first saves would log it twice.
+        if (scheme && !busy) void work(() => api.post('/api/ops/records-of-work', taughtRecord(scheme, e)), 'Recorded as taught.');
     };
 
     const isOwner = scheme?.teacher_id === userId;
@@ -140,7 +145,7 @@ export function SchemeSheet({ schemeId, canReview, userId, onClose, onChanged }:
                                     {taught ? <Text style={{ color: colors.success, fontFamily: fonts.display }}>✓</Text> : null}
                                 </View>
                                 <ButtonRow>
-                                    {!taught && e.id && isOwner && !dirty ? <Button size="sm" variant="secondary" label="Taught" onPress={() => markTaught(e as SchemeEntry & { id: string })} /> : null}
+                                    {!taught && e.id && isOwner && !dirty ? <Button size="sm" variant="secondary" label="Taught" disabled={busy} onPress={() => markTaught(e as SchemeEntry & { id: string })} /> : null}
                                     <Button size="sm" variant="ghost" label={expanded ? 'Hide details' : 'Details'} onPress={() => setOpen(expanded ? null : i)} />
                                     {scheme.editable ? <Button size="sm" variant="ghost" label="Remove" onPress={() => { setEntries((es) => es.filter((_, j) => j !== i)); setDirty(true); }} /> : null}
                                 </ButtonRow>

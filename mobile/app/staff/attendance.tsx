@@ -9,7 +9,8 @@ import {
 } from '@/components/ui';
 import { RequireScreen } from '@/components/RequireScreen';
 import type { AttendanceNotifyResult, AttendanceStatus, ClassAttendanceRow } from '@/lib/types';
-import { confirmAlert } from '@/lib/confirm';
+import { askConfirm, confirmAlert } from '@/lib/confirm';
+import { useToast } from '@/components/Toast';
 
 type StatusColor = 'success' | 'danger' | 'warning' | 'info';
 
@@ -32,7 +33,8 @@ function AttendanceContent() {
     const { colors } = useTheme();
     const styles = useStyles();
     const api = useApi();
-    const { streams, loading: streamsLoading, error: streamsError } = useManagedGradeStreams();
+    const toast = useToast();
+    const { streams, loading: streamsLoading, error: streamsError, reload: reloadStreams } = useManagedGradeStreams();
     const [streamId, setStreamId] = useState<string | null>(null);
     const [date, setDate] = useState(toISODate());
     const [rows, setRows] = useState<ClassAttendanceRow[]>([]);
@@ -85,6 +87,15 @@ function AttendanceContent() {
 
     const markAllPresent = () => setPending(Object.fromEntries(rows.map((r) => [r.id, 'present' as const])));
 
+    // Switching class or day reloads the register and drops taps not yet
+    // saved, so ask first rather than silently losing a half-taken register.
+    const leaveRegister = async (same: boolean, apply: () => void) => {
+        if (same) return;
+        if (changed > 0 && !(await askConfirm('Discard unsaved register?', `${pluralize(changed, 'change')} to this register will be lost.`, 'Discard'))) return;
+        setMessage(null);
+        apply();
+    };
+
     const save = async () => {
         // While a class or date loads, the rows on screen are the previous one's.
         if (loading) return;
@@ -98,7 +109,10 @@ function AttendanceContent() {
             setMessage({ tone: 'success', text: `Attendance saved for ${pluralize(res.count ?? records.length, 'student')}.` });
             await loadRoster();
         } catch (err) {
-            setMessage({ tone: 'danger', text: errorMessage(err, 'Failed to save attendance') });
+            // The save button sits in the footer, far below this notice on a long class list.
+            const text = errorMessage(err, 'Failed to save attendance');
+            toast.error(text);
+            setMessage({ tone: 'danger', text });
         } finally {
             setSaving(false);
         }
@@ -141,18 +155,18 @@ function AttendanceContent() {
             }
         >
             <ScreenHeader title="Attendance" description="Take or review the daily register for a class." />
-            {streamsError ? <ErrorBanner message={streamsError} /> : null}
+            {streamsError ? <ErrorBanner message={streamsError} onRetry={reloadStreams} /> : null}
 
             {streams.length === 0 ? (
-                <EmptyState title="No classes assigned" description="Registers are kept by admins and each class's own teacher." />
+                streamsError ? null : <EmptyState title="No classes assigned" description="Registers are kept by admins and each class's own teacher." />
             ) : (
                 <>
-                    <ChipSelect options={streams.map((s) => ({ value: s.id, label: s.full_name }))} value={effectiveStreamId} onChange={setStreamId} />
-                    <DateStepper value={date} onChange={setDate} max={toISODate()} />
+                    <ChipSelect options={streams.map((s) => ({ value: s.id, label: s.full_name }))} value={effectiveStreamId} onChange={(id) => void leaveRegister(id === effectiveStreamId, () => setStreamId(id))} />
+                    <DateStepper value={date} onChange={(d) => void leaveRegister(d === date, () => setDate(d))} max={toISODate()} />
                     {error ? <ErrorBanner message={error} onRetry={loadRoster} /> : null}
                     {message ? <Notice tone={message.tone} message={message.text} onDismiss={() => setMessage(null)} /> : null}
 
-                    {rows.length > 0 ? (
+                    {rows.length > 0 && !loading ? (
                         <>
                             <StatGrid>
                                 <StatTile label="Present" value={counts.present} tone={colors.success} />
@@ -172,7 +186,7 @@ function AttendanceContent() {
                         {loading ? (
                             <LoadingView />
                         ) : rows.length === 0 ? (
-                            <EmptyState title="No students in this class" />
+                            error ? null : <EmptyState title="No students in this class" />
                         ) : (
                             <ListCard>
                                 {rows.map((r) => {
@@ -189,6 +203,7 @@ function AttendanceContent() {
                                                     return (
                                                         <Pressable
                                                             key={opt.value}
+                                                            hitSlop={{ top: 4, bottom: 4 }}
                                                             onPress={() => setPending((prev) => ({ ...prev, [r.id]: opt.value }))}
                                                             accessibilityRole="button"
                                                             accessibilityLabel={`${r.name} ${opt.value}`}
@@ -217,6 +232,6 @@ const useStyles = makeStyles((colors) => ({
     rowTitle: { fontSize: 13, fontFamily: fonts.bold, color: colors.foreground },
     rowSub: { fontFamily: fonts.regular, fontSize: 11, color: colors.muted, marginTop: 2 },
     statusRow: { flexDirection: 'row', gap: 6 },
-    statusChip: { width: 36, height: 36, borderRadius: 18, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
+    statusChip: { width: 40, height: 40, borderRadius: 20, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
     statusChipText: { fontSize: 12, fontFamily: fonts.display, color: colors.muted },
 }));

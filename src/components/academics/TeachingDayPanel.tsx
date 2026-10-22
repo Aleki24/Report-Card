@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { BookOpen, CheckCircle2, ChevronLeft, ChevronRight, ClipboardCheck, NotebookPen } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { InputField } from '@/components/ui/FormField';
+import { LoadError } from '@/components/ui/LoadError';
 import { errorText, opsFetch } from '@/lib/ops/client';
 import { addDays, date as fmtDate, today } from '@/lib/ops/format';
 import { TEACHING_DAY_NOTE, nextStep, type TeachingDay, type TeachingDayAction, type TeachingDayLesson } from '@/lib/academics/teaching-day';
@@ -47,6 +48,8 @@ function LessonCard({ lesson, busy, onAction }: { lesson: TeachingDayLesson; bus
 export function TeachingDayPanel({ onChanged }: { onChanged?: () => void }) {
     const [day, setDay] = useState(today());
     const [data, setData] = useState<TeachingDay | null>(null);
+    // A failed load used to leave the placeholder up for good, with only a passing toast.
+    const [loadError, setLoadError] = useState<string | null>(null);
     const [busy, setBusy] = useState<string | null>(null);
 
     // The day the panel is showing. A slower load for a day the teacher has
@@ -57,12 +60,12 @@ export function TeachingDayPanel({ onChanged }: { onChanged?: () => void }) {
     const load = useCallback(async () => {
         try {
             const result = await opsFetch<TeachingDay>(`${URL}?date=${day}`);
-            if (dayRef.current === day) setData(result);
+            if (dayRef.current === day) { setData(result); setLoadError(null); }
         } catch (err) {
-            if (dayRef.current === day) toast.error(errorText(err));
+            if (dayRef.current === day) setLoadError(errorText(err));
         }
     }, [day]);
-    useEffect(() => { setData(null); void load(); }, [load]);
+    useEffect(() => { setData(null); setLoadError(null); void load(); }, [load]);
 
     const act = async (lesson: TeachingDayLesson, action: TeachingDayAction) => {
         setBusy(lesson.lessonId);
@@ -85,7 +88,8 @@ export function TeachingDayPanel({ onChanged }: { onChanged?: () => void }) {
                     <Button variant="outline" size="icon" aria-label="Next day" onClick={() => setDay(d => addDays(d, 1))}><ChevronRight /></Button>
                 </div>
             </div>
-            {!data ? <div className="skeleton-bone h-40 rounded-2xl" />
+            {loadError && !data ? <LoadError title="Your teaching day did not load" message={loadError} onRetry={() => { setLoadError(null); void load(); }} />
+                : !data ? <div className="skeleton-bone h-40 rounded-2xl" />
                 : !data.published ? <p className="rounded-2xl border border-border/60 bg-card p-8 text-center text-sm text-muted-foreground">Your lessons appear here once the school publishes a timetable.</p>
                     : data.lessons.length === 0 ? <p className="rounded-2xl border border-border/60 bg-card p-8 text-center text-sm text-muted-foreground">No lessons on {fmtDate(day)}.</p>
                         : <ol className="flex flex-col gap-3">{data.lessons.map(l => <LessonCard key={l.lessonId} lesson={l} busy={busy === l.lessonId} onAction={(x, a) => void act(x, a)} />)}</ol>}

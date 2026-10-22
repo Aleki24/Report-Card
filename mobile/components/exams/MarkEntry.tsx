@@ -14,6 +14,7 @@ import { PaperSetup } from './PaperSetup';
 import type { AcademicStructure, ExamMark, ExamPaperScheme, ExamSlot, MarkEntryInput, StudentListItem } from '@/lib/types';
 import { confirmAlert } from '@/lib/confirm';
 import { MarkFillTools, type FillSummary } from './MarkFillTools';
+import { useToast } from '@/components/Toast';
 
 interface Entry {
     score: string;
@@ -49,6 +50,7 @@ export function MarkEntry({ exam, structure }: { exam: ExamSlot; structure: Acad
     const { colors } = useTheme();
     const styles = useStyles();
     const api = useApi();
+    const toast = useToast();
     const draftKey = `marks-${exam.id}`;
 
     const students = useApiQuery<StudentListItem[]>(examRosterUrl({ subjectId: exam.subject_id, gradeStreamId: exam.grade_stream_id, gradeId: exam.grade_id }));
@@ -167,6 +169,23 @@ export function MarkEntry({ exam, structure }: { exam: ExamSlot; structure: Acad
         [scheme, papers, exam.max_score],
     );
 
+    // Marks typed before the grading scale arrived (a slow academic-structure
+    // load) were left ungraded; grade the auto-graded ones once it does.
+    useEffect(() => {
+        if (scales.length === 0) return;
+        setEntries((prev) => {
+            let changed = false;
+            const next: Entries = {};
+            for (const [id, e] of Object.entries(prev)) {
+                const pct = e.gradeManual ? null : percentFor(e);
+                const grade = pct === null || errorFor(e) ? e.grade : gradeFromPercentage(pct, scales);
+                if (grade !== e.grade) changed = true;
+                next[id] = grade === e.grade ? e : { ...e, grade };
+            }
+            return changed ? next : prev;
+        });
+    }, [scales, percentFor, errorFor]);
+
     const update = (studentId: string, patch: (e: Entry) => Entry) => {
         setEntries((prev) => {
             const next = patch(prev[studentId] ?? entryFromMark(marksByStudent.get(studentId)));
@@ -206,7 +225,10 @@ export function MarkEntry({ exam, structure }: { exam: ExamSlot; structure: Acad
     const handleSave = async () => {
         if (pendingIds.length === 0) return;
         if (invalid.length > 0) {
-            setMessage({ tone: 'danger', text: `Fix ${pluralize(invalid.length, 'score')} before saving.` });
+            const text = `Fix ${pluralize(invalid.length, 'score')} before saving.`;
+            setMessage({ tone: 'danger', text });
+            // The message sits above a long list; the toast shows by the Save button.
+            toast.error(text);
             return;
         }
         setSaving(true);
@@ -244,12 +266,17 @@ export function MarkEntry({ exam, structure }: { exam: ExamSlot; structure: Acad
             const remaining = unsaved(entriesRef.current);
             if (Object.keys(remaining).length === 0) clearDraft(draftKey);
             else saveDraft(draftKey, remaining);
-            setEntries(unsaved);
+            toast.success(`Saved ${pluralize(payload.length, 'mark')}.`);
             setMessage({ tone: 'success', text: `Saved ${pluralize(payload.length, 'mark')}.` });
-            marks.refresh();
+            // Keep the typed boxes until the saved marks are back: dropping them
+            // first showed every score blank until the refetch arrived. If it
+            // fails they stay as typed (already saved; Save again is harmless).
+            if (await marks.refresh()) setEntries(unsaved);
         } catch (err) {
             // The marks stay in the draft, so nothing typed is lost.
-            setMessage({ tone: 'danger', text: `${errorMessage(err, 'Could not save')}. Your marks are kept on this device — tap Save to try again.` });
+            const text = `${errorMessage(err, 'Could not save')}. Your marks are kept on this device — tap Save to try again.`;
+            setMessage({ tone: 'danger', text });
+            toast.error(text);
         } finally {
             setSaving(false);
         }
@@ -317,9 +344,9 @@ export function MarkEntry({ exam, structure }: { exam: ExamSlot; structure: Acad
                 />
             ) : null}
 
-            {loadError ? <ErrorBanner message={loadError} onRetry={() => { students.reload(); marks.reload(); }} /> : null}
+            {loadError ? <ErrorBanner message={loadError} onRetry={() => { void students.reload(); void marks.reload(); void schemeQuery.reload(); }} /> : null}
             {message ? <Notice message={message.text} tone={message.tone} onDismiss={() => setMessage(null)} /> : null}
-            {scales.length === 0 ? (
+            {structure && scales.length === 0 ? (
                 <Notice tone="warning" message="No grading system is set for this subject, so grades can't be worked out automatically. Pick a grade per learner, or ask your admin to set one." />
             ) : null}
 

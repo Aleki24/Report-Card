@@ -10,10 +10,10 @@ export interface ApiQuery<T> {
     loading: boolean;
     refreshing: boolean;
     error: string | null;
-    /** Reload in place, keeping current data visible (pull-to-refresh). */
-    refresh: () => void;
-    /** Reload; keeps current data visible when it is for the same path. */
-    reload: () => void;
+    /** Reload in place, keeping current data visible (pull-to-refresh). Resolves true once fresh data is shown. */
+    refresh: () => Promise<boolean>;
+    /** Reload; keeps current data visible when it is for the same path. Resolves true once fresh data is shown. */
+    reload: () => Promise<boolean>;
 }
 
 /**
@@ -45,18 +45,18 @@ export function useApiQuery<T>(path: string | null, opts?: { raw?: boolean }): A
     const dataPath = useRef<string | null>(cached !== undefined ? path : null);
 
     const load = useCallback(
-        async (silent: boolean) => {
+        async (silent: boolean): Promise<boolean> => {
             if (path === null) {
                 setData(null);
                 dataPath.current = null;
                 setLoading(false);
-                return;
+                return false;
             }
             if (silent || dataPath.current === path) setRefreshing(true);
             else {
                 // Show what this screen held last time, then refresh it quietly.
                 const saved = readMemory<T>(key) ?? (await readStored<T>(key));
-                if (latest.current !== path) return;
+                if (latest.current !== path) return false;
                 if (saved !== undefined) {
                     setData(saved);
                     dataPath.current = path;
@@ -81,9 +81,12 @@ export function useApiQuery<T>(path: string | null, opts?: { raw?: boolean }): A
                     setData(next);
                     dataPath.current = path;
                     writeCache(key, next);
+                    return true;
                 }
+                return false;
             } catch (err) {
                 if (latest.current === path) setError(errorMessage(err, 'Failed to load'));
+                return false;
             } finally {
                 if (latest.current === path) {
                     setLoading(false);
@@ -99,14 +102,14 @@ export function useApiQuery<T>(path: string | null, opts?: { raw?: boolean }): A
     }, [load]);
 
     // Pull-to-refresh on the enclosing screen reloads this query in place.
-    useRegisterScreenRefresh(() => load(true));
+    useRegisterScreenRefresh(async () => { await load(true); });
 
     return {
         data,
         loading,
         refreshing,
         error,
-        refresh: () => void load(true),
-        reload: () => void load(false),
+        refresh: () => load(true),
+        reload: () => load(false),
     };
 }

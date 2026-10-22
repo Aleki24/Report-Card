@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { Archive, ClipboardCheck, FileLock2, FilePlus2, FolderOpen, Printer } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
+import { LoadError } from '@/components/ui/LoadError';
 import DataTable, { type DataTableColumn } from '@/components/ui/DataTable';
 import { FormField, FormGrid, InputField } from '@/components/ui/FormField';
 import { StatTile } from '@/components/ui/StatTile';
@@ -29,6 +30,9 @@ export default function ExamPapersPage() {
     const { can, profile } = useAuth();
     const [papers, setPapers] = useState<ExamPaper[]>([]);
     const [loading, setLoading] = useState(true);
+    // A failed list used to read "You have not uploaded any papers yet", which
+    // invited teachers to upload the same paper again.
+    const [loadError, setLoadError] = useState<string | null>(null);
     const [openId, setOpenId] = useState<string | null>(null);
     const [uploading, setUploading] = useState(false);
     const [form, setForm] = useState(EMPTY_PAPER_FORM);
@@ -40,8 +44,8 @@ export default function ExamPapersPage() {
     const [moderators, setModerators] = useState<PaperModerator[] | null>(null);
 
     const load = useCallback(async () => {
-        try { setPapers(await opsFetch<ExamPaper[]>('/api/academics/exam-papers')); }
-        catch (err) { toast.error(errorText(err)); }
+        try { setPapers(await opsFetch<ExamPaper[]>('/api/academics/exam-papers')); setLoadError(null); }
+        catch (err) { setLoadError(errorText(err)); }
         finally { setLoading(false); }
     }, []);
     useEffect(() => { void load(); }, [load]);
@@ -69,7 +73,9 @@ export default function ExamPapersPage() {
     ];
 
     const table = (rows: ExamPaper[], empty: string, extra?: DataTableColumn<ExamPaper>[]) => (
-        <DataTable columns={columns(extra)} rows={rows} rowKey={p => p.id} loading={loading} onRowClick={p => setOpenId(p.id)} emptyState={empty} />
+        loadError && !loading
+            ? <LoadError title="Exam papers did not load" message={loadError} onRetry={() => { setLoading(true); void load(); }} />
+            : <DataTable columns={columns(extra)} rows={rows} rowKey={p => p.id} loading={loading} onRowClick={p => setOpenId(p.id)} emptyState={empty} />
     );
 
     const submitUpload = async () => {
@@ -142,7 +148,7 @@ export default function ExamPapersPage() {
                         <div className="flex flex-col gap-4">
                             {t.id === 'moderation' || t.id === 'print' ? (
                                 <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                                    <StatTile icon={ClipboardCheck} label="Awaiting moderation" value={waiting} tone={waiting > 0 ? 'warn' : 'good'} />
+                                    <StatTile icon={ClipboardCheck} label="Awaiting moderation" value={loadError ? '—' : waiting} tone={loadError ? 'default' : waiting > 0 ? 'warn' : 'good'} />
                                     <StatTile icon={Printer} label="To print" value={toPrint} hue="violet" />
                                     <StatTile icon={FileLock2} label="Locked" value={papers.filter(p => p.status === 'LOCKED').length} hue="blue" />
                                     <StatTile icon={Archive} label="Released" value={papers.filter(p => p.status === 'RELEASED').length} hue="emerald" />

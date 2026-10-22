@@ -11,7 +11,7 @@ import { QuickMarkEntry } from '@/components/exam-results/QuickMarkEntry';
 import { AllSubjectsView } from '@/components/exam-results/AllSubjectsView';
 import { ExamStatusBar } from '@/components/exam-results/ExamStatusBar';
 import { markEntryHref } from '@/lib/marking-progress';
-import { BarChart3, ClipboardList, Download, FileText, LayoutGrid, Package, PencilLine, Settings2, Trophy, type LucideIcon } from 'lucide-react';
+import { BarChart3, ClipboardList, Download, FileText, LayoutGrid, Package, PencilLine, RotateCcw, Settings2, Trophy, type LucideIcon } from 'lucide-react';
 import { InitialsAvatar } from '@/components/ui/InitialsAvatar';
 import { cn } from '@/lib/utils';
 import { STEP_TONES } from './examTheme';
@@ -60,6 +60,10 @@ export function ExamResultsTab() {
     const [marks, setMarks] = useState<MarkRow[]>([]);
     const [markScheme, setMarkScheme] = useState<ExamSubjectComponentScheme | null>(null);
     const [loadingMarks, setLoadingMarks] = useState(false);
+    // A failed request is shown as one, not as "No exams found" or "No marks found".
+    const [resultsError, setResultsError] = useState<string | null>(null);
+    const examsRequest = useRef(0);
+    const marksRequest = useRef(0);
 
     // A later click on another pending exam re-uses this mounted component, so
     // follow the URL when it changes rather than only reading it on mount.
@@ -113,7 +117,9 @@ export function ExamResultsTab() {
     // 2. Fetch exams for selected stream (via server API instead of browser Supabase)
     const fetchExams = useCallback(async (opts?: { keepSelection?: boolean }) => {
         if (!selectedStreamId) { setExams([]); setSelectedExamId(''); return; }
+        const request = ++examsRequest.current;
         setLoadingExams(true);
+        setResultsError(null);
         const stream = gradeStreams.find(s => s.id === selectedStreamId);
         if (!stream) { setLoadingExams(false); return; }
 
@@ -123,6 +129,7 @@ export function ExamResultsTab() {
                 grade_id: stream.grade_id,
             });
             const res = await fetch(`/api/school/exams?${params.toString()}`);
+            if (request !== examsRequest.current) return;
             if (res.ok) {
                 const json = await res.json();
                 const mapped = (json.data || []).map((e: any) => ({
@@ -151,13 +158,16 @@ export function ExamResultsTab() {
             } else {
                 setExams([]);
                 if (!opts?.keepSelection) setSelectedExamId('');
+                setResultsError('This class’s exams could not be loaded.');
             }
         } catch (err) {
+            if (request !== examsRequest.current) return;
             console.error('Failed to fetch exams:', err);
             setExams([]);
             if (!opts?.keepSelection) setSelectedExamId('');
+            setResultsError('This class’s exams could not be loaded. Check your connection.');
         } finally {
-            setLoadingExams(false);
+            if (request === examsRequest.current) setLoadingExams(false);
         }
     }, [selectedStreamId, gradeStreams]);
 
@@ -168,10 +178,14 @@ export function ExamResultsTab() {
     // 3. Fetch marks for selected exam (via server API instead of browser Supabase)
     const fetchMarks = useCallback(async () => {
         if (!selectedExamId) { setMarks([]); return; }
+        const request = ++marksRequest.current;
         setLoadingMarks(true);
+        setResultsError(null);
 
         try {
             const res = await fetch(`/api/school/exam-marks?exam_id=${selectedExamId}`);
+            // A slower answer for the exam the teacher has already left must not fill this one.
+            if (request !== marksRequest.current) return;
             if (res.ok) {
                 const json = await res.json();
                 const mapped: MarkRow[] = (json.data || []).map((m: any) => ({
@@ -191,13 +205,17 @@ export function ExamResultsTab() {
             } else {
                 setMarks([]);
                 setMarkScheme(null);
+                // Not "No marks found": teachers took that to mean their marks were lost.
+                setResultsError('The marks for this exam could not be loaded.');
             }
         } catch (err) {
+            if (request !== marksRequest.current) return;
             console.error('Failed to fetch marks:', err);
             setMarks([]);
             setMarkScheme(null);
+            setResultsError('The marks for this exam could not be loaded. Check your connection.');
         } finally {
-            setLoadingMarks(false);
+            if (request === marksRequest.current) setLoadingMarks(false);
         }
     }, [selectedExamId]);
 
@@ -343,7 +361,7 @@ export function ExamResultsTab() {
                     <select
                         className="input-field w-full"
                         value={selectedStreamId}
-                        onChange={e => { setSelectedStreamId(e.target.value); setActiveTab('results'); }}
+                        onChange={e => { setSelectedStreamId(e.target.value); setActiveTab('results'); setExams([]); setMarks([]); setSelectedExamId(''); }}
                         disabled={loadingStreams}
                     >
                         <option value="">-- Select Class --</option>
@@ -434,7 +452,15 @@ export function ExamResultsTab() {
                     </div>
 
                     {/* ── Tab Content ── */}
-                    {loadingMarks ? (
+                    {resultsError && !loadingMarks && !loadingExams ? (
+                        <div role="alert" className="card flex flex-col items-start gap-3 p-5 text-sm">
+                            <p className="font-semibold text-foreground">{resultsError}</p>
+                            <p className="text-muted-foreground">Your saved marks are not affected.</p>
+                            <button type="button" className="btn-secondary" onClick={() => { void (exams.length ? fetchMarks() : fetchExams()); }}>
+                                <RotateCcw size={16} aria-hidden />Try again
+                            </button>
+                        </div>
+                    ) : loadingMarks ? (
                         <div className="card p-5">
                             <InlineLoadingSkeleton rows={6} />
                         </div>

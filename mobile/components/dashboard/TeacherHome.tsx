@@ -8,6 +8,7 @@ import {
 } from 'lucide-react-native';
 import type { DashboardData } from '@shared/dashboard';
 import { useApiQuery } from '@/lib/useApiQuery';
+import { ErrorBanner } from '@/components/ui';
 import { hueForHref } from '@/lib/hues';
 import type { ClassTeacherStats, SubjectTeacherStats } from '@/lib/types';
 import { fonts, makeStyles, radius, spacing, useTheme } from '@/lib/theme';
@@ -77,9 +78,14 @@ export function TeacherHome({ name, variant }: { name: string; variant: Variant 
     const summary = useApiQuery<DashboardData>('/api/school/dashboard', { raw: true });
     const stats = useApiQuery<ClassTeacherStats & SubjectTeacherStats>(`/api/school/stats?role=${variant === 'class' ? 'class_teacher' : 'subject_teacher'}`, { raw: true });
     // Work learners have handed in that still needs a grade: something to act on today.
-    const submissions = useApiQuery<{ grade: number | null }[]>('/api/school/submissions');
+    // Only the subject home shows it, so the class home skips the request.
+    const submissions = useApiQuery<{ grade: number | null }[]>(variant === 'subject' ? '/api/school/submissions' : null);
     const toGrade = submissions.data ? submissions.data.filter((s) => s.grade === null).length : null;
     const marking = useMarking();
+    // A failed load is unknown, not zero: tiles show a dash and one banner offers a retry.
+    const statsFailed = !stats.data && stats.error !== null;
+    const failed = [summary, stats, submissions].filter((q) => !q.data && q.error !== null);
+    const markingValue = (text: string) => (marking.loading ? '…' : marking.error ? '—' : text);
 
     if ((summary.loading && !summary.data) || (stats.loading && !stats.data)) return <DashboardSkeleton />;
 
@@ -88,9 +94,11 @@ export function TeacherHome({ name, variant }: { name: string; variant: Variant 
     const avgText = avg && avg !== '—' ? `${avg}%` : '—';
     const markingLine = marking.loading
         ? null
-        : marking.left > 0
-            ? `You have ${marking.left.toLocaleString()} mark${marking.left === 1 ? '' : 's'} left to enter this term.`
-            : marking.items.length > 0 ? 'All your marks are in for this term. Kazi nzuri!' : 'No exams to mark yet this term.';
+        : marking.error
+            ? 'Your marking progress did not load.'
+            : marking.left > 0
+                ? `You have ${marking.left.toLocaleString()} mark${marking.left === 1 ? '' : 's'} left to enter this term.`
+                : marking.items.length > 0 ? 'All your marks are in for this term. Kazi nzuri!' : 'No exams to mark yet this term.';
     const actions: HeroAction[] = [
         marking.next
             ? { label: `Continue: ${marking.next.subjectName} · ${marking.next.className}`, icon: PenLine, href: markEntryRoute(marking.next), primary: true }
@@ -103,30 +111,36 @@ export function TeacherHome({ name, variant }: { name: string; variant: Variant 
     let i = 0;
 
     return (
-        <HomeScreen onRefresh={() => { summary.refresh(); stats.refresh(); }} refreshing={summary.refreshing || stats.refreshing}>
+        <HomeScreen
+            onRefresh={() => { void summary.refresh(); void stats.refresh(); void marking.refresh(); if (variant === 'subject') void submissions.refresh(); }}
+            refreshing={summary.refreshing || stats.refreshing}
+        >
             <Reveal index={i++}>
                 <DashboardHero name={name} term={summary.data?.term ?? null} canEditTerms={false} summary={markingLine} actions={actions} />
             </Reveal>
+            {failed.length > 0 ? (
+                <ErrorBanner message="Some of your dashboard did not load." onRetry={() => { for (const q of failed) void q.reload(); }} />
+            ) : null}
             <Reveal index={i++}>
                 <OperationsOverview>
                     <KpiTile
-                        title="Marks to enter" value={marking.loading ? '…' : marking.left.toLocaleString()} icon={ClipboardList} hue="amber"
+                        title="Marks to enter" value={markingValue(marking.left.toLocaleString())} icon={ClipboardList} hue="amber"
                         href={marking.next ? markEntryRoute(marking.next) : '/staff/exams'}
                         tone={!marking.loading && marking.left > 0 ? 'warn' : undefined}
                     />
                     <KpiTile
-                        title="Exams fully marked" value={marking.loading ? '…' : `${marking.complete}/${marking.items.length}`} icon={CircleCheck} hue="emerald" href="/staff/exams"
+                        title="Exams fully marked" value={markingValue(`${marking.complete}/${marking.items.length}`)} icon={CircleCheck} hue="emerald" href="/staff/exams"
                         tone={!marking.loading && marking.items.length > 0 && marking.complete === marking.items.length ? 'good' : undefined}
                     />
                     {variant === 'class' ? (
                         <>
-                            <KpiTile title={streamName ? `Learners in ${streamName}` : 'Learners'} value={stats.data?.studentCount ?? 0} icon={GraduationCap} hue="orange" href="/staff/people" />
+                            <KpiTile title={streamName ? `Learners in ${streamName}` : 'Learners'} value={statsFailed ? '—' : stats.data?.studentCount ?? 0} icon={GraduationCap} hue="orange" href="/staff/people" />
                             <KpiTile title="Class average" value={avgText} icon={BarChart3} hue="violet" href="/staff/exams?tab=results" />
                         </>
                     ) : (
                         <>
                             <KpiTile title="Subject average" value={avgText} icon={BarChart3} hue="violet" href="/staff/exams?tab=results" />
-                            <KpiTile title="Work to grade" value={toGrade == null ? '…' : toGrade.toLocaleString()} icon={Inbox} hue="sky" href="/staff/assignments?tab=submissions" tone={toGrade ? 'warn' : undefined} />
+                            <KpiTile title="Work to grade" value={toGrade != null ? toGrade.toLocaleString() : submissions.error ? '—' : '…'} icon={Inbox} hue="sky" href="/staff/assignments?tab=submissions" tone={toGrade ? 'warn' : undefined} />
                         </>
                     )}
                 </OperationsOverview>
