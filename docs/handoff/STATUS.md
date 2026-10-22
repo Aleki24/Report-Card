@@ -31,9 +31,9 @@ Written 22 October 2026, when the full-file review was paused. Everything below 
 
 ## 3. Owner actions (you)
 
-1. **Urgent.** In the Supabase SQL Editor, run `supabase/migrations/20261011090100_close_photos_listing.sql`. Until you do, anyone holding the public app key can list and download every school's learner photos and homework images. Nothing in the app relies on those policies: uploads go through the server or signed links, and photos load from their public links. I tried to apply it on 21 Oct, and Supabase returned "cancelled".
-2. In the same place, run `supabase/migrations/20261019090000_attachment_bucket_limits.sql`. It makes storage enforce the 10 MB limit and the allowed file types for photos and homework files.
-3. Supabase → Authentication → Providers: turn off email sign-ups. The app signs in with Clerk.
+1. ~~Run `supabase/migrations/20261011090100_close_photos_listing.sql`.~~ **Done 22 Oct**, run by you in the SQL Editor. All four photos policies are gone. Listing the bucket with the public key now returns nothing, and photos still load from their public links.
+2. ~~Run `supabase/migrations/20261019090000_attachment_bucket_limits.sql`.~~ **Done 22 Oct.** The photos and assignment-files buckets are capped at 10 MB with their allowed file types. Because both ran in the SQL Editor, they do not appear in Supabase's migration history.
+3. Supabase → Authentication → Providers: turn off email sign-ups. The app signs in with Clerk. The Supabase security report also flags leaked-password protection as off. It only applies to Supabase sign-ins, so turning off sign-ups covers it, but you can switch it on under Authentication too.
 4. Vercel (project report-card → Settings → Environment Variables):
    - Set `ANTHROPIC_API_KEY` as Sensitive, then delete the variable named `claude`.
    - Set `AT_USERNAME`, and re-create `AT_API_KEY` as Sensitive.
