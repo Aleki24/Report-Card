@@ -66,16 +66,36 @@ export async function fetchWithRetry(url: string, init?: RequestInit, attempts =
     }
 }
 
+/** Shown when a read gets no answer in time, instead of a spinner that never ends. */
+export const TIMEOUT_ERROR_MESSAGE = 'Skulbase is taking too long to answer. Check your connection and try again.';
+const READ_TIMEOUT_MS = 30_000;
+
 async function request<T>(path: string, token: string | null, init?: RequestInit): Promise<T> {
-    const res = await fetchWithRetry(`${API_URL}${path}`, {
-        ...init,
-        headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-            ...(init?.headers ?? {}),
-        },
-    });
-    const json: unknown = await res.json().catch(() => ({}));
+    // Reads give up after 30 seconds on a stalled connection. Writes do not:
+    // giving up on one the server may still complete (a payment, a mark sheet)
+    // would invite a second submission.
+    const isRead = !init?.method || init.method.toUpperCase() === 'GET';
+    const controller = isRead ? new AbortController() : null;
+    const timer = controller ? setTimeout(() => controller.abort(), READ_TIMEOUT_MS) : null;
+    let res: Response;
+    let json: unknown;
+    try {
+        res = await fetchWithRetry(`${API_URL}${path}`, {
+            ...init,
+            ...(controller ? { signal: controller.signal } : {}),
+            headers: {
+                'Content-Type': 'application/json',
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                ...(init?.headers ?? {}),
+            },
+        });
+        json = await res.json().catch(() => ({}));
+    } catch (err) {
+        if (controller?.signal.aborted) throw new ApiError(TIMEOUT_ERROR_MESSAGE, 0, NETWORK_ERROR_CODE);
+        throw err;
+    } finally {
+        if (timer) clearTimeout(timer);
+    }
     if (!res.ok) {
         const body = (json ?? {}) as ErrorBody;
         // Zod `details` name the rejected fields; fold them in as the web does.

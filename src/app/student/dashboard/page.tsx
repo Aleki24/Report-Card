@@ -61,9 +61,14 @@ export default function StudentDashboardPage() {
     // open (or backgrounded) across the day.
     const [now, setNow] = useState(() => new Date());
     const fetchingRef = useRef(false);
+    // A reload asked for while one is running (after a hand-in) runs once it
+    // ends, rather than being dropped and leaving "Hand in" on the homework.
+    const pendingRef = useRef(false);
+    const lastLoadedAt = useRef(0);
+    const [feesFailed, setFeesFailed] = useState(false);
 
-    const fetchDashboard = useCallback(async (opts?: { silent?: boolean }) => {
-        if (fetchingRef.current) return;
+    const fetchDashboard = useCallback(async (opts?: { silent?: boolean }): Promise<void> => {
+        if (fetchingRef.current) { pendingRef.current = true; return; }
         fetchingRef.current = true;
         if (opts?.silent) setRefreshing(true); else setLoading(true);
         try {
@@ -75,8 +80,12 @@ export default function StudentDashboardPage() {
             const dashJson = (await dashRes.json()) as { data?: DashboardData };
             const feesJson = feesRes.ok ? ((await feesRes.json()) as { data?: FeeRecord[] }) : null;
             setData(dashJson.data ?? {});
-            setFeesData(feesJson?.data ?? []);
+            // A failed fees request keeps what was shown, and says so, instead of
+            // silently dropping the balance tile.
+            if (feesJson) setFeesData(feesJson.data ?? []);
+            setFeesFailed(!feesJson);
             setLastUpdated(new Date());
+            lastLoadedAt.current = Date.now();
             setLoadError(false);
         } catch (err) {
             console.error('Dashboard fetch error:', err);
@@ -87,6 +96,10 @@ export default function StudentDashboardPage() {
             setLoading(false);
             setRefreshing(false);
         }
+        if (pendingRef.current) {
+            pendingRef.current = false;
+            await fetchDashboard({ silent: true });
+        }
     }, []);
 
     useEffect(() => { void fetchDashboard(); }, [fetchDashboard]);
@@ -96,6 +109,8 @@ export default function StudentDashboardPage() {
         function onVisible() {
             if (document.visibilityState !== 'visible') return;
             setNow(new Date());
+            // Switching tabs back and forth used to refetch everything each time.
+            if (Date.now() - lastLoadedAt.current < 60_000) return;
             void fetchDashboard({ silent: true });
         }
         document.addEventListener('visibilitychange', onVisible);
@@ -223,10 +238,12 @@ export default function StudentDashboardPage() {
                 </div>
             </section>
 
-            {loadError && (
-                <div className="flex items-center justify-between gap-3 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-                    <span>Some of your data couldn&apos;t be loaded.</span>
-                    <button type="button" onClick={() => void fetchDashboard({ silent: true })} className="shrink-0 font-semibold underline">Retry</button>
+            {(loadError || feesFailed) && (
+                <div role="alert" className="flex items-center justify-between gap-3 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                    <span>{loadError ? 'Some of your data couldn’t be loaded.' : 'Your fee balance couldn’t be loaded.'}</span>
+                    <button type="button" onClick={() => void fetchDashboard({ silent: true })} className="btn-secondary h-9 shrink-0 text-xs">
+                        <RefreshCw size={14} aria-hidden />Try again
+                    </button>
                 </div>
             )}
 
@@ -238,7 +255,7 @@ export default function StudentDashboardPage() {
                         type="button"
                         onClick={() => void fetchDashboard({ silent: true })}
                         disabled={refreshing}
-                        className="-mt-3 inline-flex shrink-0 items-center gap-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-60"
+                        className="-mt-3 inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-lg px-2 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-60"
                     >
                         <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} aria-hidden />
                         {refreshing ? 'Updating…' : lastUpdated ? `Updated ${timeAgo(lastUpdated.toISOString(), now)}` : 'Refresh'}

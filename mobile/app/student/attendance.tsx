@@ -49,9 +49,10 @@ export default function AttendanceScreen() {
 
             <StatGrid>
                 <StatTile label="Attendance rate" value={stats.rate != null ? `${stats.rate}%` : '—'} tone={stats.rate != null && stats.rate < 80 ? colors.danger : colors.success} />
-                <StatTile label="Present" value={stats.present} />
-                <StatTile label="Absent" value={stats.absent} tone={stats.absent > 0 ? colors.danger : undefined} />
-                <StatTile label="Late / excused" value={`${stats.late} / ${stats.excused}`} />
+                {/* Unknown until loaded, not "0 days absent". */}
+                <StatTile label="Present" value={data == null ? '—' : stats.present} />
+                <StatTile label="Absent" value={data == null ? '—' : stats.absent} tone={data != null && stats.absent > 0 ? colors.danger : undefined} />
+                <StatTile label="Late / excused" value={data == null ? '—' : `${stats.late} / ${stats.excused}`} />
             </StatGrid>
 
             <SectionLabel>Days</SectionLabel>

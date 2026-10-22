@@ -39,7 +39,12 @@ function LessonCell({ lessons, mode, selected }: { lessons: readonly TimetableLe
  * teacher or room teaching across sections shows each lesson time.
  */
 export function TimetableGrid({ config, lessons, mode, selectedId, onCellClick }: Props) {
-    const [phoneDay, setPhoneDay] = useState(config.days[0]);
+    // Phones open on today (1 = Monday … 7 = Sunday), or the first school day
+    // after it, rather than always on Monday.
+    const [phoneDay, setPhoneDay] = useState(() => {
+        const today = ((new Date().getDay() + 6) % 7) + 1;
+        return config.days.find(d => d >= today) ?? config.days[0];
+    });
     const rows = React.useMemo(() => gridRows(config, lessons), [config, lessons]);
     const interactive = !!onCellClick;
 

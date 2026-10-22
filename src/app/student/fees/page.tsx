@@ -64,6 +64,9 @@ export default function StudentFeesPage() {
     const historyRequest = useRef(0);
     const [paymentProvider, setPaymentProvider] = useState<PaymentProvider>('NONE');
     const [bankAccounts, setBankAccounts] = useState<SchoolBankAccount[]>([]);
+    // Until the school's payment options are known, the page must not say
+    // "your school hasn't set up online payment".
+    const [settingsKnown, setSettingsKnown] = useState(false);
     const [copiedId, setCopiedId] = useState<string | null>(null);
 
     const [payingFee, setPayingFee] = useState<FeeRecord | null>(null);
@@ -99,6 +102,7 @@ export default function StudentFeesPage() {
             .then((j: { data?: { provider?: PaymentProvider; bankAccounts?: SchoolBankAccount[] } }) => {
                 setPaymentProvider(j.data?.provider || 'NONE');
                 setBankAccounts(j.data?.bankAccounts || []);
+                setSettingsKnown(true);
             })
             .catch(() => {});
         return stopPolling;
@@ -295,7 +299,7 @@ export default function StudentFeesPage() {
             ),
         },
         {
-            key: 'dueDate', header: 'Due', hideOnMobile: true,
+            key: 'dueDate', header: 'Due',
             render: f => (
                 <span className={cn(isOverdue(f.dueDate, f.balance) ? 'font-semibold text-destructive' : 'text-muted-foreground')}>
                     {formatDay(f.dueDate)}{isOverdue(f.dueDate, f.balance) ? ' · overdue' : ''}
@@ -329,7 +333,7 @@ export default function StudentFeesPage() {
             </div>
 
             {/* How to pay: always answered, whether or not online payment is set up. */}
-            {loadState === 'ready' && owed > 0 && !canPayOnline && bankAccounts.length === 0 && (
+            {loadState === 'ready' && settingsKnown && owed > 0 && !canPayOnline && bankAccounts.length === 0 && (
                 <div className="mb-5 flex items-start gap-3 rounded-2xl border border-border/70 bg-card p-4 text-sm shadow-sm">
                     <Info className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
                     <p>
@@ -388,7 +392,7 @@ export default function StudentFeesPage() {
                     mobileTitleKey="termName"
                     onRowClick={openHistory}
                     rowActions={canPayOnline ? (fee => fee.balance > 0 ? (
-                        <button type="button" className="btn-primary h-8 rounded-lg px-3 text-xs" onClick={() => openPay(fee)} aria-label={`Pay ${fee.termName ?? 'this term'} fees`}>
+                        <button type="button" className="btn-primary h-10 rounded-lg px-3 text-xs sm:h-8" onClick={() => openPay(fee)} aria-label={`Pay ${fee.termName ?? 'this term'} fees`}>
                             <Smartphone className="size-3.5" aria-hidden="true" />Pay
                         </button>
                     ) : null) : undefined}
@@ -427,37 +431,24 @@ export default function StudentFeesPage() {
                         ) : historyPayments.filter(p => p.status === 'COMPLETED').length === 0 ? (
                             <p className="py-8 text-center text-sm text-muted-foreground">No payments recorded for this term yet.</p>
                         ) : (
-                            <div className="overflow-hidden rounded-xl border border-border/70">
-                                <div className="w-full overflow-x-auto">
-                                    <table className="data-table">
-                                        <thead>
-                                            <tr>
-                                                <th>Date</th>
-                                                <th>Method</th>
-                                                <th>Amount</th>
-                                                <th>Reference</th>
-                                                <th><span className="sr-only">Receipt</span></th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {/* Only money that actually arrived: voided, failed and still-pending prompts are not payments. */}
-                                            {historyPayments.filter(p => p.status === 'COMPLETED').map(p => (
-                                                <tr key={p.id}>
-                                                    <td data-label="Date" className="text-xs">{formatDay(p.paidAt)}</td>
-                                                    <td data-label="Method">{methodLabel(p.method)}</td>
-                                                    <td data-label="Amount" className="font-semibold">{formatCurrency(p.amount)}</td>
-                                                    <td data-label="Reference" className="font-mono text-xs">{p.mpesaReceiptNumber || p.pesapalConfirmationCode || p.receiptNumber}</td>
-                                                    <td data-label="" className="text-right">
-                                                        <a className="btn-secondary h-8 rounded-lg px-3 text-xs" href={receiptUrl(p.id)} target="_blank" rel="noreferrer">
-                                                            <Receipt className="size-3.5" aria-hidden="true" />Receipt
-                                                        </a>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
+                            // A list, not a five-column table: on phones the Receipt button sat off-screen.
+                            <ul className="flex flex-col divide-y divide-border/60 overflow-hidden rounded-xl border border-border/70">
+                                {/* Only money that actually arrived: voided, failed and still-pending prompts are not payments. */}
+                                {historyPayments.filter(p => p.status === 'COMPLETED').map(p => (
+                                    <li key={p.id} className="flex items-center gap-3 px-3 py-3 sm:px-4">
+                                        <div className="min-w-0 flex-1">
+                                            <p className="font-semibold tabular-nums">{formatCurrency(p.amount)}</p>
+                                            <p className="text-xs text-muted-foreground">
+                                                {formatDay(p.paidAt)} · {methodLabel(p.method)}
+                                                <span className="block font-mono wrap-anywhere">{p.mpesaReceiptNumber || p.pesapalConfirmationCode || p.receiptNumber}</span>
+                                            </p>
+                                        </div>
+                                        <a className="btn-secondary h-10 shrink-0 rounded-lg px-3 text-xs" href={receiptUrl(p.id)} target="_blank" rel="noreferrer">
+                                            <Receipt className="size-3.5" aria-hidden="true" />Receipt
+                                        </a>
+                                    </li>
+                                ))}
+                            </ul>
                         )}
                     </div>
                 )}

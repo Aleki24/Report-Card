@@ -63,6 +63,13 @@ export function useApiQuery<T>(path: string | null, opts?: { raw?: boolean }): A
                     setLoading(false);
                     setRefreshing(true);
                 } else {
+                    // A different path with nothing cached: drop the previous answer,
+                    // or another month's or filter's rows stay on screen (and after
+                    // a failure, look like this one's).
+                    if (dataPath.current !== null && dataPath.current !== path) {
+                        setData(null);
+                        dataPath.current = null;
+                    }
                     setLoading(true);
                 }
             }

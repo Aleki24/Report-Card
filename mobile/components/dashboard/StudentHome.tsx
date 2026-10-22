@@ -76,6 +76,8 @@ export function StudentHome() {
     const dash = useApiQuery<DashboardData>('/api/school/student/dashboard');
     const fees = useApiQuery<FeeRecord[]>('/api/school/fees');
     const [downloading, setDownloading] = useState(false);
+    // Notices were cut to two lines with no way to read the rest: tap opens one in full.
+    const [openNotice, setOpenNotice] = useState<string | null>(null);
 
     if (dash.loading && !dash.data) return <DashboardSkeleton />;
 
@@ -233,16 +235,22 @@ export function StudentHome() {
 
                 <InsightCard title="Announcements">
                     {(data?.announcements ?? []).length === 0 ? <Text style={styles.quiet}>No announcements from school yet.</Text> : (data?.announcements ?? []).slice(0, 4).map((a, n) => (
-                        <View key={a.id} style={[styles.news, n > 0 && styles.hwBorder]}>
+                        <Pressable
+                            key={a.id}
+                            onPress={() => setOpenNotice(openNotice === a.id ? null : a.id)}
+                            accessibilityRole="button"
+                            accessibilityState={{ expanded: openNotice === a.id }}
+                            style={[styles.news, n > 0 && styles.hwBorder]}
+                        >
                             <View style={[styles.newsIcon, { backgroundColor: a.isImportant ? colors.dangerBg : colors.primarySoft }]}>
                                 <Megaphone size={16} color={a.isImportant ? colors.danger : colors.primary} />
                             </View>
                             <View style={{ flex: 1, minWidth: 0 }}>
                                 <Text style={styles.resultName}>{a.title}{a.isImportant ? <Text style={[styles.important, { color: colors.danger }]}>  IMPORTANT</Text> : null}</Text>
-                                <Text style={styles.hwMeta} numberOfLines={2}>{a.content}</Text>
-                                <Text style={styles.when}>{getTimeAgo(a.createdAt)}</Text>
+                                <Text style={styles.hwMeta} numberOfLines={openNotice === a.id ? undefined : 2}>{a.content}</Text>
+                                <Text style={styles.when}>{getTimeAgo(a.createdAt)}{openNotice === a.id ? '' : ' · tap to read'}</Text>
                             </View>
-                        </View>
+                        </Pressable>
                     ))}
                 </InsightCard>
 

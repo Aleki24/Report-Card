@@ -45,6 +45,7 @@ type LoadState = { state: 'loading' } | { state: 'ready'; records: AttendanceRec
 
 export default function StudentAttendancePage() {
     const [load, setLoad] = useState<LoadState>({ state: 'loading' });
+    const loadingRecords = load.state === 'loading';
     const [monthFilter, setMonthFilter] = useState('');
 
     // The whole history is fetched once and filtered here: fetching one month
@@ -108,14 +109,15 @@ export default function StudentAttendancePage() {
                     <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
                         <StatCard
                             label="Attendance Rate"
-                            value={rate === null ? '—' : `${rate}%`}
+                            value={loadingRecords || rate === null ? '—' : `${rate}%`}
                             sub={period}
                             icon={CalendarCheck}
                             iconClassName={rate === null || rate >= 80 ? 'bg-emerald-500/12 text-emerald-600' : 'bg-amber-500/12 text-amber-600'}
                         />
-                        <StatCard label="Present" value={counts.present} sub="Days" icon={UserCheck} iconClassName="bg-emerald-500/12 text-emerald-600" />
-                        <StatCard label="Absent" value={counts.absent} sub="Days" icon={UserX} iconClassName="bg-red-500/12 text-red-600" />
-                        <StatCard label="Late / Excused" value={`${counts.late} / ${counts.excused}`} sub="Days" icon={Clock} iconClassName="bg-amber-500/12 text-amber-600" />
+                        {/* Unknown while loading, not "0 days absent". */}
+                        <StatCard label="Present" value={loadingRecords ? '—' : counts.present} sub="Days" icon={UserCheck} iconClassName="bg-emerald-500/12 text-emerald-600" />
+                        <StatCard label="Absent" value={loadingRecords ? '—' : counts.absent} sub="Days" icon={UserX} iconClassName="bg-red-500/12 text-red-600" />
+                        <StatCard label="Late / Excused" value={loadingRecords ? '—' : `${counts.late} / ${counts.excused}`} sub="Days" icon={Clock} iconClassName="bg-amber-500/12 text-amber-600" />
                     </div>
 
                     <DataTable
