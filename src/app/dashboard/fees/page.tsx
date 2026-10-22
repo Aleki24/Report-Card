@@ -9,7 +9,7 @@ import { apiErrorMessage } from '@/lib/api-error-message';
 import { requestJson, jsonBody } from '@/lib/api-error-message';
 import { ConfirmDialog, Modal } from '@/components/ui/Modal';
 import { PageTabs, useUrlTab, type PageTab } from '@/components/ui/PageTabs';
-import { DataTable, StatTile, TermSelect, type TermSelectYear } from '@/components/ui';
+import { DataTable, LoadError, StatTile, TermSelect, type TermSelectYear } from '@/components/ui';
 import { UnmatchedPaymentsPanel } from '@/components/fees/UnmatchedPaymentsPanel';
 import { humanize } from '@/lib/text';
 import { cn } from '@/lib/utils';
@@ -219,6 +219,8 @@ function FeesPageInner() {
     const [confirming, setConfirming] = useState(false);
     const [fees, setFees] = useState<FeeRecord[]>([]);
     const [loading, setLoading] = useState(true);
+    // A failed load is not an empty school: it gets its own panel and a retry.
+    const [feesError, setFeesError] = useState<string | null>(null);
     const [search, setSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
     const [streamFilter, setStreamFilter] = useState('');
@@ -313,14 +315,16 @@ function FeesPageInner() {
             if (request !== feesRequest.current) return;
             if (!res.ok) {
                 setFees([]);
-                toast.error(apiErrorMessage(json, 'Could not load fee records.'));
+                setFeesError(apiErrorMessage(json, 'Could not load fee records.'));
             } else {
                 setFees((json as { data?: FeeRecord[] } | null)?.data ?? []);
+                setFeesError(null);
             }
         } catch (err) {
             if (request !== feesRequest.current) return;
             console.error('Failed to load fees:', err);
-            toast.error('Could not load fee records. Check your connection.');
+            setFees([]);
+            setFeesError('Could not load fee records. Check your connection.');
         }
         setLoading(false);
     }, [selectedTerm]);
@@ -879,10 +883,10 @@ function FeesPageInner() {
 
             {/* ── KPI Cards ── */}
             <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-                <StatTile icon={Wallet} hue="blue" label="Expected" value={formatCurrency(kpi.expected)} hint={`${kpi.records} record${kpi.records === 1 ? '' : 's'}${streamFilter ? ` · ${gradeStreams.find(g => g.id === streamFilter)?.full_name ?? 'this class'}` : ''}`} />
-                <StatTile icon={ArrowUpRight} label="Collected" value={formatCurrency(kpi.collected)} hint={`${kpi.collectionRate}% collection rate`} tone="good" />
-                <StatTile icon={Clock} label="Outstanding" value={formatCurrency(kpi.outstanding)} hint="unpaid balance" tone={kpi.outstanding > 0 ? 'warn' : 'default'} />
-                <StatTile icon={AlertTriangle} label="Overdue" value={formatCurrency(kpi.overdueAmount)} hint={`${kpi.overdueCount} overdue record(s)`} tone={kpi.overdueCount > 0 ? 'bad' : 'default'} />
+                <StatTile icon={Wallet} hue="blue" label="Expected" value={feesError ? '—' : formatCurrency(kpi.expected)} hint={feesError ? undefined : `${kpi.records} record${kpi.records === 1 ? '' : 's'}${streamFilter ? ` · ${gradeStreams.find(g => g.id === streamFilter)?.full_name ?? 'this class'}` : ''}`} />
+                <StatTile icon={ArrowUpRight} label="Collected" value={feesError ? '—' : formatCurrency(kpi.collected)} hint={feesError ? undefined : `${kpi.collectionRate}% collection rate`} tone="good" />
+                <StatTile icon={Clock} label="Outstanding" value={feesError ? '—' : formatCurrency(kpi.outstanding)} hint={feesError ? undefined : 'unpaid balance'} tone={kpi.outstanding > 0 ? 'warn' : 'default'} />
+                <StatTile icon={AlertTriangle} label="Overdue" value={feesError ? '—' : formatCurrency(kpi.overdueAmount)} hint={feesError ? undefined : `${kpi.overdueCount} overdue record(s)`} tone={kpi.overdueCount > 0 ? 'bad' : 'default'} />
             </div>
 
             {/* ── Collection meter ── */}
@@ -1220,6 +1224,12 @@ function FeesPageInner() {
                         <div className="space-y-2" aria-hidden="true">
                             {Array.from({ length: 6 }, (_, i) => <div key={i} className="h-14 animate-pulse rounded-xl bg-muted/60" />)}
                         </div>
+                    ) : feesError ? (
+                        <LoadError
+                            title="Fee records did not load"
+                            message={feesError}
+                            onRetry={() => { setLoading(true); void fetchFees(); }}
+                        />
                     ) : fees.length === 0 ? (
                         /* ── Guided Onboarding Empty State ── */
                         <div className="rounded-2xl border border-dashed border-border bg-card px-6 py-12 text-center">

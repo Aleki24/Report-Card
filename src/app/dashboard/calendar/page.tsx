@@ -6,6 +6,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { ModulePage } from '@/components/ops/ModulePage';
 import { ResourceManager } from '@/components/ops/ResourceManager';
 import { StatusPill } from '@/components/ops/StatusPill';
+import { LoadError } from '@/components/ui/LoadError';
 import { useOpsList } from '@/hooks/useOpsList';
 import { date, humanize } from '@/lib/ops/format';
 import { EVENT_FIELDS, EVENT_TYPE_TONES, eventDefaults, isHappeningToday, monthLabel, upcomingByMonth, type SchoolEvent } from '@/lib/ops/forms/academics';
@@ -13,9 +14,10 @@ import { cn } from '@/lib/utils';
 
 /** Upcoming events grouped by month: what everyone in school needs to plan around. */
 function Agenda() {
-    const { rows, loading } = useOpsList<SchoolEvent>('events');
+    const { rows, loading, error, reload } = useOpsList<SchoolEvent>('events');
     const months = upcomingByMonth(rows);
 
+    if (error && !loading) return <LoadError title="The calendar did not load" message={error} onRetry={() => void reload()} />;
     if (loading) return <div className="flex flex-col gap-2">{Array.from({ length: 4 }).map((_, i) => <div key={i} className="skeleton-bone h-16 rounded-2xl" />)}</div>;
     if (months.length === 0) return <p className="rounded-2xl border border-border/60 bg-card p-8 text-center text-sm text-muted-foreground">Nothing coming up on the school calendar.</p>;
 

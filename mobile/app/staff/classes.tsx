@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { GraduationCap, Pencil, School, UserRoundCog, UserRound, Users } from 'lucide-react-native';
+import { GraduationCap, Pencil, School, Search, UserRoundCog, UserRound, Users } from 'lucide-react-native';
 import { CLASSES_OVERVIEW_URL, classDeleteBlocker, type ClassSummary, type ClassesOverview } from '@shared/classes-overview';
 import { useApi, withQuery } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
@@ -168,6 +168,14 @@ function ClassesContent() {
 
             {classes.length > 6 ? <SearchField value={search} onChangeText={setSearch} placeholder="Find a class or class teacher" /> : null}
             {classes.length === 0 ? <EmptyState title="No classes yet" description="Add your first class above." /> : null}
+            {classes.length > 0 && shown.length === 0 ? (
+                <EmptyState
+                    icon={Search}
+                    title="No class matches that search"
+                    description="Try a different class or teacher name."
+                    action={<Button variant="secondary" label="Clear search" onPress={() => setSearch('')} />}
+                />
+            ) : null}
 
             {curricula.map((level) => {
                 const levelGrades = grades.filter((g) => g.academic_level_id === level.id).sort((a, b) => a.numeric_order - b.numeric_order);

@@ -1,0 +1,840 @@
+[
+  {
+    "slice": "s02",
+    "filesReviewed": 41,
+    "findings": [
+      {
+        "title": "Failed activation rollback deletes the learner's whole student record",
+        "severity": "medium",
+        "category": "data",
+        "file": "src/app/api/auth/activate/route.ts",
+        "line": 219,
+        "trigger": "Admin invites a learner; learner activates with a password. The students.id swap succeeds (line 268-272), then moveUserLinks returns any non-missing-table DB error (line 290), so rollback('linked') runs.",
+        "impact": "rollback('linked') moves only class_teachers and subject_teachers back (223-224) and then deletes the new users row (226). students.id references users(id) ON DELETE CASCADE, as the route's own comment at 206-207 states, so the learner's students row and everything hanging off it (marks, fees, attendance) is deleted. The learner is told to contact the admin, and the data is gone.",
+        "evidence": "activate/route.ts:219-231 rollback has no students.update({id: oldUserId}).eq('id', clerkUserId); the student swap at 267-278 runs before moveUserLinks at 290-295, and a failure there calls rollback('linked') at 293.",
+        "fix": "In rollback('linked'), when the role is STUDENT, move students.id back to oldUserId and check the result before deleting the new users row. Better, do the whole relink in one SQL function so it is atomic."
+      },
+      {
+        "title": "Vote-head statement books unallocated spending to Transport and drops spending on unbilled vote heads",
+        "severity": "medium",
+        "category": "data",
+        "file": "src/app/api/finance/reports/vote-heads/route.ts",
+        "line": 75,
+        "trigger": "A school that bills transport approves an expense with no vote head (vote_head_id is optional), or an expense against a vote head such as Maintenance that has no invoice lines this term. Open Billing > Vote-head statement.",
+        "impact": "Null-vote-head expenses add to the Transport row's Spent. Expenses on a vote head with no billed line match nothing and disappear from the statement, so total spend is understated. The expenses query is unpaged, so it also stops at 1,000 rows.",
+        "evidence": "Line 75 uses find(t => t.voteHeadId === e.vote_head_id). Transport lines have voteHeadId null (bucket(null,...) at 44-47), so null === null matches the Transport bucket before the 'Unallocated spending' branch at 77 is reached. There is no else for a non-null id with no line. Line 33 is a plain select with no paging.",
+        "fix": "Key spending by id: add a row for every vote head with spend (names from vote_heads), and use a dedicated 'Unallocated spending' bucket only when vote_head_id is null. Read expenses with fetchAllRows."
+      },
+      {
+        "title": "Billing run reads fee awards and transport riders without paging",
+        "severity": "medium",
+        "category": "data",
+        "file": "src/app/api/finance/invoices/generate/route.ts",
+        "line": 50,
+        "trigger": "A large school (more than 1,000 fee_awards for the term, or more than 1,000 learners on buses) clicks Preview or Bill term.",
+        "impact": "PostgREST returns only the first 1,000 rows silently. Learners beyond that get no bursary deducted from student_fees.total_fee (line 115), and riders beyond it get no transport line (86-87). The preview and the real run are both wrong, and the invoices and fee balances are over- or under-billed.",
+        "evidence": "Line 50 (fee_awards) and line 58 (student_transport, no term filter) are plain selects, while students and student_fees use fetchAllRows at 51-56. The vote-head report reads the same fee_awards with fetchAllRows (vote-heads/route.ts:36).",
+        "fix": "Read awards and riders with fetchAllRows and a stable .order('id'), as the other two reads already do."
+      },
+      {
+        "title": "Invoice regeneration is not atomic and misreports an empty real run",
+        "severity": "low",
+        "category": "data",
+        "file": "src/app/api/finance/invoices/generate/route.ts",
+        "line": 100,
+        "trigger": "Re-bill a term for a large school and let a later step fail: an insertChunked chunk errors, or the 60 s limit hits after the delete at 107-110.",
+        "impact": "Invoices are upserted first, then all their lines are deleted, then reinserted, then student_fees is upserted. A failure after the delete leaves invoices with totals but no or partial lines, and fee balances stale, until someone re-runs it. A real run that finds no billable learner returns dry_run: true (line 98), so the panel says 'Would bill 0' and toasts '0 learners billed' instead of saying nothing was billed.",
+        "evidence": "generate/route.ts:100-123 are separate PostgREST calls with no transaction; line 98 returns { ...summary, dry_run: true } when invoices.length === 0 regardless of body.dry_run.",
+        "fix": "Run the replace in a single SQL function or transaction (or insert the new lines before deleting the old ones). Return dry_run: body.dry_run on the empty path."
+      },
+      {
+        "title": "STK push never checks that the CheckoutRequestID was saved, so a charged payment can stay PENDING forever",
+        "severity": "medium",
+        "category": "data",
+        "file": "src/app/api/mpesa/stkpush/route.ts",
+        "line": 139,
+        "trigger": "The update that stores mpesa_checkout_request_id after Safaricom accepts the prompt fails (transient DB error), or loses the race with the callback.",
+        "impact": "The callback finds the payment only by mpesa_checkout_request_id (callback/route.ts:47-56). With the id missing it logs 'no matching pending payment' and returns 200, so Safaricom does not retry. The payer has paid, the ledger row stays PENDING, and the fee is never credited. The route still returns the checkout id, so the student's poll gets 404 until it shows 'unconfirmed'.",
+        "evidence": "stkpush/route.ts:139-145 awaits the update but discards { error }. The Pesapal checkout handles the same case (trackError at pesapal/checkout/route.ts:105-113) and the IPN falls back to the merchant reference, but M-Pesa has no fallback.",
+        "fix": "Check the update error and retry. On a persistent failure, mark the row FAILED with a clear note and tell the payer not to retry blindly. Alternatively, store a client-generated id on the row first and match the callback on MerchantRequestID as well."
+      },
+      {
+        "title": "Approving a school ignores a failed promotion of the requester, and the single-use token is already burnt",
+        "severity": "medium",
+        "category": "data",
+        "file": "src/app/api/platform/schools/[schoolId]/decision/route.ts",
+        "line": 125,
+        "trigger": "Owner approves a school and the users.update that promotes the requester fails (DB error), or matches no row because the requester's row is gone.",
+        "impact": "The school is APPROVED and approval_token is cleared, so the link cannot be retried ('Already approved'). The requester stays PENDING, yet the owner sees 'is now live and its administrator can sign in' and the requester gets the approval message. Someone must fix it by hand in the database.",
+        "evidence": "claimDecision (97-106) sets approval_status and nulls approval_token at 122. Lines 125-127 then run users.update({role:'ADMIN', school_id}) without reading error or row count, and the page returns success at 152.",
+        "fix": "Check the update result. If it fails, restore the PENDING_APPROVAL status and token, or show a failure page. Ideally promote and approve in one SQL function."
+      },
+      {
+        "title": "A future-dated academic year makes every class teacher lose class-teacher rights",
+        "severity": "medium",
+        "category": "api",
+        "file": "src/app/api/auth/available-roles/route.ts",
+        "line": 47,
+        "trigger": "In Oct-Dec an admin creates next year's academic year (the academic_year insert in admin/academic-structure has no date restriction) before assigning class teachers to it.",
+        "impact": "The current year is taken as the latest start_date, so the new year wins. getClassTeacherStreamIds then finds no assignments. The class-teacher option disappears from available-roles and switch-role. In /api/reports/comments canCommentOnStream fails, and the class report, mark sheet, rounds and student card routes return 403 'Only administrators and the designated class teacher...' (canStaffReportOnStream uses getTeacherPermissions with the same year rule), exactly during report season.",
+        "evidence": "auth-server.ts:77-86 orders academic_years by start_date desc limit 1 although its doc says 'the one that started most recently', with no start_date <= today filter. teacher-utils.ts:35-56 does the same. class_teachers rows are per academic_year_id and are not copied when a year is created. Callers: available-roles:47, switch-role:57, me:104, reports/comments:22-24.",
+        "fix": "In both helpers choose the latest year with start_date <= today, falling back to the earliest future year only if none has started."
+      },
+      {
+        "title": "Paid C2B confirmations with a missing reference or bad amount are inserted without checking the result",
+        "severity": "low",
+        "category": "data",
+        "file": "src/app/api/mpesa/c2b/confirmation/[schoolId]/[token]/route.ts",
+        "line": 73,
+        "trigger": "A customer pays the Paybill with no account number, or Safaricom sends an unparsable TransAmount, and the insert fails for any reason.",
+        "impact": "The money has moved, but the failure is neither logged nor retried and Safaricom gets 'Success'. The payment is lost without a trace. The branch below (125-133) was written to log exactly this.",
+        "evidence": "Line 73 is `await supabase.from('fee_payments').insert({...})` with no { error }, then it returns Success at 84, while the second insert at 113 captures and logs insertError.",
+        "fix": "Capture the error, log it with TransID and school, and treat the unique-index violation as a duplicate as the second branch does."
+      },
+      {
+        "title": "A successful M-Pesa payment can be shown to the payer as failed",
+        "severity": "low",
+        "category": "ux",
+        "file": "src/app/api/mpesa/stkpush/callback/[schoolId]/[token]/route.ts",
+        "line": 78,
+        "trigger": "The school's Paybill also sends C2B confirmations for STK-initiated payments and the C2B confirmation arrives before the STK callback. It records the payment, matched by admission number (the STK AccountReference), as a separate COMPLETED row.",
+        "impact": "The callback hits the receipt unique index and marks the payer's own row CANCELLED. /api/mpesa/stkpush/status returns CANCELLED, which paymentWaitStep treats as 'failed', and the student sees a failure with the note about a 'separate payment', so they may pay again. The C2B row also credits the current term's fee, not the fee the student chose.",
+        "evidence": "callback/route.ts:78-91 sets status 'CANCELLED' on the unique violation. The payer's UI maps CANCELLED to 'failed' (lib/fees.ts paymentWaitStep) and shows notes (student/fees/page.tsx pollUntilResolved).",
+        "fix": "When the receipt is already on the ledger, tell the payer it succeeded (e.g. keep the row and link it to the existing payment, or return a distinct status the UI treats as paid) instead of CANCELLED."
+      },
+      {
+        "title": "Fee-reminder blast can time out mid-send and re-send, and its rate limit does not hold",
+        "severity": "medium",
+        "category": "api",
+        "file": "src/app/api/finance/reminders/route.ts",
+        "line": 43,
+        "trigger": "A bursar texts every guardian owing at least KES 1 for a term in a school with a few hundred debtors, then retries after a gateway error or sends again.",
+        "impact": "Each message names the child and the balance, so sendBulkSMS creates about one Africa's Talking request per guardian (4 at a time). The route sets no maxDuration, and the repo's own comment says the default timeout is under 9 s. The function dies partway, the user sees an error, no audit row is written, and a retry texts the early recipients again. The only guard is an in-memory limiter, per instance and resetting on cold start, that allows 2 sends per 10 minutes, so duplicate reminders also reach parents and cost money.",
+        "evidence": "africastalking.ts:127-137 groups recipients by identical message text; reminders/route.ts:39 builds a unique text per child; no `export const maxDuration` in this file (only generate and the report routes set it); line 43 uses rateLimit() (in-memory) with maxRequests 2.",
+        "fix": "Set maxDuration (and ideally chunk or queue the sends); use the DB-backed rateLimitShared or a per-term sent marker so a second blast is refused; return partial counts if it is cut short."
+      },
+      {
+        "title": "Report routes return internal error details to the browser",
+        "severity": "low",
+        "category": "security",
+        "file": "src/app/api/reports/student/[studentId]/route.ts",
+        "line": 208,
+        "trigger": "Any DB or PDF failure while a learner or teacher downloads a report card, class report, mark sheet, or loads comments.",
+        "impact": "The student route sends the whole Supabase error object (code, details, hint, message) as `details`. The class, mark sheet and student catch blocks, and comments GET (lines 57 and 97), return raw error.message. That discloses table, column and constraint names to learners, who can call the student route.",
+        "evidence": "student/route.ts:208 `{ error: ..., details: marksErr }`; student/route.ts:756, class/route.ts:692, marksheet/route.ts:676 and comments/route.ts:57,97 return error.message. internalError() exists for this.",
+        "fix": "Log the error server-side and return the generic message via internalError(); drop `details`."
+      },
+      {
+        "title": "Payment gateway errors are passed straight to the payer",
+        "severity": "low",
+        "category": "api",
+        "file": "src/app/api/mpesa/stkpush/route.ts",
+        "line": 155,
+        "trigger": "A school's Daraja or Pesapal credentials are wrong or the gateway is down when a learner taps Pay (also decryptSecret failures).",
+        "impact": "The learner sees raw upstream text such as `M-Pesa auth failed (400): {...Daraja body...}` or a decryption error, and the same text is saved in fee_payments.notes, which the status route returns to the learner. It is confusing and exposes gateway internals.",
+        "evidence": "stkpush/route.ts:154-160 and pesapal/checkout/route.ts:122-128 return error.message with 502; lib/mpesa.ts:48 builds the message from the raw response body.",
+        "fix": "Log the detail and return a fixed message such as 'Could not start the payment. Try again or ask the school.'; keep the technical text only in server logs."
+      },
+      {
+        "title": "Overview 'next on the calendar' tile ignores event audience",
+        "severity": "low",
+        "category": "security",
+        "file": "src/app/api/ops/overview/route.ts",
+        "line": 102,
+        "trigger": "A signed-in learner (ROLE_GRANTS.STUDENT includes calendar.view) calls GET /api/ops/overview while the next event is a STAFF-only meeting.",
+        "impact": "The tile returns that event's title and date to the learner. The events resource deliberately hides staff events from learners (audience.byRole in academics.ts).",
+        "evidence": "overview/route.ts:101-104 queries school_events with no audience filter; the route has no role requirement ({}) and runs the loader for any caller whose access.can('calendar.view') is true.",
+        "fix": "Apply the same audience restriction as the events resource for STUDENT and PARENT, or limit the tile to staff roles."
+      },
+      {
+        "title": "Class teachers can read whole-school boarding data (exeats, bed allocations) through the shared ops and residence endpoints",
+        "severity": "low",
+        "category": "security",
+        "file": "src/app/api/ops/[resource]/route.ts",
+        "line": 6,
+        "trigger": "A class teacher (ROLE_GRANTS.CLASS_TEACHER includes boarding.view) opens Boarding, or calls /api/ops/exeats, /api/ops/dorm-allocations or /api/finance/residence?grade_stream_id=<any class>.",
+        "impact": "They see every class's exeats (reason, type, pass_code, status) and dorm allocations, not just their own class, although access.ts says a class teacher may view boarding records 'only for their own class'.",
+        "evidence": "listRows (lib/ops/crud-server.ts:77-97) filters by school and resource filters only; welfare.ts:41,62 read: ['boarding.view']; finance/residence/route.ts:26-37 filters only by school and the requested stream.",
+        "fix": "Narrow these lists to the teacher's own stream(s) when the caller holds boarding.view only through a teacher role (the seesAllStudents rule), or require a boarding duty."
+      },
+      {
+        "title": "Ops list endpoint silently truncates at 1,000 rows",
+        "severity": "low",
+        "category": "data",
+        "file": "src/app/api/ops/[resource]/route.ts",
+        "line": 6,
+        "trigger": "A resource with no maxRows grows past 1,000 rows, e.g. the Bursaries & waivers tab (fee-awards) lists every term's awards with no term filter, or a large boarding school's exeats.",
+        "impact": "The list stops at 1,000 rows with no 'more' signal. Older awards can no longer be seen, edited or deleted, and the client-side search only covers the loaded rows. Totals shown from the list are wrong.",
+        "evidence": "crud-server.ts:92-97 sets max = def.maxRows ?? 1000 and returns exactly that many; fee-awards (finance.ts) has no maxRows or default term filter; billing/page.tsx:108-122 shows no filter.",
+        "fix": "Page through the full set (fetchAllRows, as used for limit > 1000), raise the default, or return a truncated flag and add a term filter to the awards tab."
+      },
+      {
+        "title": "Signup deletes the just-created Clerk account when the webhook wins the users-row race",
+        "severity": "low",
+        "category": "api",
+        "file": "src/app/api/auth/signup/route.ts",
+        "line": 92,
+        "trigger": "Clerk's user.created webhook (which inserts the users row) runs before signup's own insert, or /api/auth/me does. Signup's insert then fails on users_pkey.",
+        "impact": "Any profile insert error, including the id-duplicate case, makes the route delete the Clerk user and return 500 'Could not finish creating your account', throwing away a good account and forcing a retry (or a 409 if the orphan row lingers). Non-string email, password or name fields also reach .trim()/.length and produce a 500 rather than a 400.",
+        "evidence": "signup/route.ts:86-96 only special-cases users_username_key, while provision-user.ts:79-83 explicitly treats users_pkey as 'row already there, fine' for the same race.",
+        "fix": "Treat a users_pkey violation as success (or upsert on id), and validate body field types with zod before use."
+      },
+      {
+        "title": "Parent child overview turns failed queries into empty data",
+        "severity": "low",
+        "category": "data",
+        "file": "src/app/api/parent/children/[id]/route.ts",
+        "line": 26,
+        "trigger": "A transient DB error in the fees, calendar or transport queries while a parent opens their child's page.",
+        "impact": "The queries are mapped with .then(r => r.data ?? []), so errors become empty arrays and the parent page hides the Fees section and the Fee balance tile (fees.length > 0 checks), so a child who owes money appears to owe nothing, with no error shown. The transport ride and trip lookups are swallowed the same way.",
+        "evidence": "parent/children/[id]/route.ts:26,30,33,36 and 42-46 never read `error`; feeOwed is computed from allFees (51) which is [] on failure; parent/page.tsx renders sections only when the arrays are non-empty.",
+        "fix": "Throw on error (as getStudentAttendance does) so the page shows its error state rather than a clean-looking empty one."
+      },
+      {
+        "title": "Clinic visit notify can text the guardian twice and ignores its own bookkeeping failure",
+        "severity": "low",
+        "category": "data",
+        "file": "src/app/api/health/visits/[id]/notify/route.ts",
+        "line": 29,
+        "trigger": "The nurse double-taps 'Tell parent' (the button in dashboard/health/page.tsx is not disabled while the request runs), or taps it again after reload.",
+        "impact": "Each request sends another real SMS to the parent about their child's clinic visit. If the parent_notified update fails, the flag stays false and the button keeps offering the send.",
+        "evidence": "notify/route.ts:29-31 sends without checking visit.parent_notified and awaits update({ parent_notified: true }) without reading its error.",
+        "fix": "Claim the visit first with a conditional update (.eq('parent_notified', false)) and send only if it matched; check the update's error."
+      },
+      {
+        "title": "Google activation has no rollback and leaves the invited account half-linked",
+        "severity": "low",
+        "category": "data",
+        "file": "src/app/api/auth/activate-google/route.ts",
+        "line": 109,
+        "trigger": "A student or teacher activates with Google and any step after the pending row is staged (student swap, teacher swap, moveUserLinks) fails.",
+        "impact": "The pending row is left with email pending+<id>@migrating.local and username null, the Google user's users row (role and school already set) is left in place, and the invite stays unused. For a student whose students.id swap already succeeded, every retry fails at 'Failed to link your student record' because the old id no longer matches. The wiped username later breaks the password path (finalUsername.length on null throws a 500 in /api/auth/activate). The upsert-failure message also says 'Account linked' when nothing was.",
+        "evidence": "activate-google/route.ts:109-174: only the upsert failure restores the pending row (133); the swap and link failures at 145-163 return 500 with no restore, unlike the rollback() in activate/route.ts:219-231.",
+        "fix": "Add the same staged/linked rollback as the password route (including moving students.id back), or perform the relink in one SQL function."
+      }
+    ]
+  },
+  {
+    "slice": "s11",
+    "filesReviewed": 24,
+    "findings": [
+      {
+        "title": "Transport compliance panel says every document is current when the request failed",
+        "severity": "medium",
+        "category": "ux",
+        "file": "src/app/dashboard/transport/page.tsx",
+        "line": 82,
+        "trigger": "Open Transport > Compliance while offline or when /api/transport/compliance returns 500 or 403 (a flaky mobile connection is enough).",
+        "impact": "The only feedback is a toast that disappears. The table then shows 'Every vehicle and crew document is current.' on an NTSA compliance screen, so a bursar or admin can wrongly conclude no insurance, inspection or licence has expired.",
+        "evidence": "transport/page.tsx:82 does `.catch(err => { toast.error(errorText(err)); setAlerts([]); })`. With `alerts=[]` and `loading=false`, DataTable (line 88) renders emptyState 'Every vehicle and crew document is current.'. A genuinely empty result and a failed request look identical.",
+        "fix": "Keep a separate error state. On failure render an error block with a Retry button and never the 'all current' empty state. Only show that text when the request succeeded with zero alerts."
+      },
+      {
+        "title": "Newly added vehicles, drivers and routes are missing from the Trips, Routes and Fuel-log forms until a full reload",
+        "severity": "medium",
+        "category": "data",
+        "file": "src/app/dashboard/transport/page.tsx",
+        "line": 104,
+        "trigger": "Open Transport > Vehicles and add a vehicle. Switch to Fuel & service and click Add, or to Trips and click Schedule trip. Do the same after adding a driver in Drivers & attendants and then opening the Routes form.",
+        "impact": "The Vehicle, Driver and Route dropdowns do not list the record just created, so a new school cannot log fuel or schedule a trip for its first vehicle without reloading the page. The Trips table also keeps showing the old route and vehicle labels.",
+        "evidence": "transport/page.tsx:104-106 load vehicles, crew and routes once with useOpsList at page level, and they feed `vehicleOptions`/`driverOptions` (lines 107-108) used at lines 127, 149 and 208. Each tab's ResourceManager runs its own useOpsList (ResourceManager.tsx), so a create or delete there calls only that instance's reload(). The page-level instances never reload. ModulePage remounts only the active tab's content (ModulePage.tsx), not TransportPage.",
+        "fix": "Reload the page-level lists after a mutation, for example by adding an onChanged callback to ResourceManager that calls vehicles.reload(), crew.reload() and routes.reload(). Alternatively re-fetch when the tab becomes active, or use one shared cache keyed by resource."
+      },
+      {
+        "title": "Route drawer's Stop picker and default stop order do not update after stops are added or removed",
+        "severity": "medium",
+        "category": "data",
+        "file": "src/app/dashboard/transport/page.tsx",
+        "line": 36,
+        "trigger": "Open a route, add a stop in the Stops section, then click Add learner. Or add two stops back to back.",
+        "impact": "The new stop is not offered in the learner's Stop select, so riders cannot be assigned to stops added in the same session without closing and reopening the drawer. The second stop's Order field defaults to the same number as the first, giving duplicate sequences and a wrong pick-up order. The Stops and Learners counts in the Routes table also stay stale.",
+        "evidence": "transport/page.tsx:36 calls `useOpsList('route-stops', {route_id})` in RouteDetail. That feeds `stopDefaults(route.id, stops.rows)` (line 44) and `riderFields(stops.rows)` (line 63). The Stops ResourceManager (lines 41-55) fetches its own copy with the same params, so adds, edits and deletes reload only that copy. `stopDefaults` computes `(stops.at(-1)?.sequence ?? 0) + 1` from the stale array.",
+        "fix": "Share one list: have RouteDetail own the stops list and pass rows and reload into ResourceManager, or call stops.reload() from a ResourceManager onChanged hook. Also reload the Routes list when the drawer closes."
+      },
+      {
+        "title": "Unsaved report-card remarks are silently discarded when the Comments panel is hidden and shown again, or when class or term changes",
+        "severity": "medium",
+        "category": "data",
+        "file": "src/app/dashboard/reports/page.tsx",
+        "line": 303,
+        "trigger": "Open Comments on the cards, type remarks for several learners without saving, click Hide then Show. Or change the Class or Term selector while remarks are unsaved.",
+        "impact": "A class teacher loses all typed remarks with no warning, and the 'Save N changes' button and the beforeunload guard disappear with them. Typing 30 remarks in one sitting and losing them to a stray Hide click is a real data-loss risk.",
+        "evidence": "reports/page.tsx:303-323: the effect depends on `showComments`, `selectedGradeStream`, `selectedTerm` and `selectedAcademicYear`. Each run calls `setComments(null)` (line 306), refetches, then overwrites both `comments` and `savedComments` (lines 314-315). StudentCommentsSection's Hide button only toggles `open` (StudentCommentsSection.tsx), which re-triggers this effect on Show. The beforeunload guard (lines 331-336) covers only tab close.",
+        "fix": "Fetch only when the scope (class, term, year) changes, and keep `comments` across Hide/Show. Before replacing the data for a new scope, ask for confirmation or auto-save when `dirtyCommentIds.size > 0`."
+      },
+      {
+        "title": "Failed class, term or year load on Report Cards looks like 'No classes assigned to you'",
+        "severity": "medium",
+        "category": "ux",
+        "file": "src/app/dashboard/reports/page.tsx",
+        "line": 76,
+        "trigger": "Open Report Cards when /api/school/managed-streams or /api/school/data?type=terms answers 401, 403 or 500 (expired session, server blip, deploy in progress).",
+        "impact": "No toast appears, because only a thrown exception does that. The Class select shows the placeholder 'No classes assigned to you' and the Term select is empty. An admin or class teacher concludes their classes are missing and cannot generate reports, and nothing says to retry.",
+        "evidence": "reports/page.tsx:76-82 awaits three fetches, calls `.json()` on each, and reads `gsJson.data || []`, `ayJson.data || []` and `tJson.data || []` without checking `gsRes.ok`, `ayRes.ok` or `tRes.ok`. An error body such as `{error:'Forbidden'}` has no `data`, so empty arrays are set. ReportSettings.tsx shows the placeholder when `gradeStreams.length === 0`. Compare the rounds and comments loaders, which check `res.ok`.",
+        "fix": "Check `.ok` on each response and throw apiErrorMessage(...). Show an error state with a Retry button instead of empty selects."
+      },
+      {
+        "title": "A parent entered with a differently formatted phone creates a second parent account instead of reusing the first",
+        "severity": "medium",
+        "category": "data",
+        "file": "src/app/dashboard/parent-accounts/page.tsx",
+        "line": 36,
+        "trigger": "Link Mary as parent of learner A with phone '0712345678'. Later link her to sibling B typing '0712 345 678' or '+254712345678'.",
+        "impact": "The form hint at line 74 says a parent already linked to another child is matched by phone, but the match fails. A new PARENT user and a new invite code are created, and an SMS goes out. The mother ends up with two logins, each seeing one child, and the school accumulates duplicate parent accounts.",
+        "evidence": "The page posts `form.phone` as typed (line 36). In api/admin/parents/route.ts the lookup is `.eq('school_id', ...).eq('phone', body.phone)`, an exact string match, and the insert stores the same raw string. Normalisation to +254 exists only at SMS send time (lib/africastalking.ts normalizeKenyanPhone). The schema only enforces `trim().min(9).max(20)`.",
+        "fix": "Normalise to one canonical form (for example +2547XXXXXXXX) before the lookup and the insert, in the route and ideally in the form. Alternatively match on the normalised digits of existing rows."
+      },
+      {
+        "title": "Learner list and guardian table can show another learner's parents, and show 'No parents linked' while loading",
+        "severity": "low",
+        "category": "ux",
+        "file": "src/app/dashboard/parent-accounts/page.tsx",
+        "line": 26,
+        "trigger": "Pick learner A, then quickly pick learner B on a slow connection. Or pick B when B's request fails.",
+        "impact": "The table keeps A's parents (with working Unlink buttons) under B until B's response arrives. If A's slower response lands last, A's rows overwrite B's while the picker shows B, and a failed request leaves A's rows with only a toast. The admin can unlink the wrong family's guardian. On first pick the table says 'No parents linked to this learner yet.' while still loading.",
+        "evidence": "parent-accounts/page.tsx:26-30 `load` has no abort or sequence guard and never clears `links` when `studentId` changes. The effect at line 30 fires on every change. DataTable at line 57 is rendered without a `loading` prop, so `links=[]` renders emptyState (DataTable.tsx shows emptyState when not loading and rows is empty).",
+        "fix": "Clear links and set a loading flag when studentId changes. Ignore responses whose id is no longer the selected one (AbortController or a request counter) and pass `loading` to DataTable. Show an error state on failure."
+      },
+      {
+        "title": "'Invite code sent by SMS' is shown although the route never reports whether the SMS went out",
+        "severity": "low",
+        "category": "ux",
+        "file": "src/app/dashboard/parent-accounts/page.tsx",
+        "line": 38,
+        "trigger": "Link a new parent when AT_API_KEY is missing, the number is invalid, or Africa's Talking rejects the send.",
+        "impact": "The admin gets a green toast 'Parent account created; invite code sent by SMS.' while no text was sent. Only the code box below helps if they notice it, and they may not hand the code over because they believe the parent was already texted.",
+        "evidence": "api/admin/parents/route.ts awaits `notifyInviteCode(...)` but discards its result (sms:false, smsError) and returns only `{parent_id, invite_code, reused}`. ParentLinkResult has no delivery field, and parentLinkedMessage (lib/ops/forms/platform.ts) hard-codes 'invite code sent by SMS'. The users flow does return `notified` (create-user route).",
+        "fix": "Return the notify result from the route and extend ParentLinkResult. Phrase the toast from it, for example 'SMS not sent. Give the parent this code.' when sms is false."
+      },
+      {
+        "title": "Learner picker cannot find learners added after its first load, and a failed load shows 'No matches'",
+        "severity": "medium",
+        "category": "data",
+        "file": "src/app/dashboard/parent-accounts/page.tsx",
+        "line": 53,
+        "trigger": "In one browser session open a page that uses the students lookup (Parent accounts, Transport riders, Library, Health). Go to People and add a learner. Return and try to select that learner. Or open the picker while /api/ops/lookups fails.",
+        "impact": "The new learner is missing from the picker until a hard reload, so the admin cannot link parents on admission day. If the lookup request fails, the empty list reads 'No matches' with no error or retry.",
+        "evidence": "hooks/useLookup.ts keeps a module-level `cache` Map of promises keyed by URL. It is never invalidated (only deleted when the fetch rejects), and it survives client-side navigation. On rejection `useLookup` sets `options: []` (`.catch(() => setState({ key, options: [] }))`), and SearchableSelect then renders 'No matches' when not loading. LookupSelect (SearchableSelect.tsx) is what this page uses.",
+        "fix": "Expire the cache (short TTL or invalidate after people mutations, or refetch on mount) and expose an error state from useLookup so the picker can show 'Could not load learners. Retry'."
+      },
+      {
+        "title": "Unlinking a parent is one tap on an icon with no confirmation and no busy state",
+        "severity": "low",
+        "category": "ux",
+        "file": "src/app/dashboard/parent-accounts/page.tsx",
+        "line": 67,
+        "trigger": "Tap the small trash icon next to a guardian, especially on a phone, or double-click it.",
+        "impact": "The guardian immediately loses access to that child's results and fees. A mis-tap cannot be undone without re-adding the parent and a new SMS. A double click sends a second DELETE that returns 404 and shows an error toast right after the success toast.",
+        "evidence": "parent-accounts/page.tsx:45-48 `unlink` calls DELETE straight away. The button (line 67) has no confirm and is not disabled while the request runs. ResourceManager and Settings use ConfirmDialog for other deletes.",
+        "fix": "Use ConfirmDialog ('Unlink X from Y?') and disable the button while the request is in flight."
+      },
+      {
+        "title": "SMS dialog lists and pre-selects transferred, graduated and deactivated learners",
+        "severity": "medium",
+        "category": "data",
+        "file": "src/app/dashboard/reports/page.tsx",
+        "line": 153,
+        "trigger": "A learner is set to Transferred, Graduated or Deactivated but keeps their class (the class is optional once not Active). Open Report Cards > Send SMS for that class.",
+        "impact": "The learner is listed with a guardian phone and ticked by default. The server builds their message from marks that exist only for ACTIVE learners, so the parent gets 'Avg: -% | Grade: - | Rank: -' with no subjects, and the school pays for it. The Students form promises non-active learners 'drop off class lists'.",
+        "evidence": "reports/page.tsx:153 loads /api/school/data?type=students&grade_stream_id=..., which has no status filter (api/school/data/route.ts 'students' case). `toRosterLearner` (lib/reports/class-roster.ts) drops `status`. SMSModal pre-ticks every learner with a phone (`reachable`). api/sms/send selects the students by id and class only; its marks come from `classStudentIds` filtered to status ACTIVE, and recipients are built for every selected student. The class and mark-sheet routes filter `.eq('status','ACTIVE')`.",
+        "fix": "Keep `status` in RosterLearner and exclude non-ACTIVE learners from the SMS list. The one-learner picker may keep them, marked as such. Ideally also reject non-ACTIVE ids in /api/sms/send."
+      },
+      {
+        "title": "A failed class-roster load is cached as 'no learners' and never retried",
+        "severity": "low",
+        "category": "ux",
+        "file": "src/app/dashboard/reports/page.tsx",
+        "line": 161,
+        "trigger": "Click 'Choose learner' or 'Send SMS' while /api/school/data?type=students fails (network drop). Close the dialog and reopen it.",
+        "impact": "The failure toast appears once. Every later open for that class shows 'This class has no learners yet.' in the learner picker and SMS dialog, so the teacher believes the class is empty and cannot send results until they change class or reload.",
+        "evidence": "reports/page.tsx:161-164 sets `roster = { streamId, learners: [] }` in the catch. `openDialog` (lines 167-170) only calls loadRoster when `roster?.streamId !== selectedGradeStream`, so the failed result is treated as loaded. Both dialogs render the empty-list text when `learners` is `[]`.",
+        "fix": "On failure store an error state, or clear the roster so the next open retries. Show a Retry message in the dialogs instead of the empty-class text."
+      },
+      {
+        "title": "Dashboard shortcuts, tiles and to-dos link to modules the school has switched off and bounce silently",
+        "severity": "low",
+        "category": "ux",
+        "file": "src/app/dashboard/page.tsx",
+        "line": 234,
+        "trigger": "An admin turns off Fees, Attendance, Assignments, Analytics or Report Cards under Settings > Modules, then clicks the matching dashboard shortcut (for example 'Record payment' or 'Attendance'), a KPI tile or a to-do button.",
+        "impact": "The click shows a skeleton and returns to /dashboard with no message, which reads as a dead button. The dashboard keeps promoting features the school disabled.",
+        "evidence": "page.tsx:234-243 QUICK_ACTIONS is a fixed list, and the KPI tiles (lines 139-147), the 'Analytics'/'Exams' action links (lines 164, 170) and buildTodos hrefs (lib/dashboard.ts) have no module checks (no hasModule in app/dashboard/page.tsx or components/dashboard). PAGE_ACCESS marks exams, report_cards, attendance, analytics, assignments and fees with a `module`, so canAccessPath is false when it is off. DashboardContent then runs `router.replace(homePathForRole(role))`, which is /dashboard.",
+        "fix": "Filter QUICK_ACTIONS, tiles, todos and insight links with `canAccessPath(href, {role, can, hasModule})` or hasModule(...) from useAuth before rendering."
+      },
+      {
+        "title": "Setup wizard sits on 'Loading grades…' forever if the grade list request fails",
+        "severity": "low",
+        "category": "ux",
+        "file": "src/app/dashboard/onboarding/page.tsx",
+        "line": 112,
+        "trigger": "Register a school while GET /api/school/onboarding fails (transient network error or 500), then reach step 4 (Classes).",
+        "impact": "A toast appears once at step 1 and is gone by step 4. Step 4 shows an endless spinner, and Continue is blocked by 'Tick at least one grade'. A new school cannot finish registration and nothing says why or how to retry.",
+        "evidence": "onboarding/page.tsx:112-118 fetches only when `selectedRole==='ADMIN'` and `standardGrades.length===0`, and its deps `[selectedRole, standardGrades.length]` do not change after a failure, so it never retries. Line 564 renders the spinner whenever `standardGrades.length === 0`, with no error branch.",
+        "fix": "Track a load error state and show 'Could not load the grade list' with a Retry button on step 4. Re-run the fetch on retry, and optionally on entering step 4."
+      },
+      {
+        "title": "Dashboard error boundary prints the raw exception message to users",
+        "severity": "low",
+        "category": "ux",
+        "file": "src/app/dashboard/error.tsx",
+        "line": 23,
+        "trigger": "Any client-side render error under /dashboard, for example a null response field.",
+        "impact": "Admins, teachers and bursars see developer text such as \"Cannot read properties of undefined (reading 'map')\" under 'Something went wrong'. The other segment error boundaries use friendly fixed copy.",
+        "evidence": "error.tsx:23 renders `error.message || 'An unexpected error occurred. Please try again.'`. The message is the unfiltered Error.message (it is already logged on line 14).",
+        "fix": "Always show the generic sentence, optionally with `error.digest` as a reference code, and keep the details in console.error only."
+      }
+    ]
+  },
+  {
+    "slice": "s10",
+    "filesReviewed": 36,
+    "findings": [
+      {
+        "title": "Deleting a fee record cascades away its payment receipts, with only a soft warning",
+        "severity": "high",
+        "category": "data",
+        "file": "src/app/dashboard/fees/page.tsx",
+        "line": 485,
+        "trigger": "A bursar with fees.manage clicks the trash icon on a fee record that already has payments (for example to fix a wrong amount by deleting and re-adding it) and confirms the dialog.",
+        "impact": "Every fee_payments row for that record, including M-Pesa receipts and receipt numbers, is hard-deleted with no undo. Re-adding the record shows the learner as fully unpaid, the school's ledger and audit trail are lost, and parents can be re-billed for money already paid. This contradicts the voiding route's own rule that ledger entries are never hard-deleted.",
+        "evidence": "fees/page.tsx:485-498 offers delete on any record and its message only says 'KSh X has been paid against it'. DELETE /api/school/fees/[id]/route.ts:76-100 deletes student_fees with no payment check. supabase/migrations/20260720191758_add_fee_payments_ledger.sql:54 declares fee_payments.student_fee_id REFERENCES student_fees(id) ON DELETE CASCADE, and no later migration changes it.",
+        "fix": "Have DELETE /api/school/fees/[id] return 409 when any non-CANCELLED payment exists, and hide or disable the page's delete button for records with paidAmount > 0 (point to Edit or Void instead). A stronger option is ON DELETE RESTRICT."
+      },
+      {
+        "title": "A failed fee-list load is shown as 'No Fee Records Yet' with zero KPIs",
+        "severity": "medium",
+        "category": "ux",
+        "file": "src/app/dashboard/fees/page.tsx",
+        "line": 314,
+        "trigger": "Open Fees, or switch term, while /api/school/fees returns 4xx/5xx (timeout, expired session, transient Supabase error). The only trace is a toast that disappears.",
+        "impact": "The bursar sees the guided 'No Fee Records Yet - get started by setting up fee structures' empty state (or 'the bursar or an admin bills learners first' for an accountant), Expected/Collected 0 and 'Needs attention'. They may start re-billing a term that is already billed. On a network exception the previous term's rows stay on screen under the new term name.",
+        "evidence": "fees/page.tsx:314-317 sets setFees([]) on !res.ok with only a toast; :320-324 keeps stale fees in the catch path; :1223-1262 renders the onboarding empty state whenever fees.length === 0, with no error state in the list view.",
+        "fix": "Track a loadError state set in fetchFees. When it is set, render an error panel with a 'Try again' button instead of the empty state and KPIs, and in the catch path clear or mark the stale rows."
+      },
+      {
+        "title": "Batch save wipes typed values for failed rows and names only the first four failures",
+        "severity": "medium",
+        "category": "ux",
+        "file": "src/app/dashboard/fees/page.tsx",
+        "line": 786,
+        "trigger": "Enter fees and payments for a class of about 40 in Batch entry and press 'Save all' while some rows fail (duplicate M-Pesa code, a dropped request, an expired session).",
+        "impact": "After saving, every row is rebuilt from the server, so the amounts typed for the failed rows are gone. The banner lists only the first four problems ('N problem(s): a; b; c; d...'), so the bursar cannot tell which payments were not recorded and must audit the sheet by hand. Money received can be left unrecorded.",
+        "evidence": "fees/page.tsx:786 awaits Promise.all([fetchFees(), loadBatchStudents()]) and loadBatchStudents (:682) replaces batchEntries with emptyBatchEntry for every student. :792 prints errors.slice(0, 4).",
+        "fix": "After a save with errors, reload only the rows that succeeded, or merge the server data and keep the failed rows' typed payNow/total values highlighted. Show all failures in a scrollable list."
+      },
+      {
+        "title": "Unsaved batch-entry values are discarded with no confirmation",
+        "severity": "low",
+        "category": "ux",
+        "file": "src/app/dashboard/fees/page.tsx",
+        "line": 813,
+        "trigger": "Type amounts for a class in Batch entry, then tap the Records or Payments tab, change the class or term select, or press 'Discard'.",
+        "impact": "All typed fees and payments are cleared silently. changeMode calls clearBatch and the stream/term effect reloads and resets entries, and there is no beforeunload guard. A mis-tap on a phone loses a long data-entry session.",
+        "evidence": "fees/page.tsx:813-817 changeMode -> clearBatch(); :690-695 effect on batchStream/batchTerm reloads and resets entries; :1041 Discard calls loadBatchStudents directly. batchChanges (:709) already knows when there are unsaved edits.",
+        "fix": "When batchChanges.fees + batchChanges.payments > 0, ask for confirmation before changeMode/stream/term change/Discard, and add a beforeunload warning as the attendance register does."
+      },
+      {
+        "title": "Payment history modal shows a failed load as 'No payments recorded yet' and keeps a stale paid total after a void",
+        "severity": "medium",
+        "category": "ux",
+        "file": "src/app/dashboard/fees/page.tsx",
+        "line": 578,
+        "trigger": "(a) Click the history icon on a record while /api/school/fees/[id]/payments returns 403/404/500. (b) Void a receipt from the history modal.",
+        "impact": "(a) The modal header says 'KSh 20,000 of 45,000 paid' but the body says 'No payments recorded yet', which wrongly suggests the receipts are missing. (b) After the void the list refreshes but the header still shows the pre-void paid amount until the modal is closed and reopened.",
+        "evidence": "fees/page.tsx:582-584 never checks res.ok and does setHistoryPayments(json.data || []). :592-596 voidPayment re-calls openHistory(fee) with the old historyFee object, and openHistory does setHistoryFee(fee) (:579), so fetchFees' refreshed record is never used.",
+        "fix": "Check res.ok and show an error with retry. After a void, set historyFee from the refreshed fees list (find by id) instead of the captured object."
+      },
+      {
+        "title": "Payments log has no stale-response guard, so a slower earlier filter overwrites the newer result",
+        "severity": "low",
+        "category": "ux",
+        "file": "src/app/dashboard/fees/page.tsx",
+        "line": 600,
+        "trigger": "On the Payments tab, type in the search box, change method/status/date filters quickly, or switch term while an earlier request is still in flight.",
+        "impact": "The table can show rows (and the 'Showing the newest N of M' notice) for an older filter than the one in the inputs. The bursar may reconcile or void against the wrong set, and Export then uses different filters from what is on screen.",
+        "evidence": "fees/page.tsx:600-623 fetchPaymentsLog has no request counter or AbortController and calls setPaymentsLog/setPaymentsLogLoading from whichever response lands last. The effect at :625-627 fires on every filter change. fetchFees (:305) and loadBatchStudents (:654) do have the guard.",
+        "fix": "Add a useRef request counter (or AbortController) as fetchFees does, and ignore responses that are not the latest."
+      },
+      {
+        "title": "Add-record student picker silently ends up empty when the student list request fails with an HTTP error",
+        "severity": "low",
+        "category": "ux",
+        "file": "src/app/dashboard/fees/page.tsx",
+        "line": 415,
+        "trigger": "Open 'Add record' while GET /api/school/data?type=students returns 401/403/500 (JSON error body).",
+        "impact": "The student dropdown is empty with no error, and studentsRequested stays true so reopening the dialog never retries. The bursar cannot add a record until the page is reloaded and has no hint why.",
+        "evidence": "fees/page.tsx:418-421 does .then(r => r.json()).then(json => setStudents((json.data ?? []).map(...))) with no r.ok check, so an error body gives []. Only a thrown error reaches the .catch that resets studentsRequested and toasts.",
+        "fix": "Throw when !r.ok (using the API's error text) so the existing catch resets the flag and toasts."
+      },
+      {
+        "title": "Icon-only action buttons use a `btn-icon` class that has no CSS, leaving 14-16px tap targets",
+        "severity": "medium",
+        "category": "responsive",
+        "file": "src/app/dashboard/announcements/page.tsx",
+        "line": 254,
+        "trigger": "Open Announcements, Assignments or Fees on a phone and try to tap Edit or Delete, Payment history/Edit/Delete on fee rows, or Void/Receipt in the payment tables.",
+        "impact": "The Edit and Delete icons sit about 4px apart as bare 16px (14px in fees) buttons with no padding, hover background or focus ring, so mis-taps on the destructive icon are easy. It also fails the 24px minimum target size and gives keyboard users no visible focus.",
+        "evidence": "className=\"btn-icon ...\" is used at announcements/page.tsx:254-255, assignments/page.tsx:270-271 and :349, and fees/page.tsx:1164, 1174, 1310-1312, 1505, 1514. `.btn-icon` is not defined in src/app/globals.css (only .btn-primary and .btn-secondary exist; grep returns 0), is not in the compiled CSS, and has never been in the git history of globals.css.",
+        "fix": "Define .btn-icon in the components layer of globals.css (for example inline-flex size-9 items-center justify-center rounded-lg hover:bg-muted focus-visible:ring-2), or replace it with the existing Button size='icon-sm' variant."
+      },
+      {
+        "title": "Cancelling an expense decision leaves note/reference behind that prefill the next expense",
+        "severity": "medium",
+        "category": "ux",
+        "file": "src/app/dashboard/expenses/page.tsx",
+        "line": 152,
+        "trigger": "Click Reject on expense A, type 'Duplicate invoice' in the note (or open Paid and type a cheque number), press Cancel, then click Approve (or Paid) on expense B.",
+        "impact": "B's dialog opens with A's note/reference prefilled and Confirm sends it. A stale rejection note is recorded as the decision_note on an approved expense, or another expense's cheque/M-Pesa reference is stored on a paid one. Both go into the audit log.",
+        "evidence": "expenses/page.tsx:36-41 hold note/method/reference at page level. They are reset only after a successful decide (:53). onClose and the Cancel button (:154, 157) just call setDecision(null). The Paid button resets only method (:120). decide() sends note even for a PAID decision (:49).",
+        "fix": "Reset note, method and reference whenever a decision dialog opens (in the onClick that calls setDecision) or on close, and omit note for PAID."
+      },
+      {
+        "title": "CBC grid load has no stale-response guard, so rows from an old filter can be saved under the new strand/term/subject",
+        "severity": "medium",
+        "category": "data",
+        "file": "src/app/dashboard/cbc/page.tsx",
+        "line": 43,
+        "trigger": "Press 'Open class list' on a slow connection, then change the strand, sub-strand, term or learning area before the response arrives (set() clears the list), then edit a level after the stale list appears and press Save.",
+        "impact": "The old request's learner levels are shown and saved under the new filter. The PUT only checks that learners belong to the class, so wrong levels are written for another strand or term.",
+        "evidence": "cbc/page.tsx:46 does setRows(await opsFetch(...)) with no check that the filter is unchanged. set() (:73-78) clears rows and dirty but cannot cancel the request. save() (:55-58) sends the current `filter` with the possibly stale `rows`. PUT /api/academics/cbc/route.ts validates only class membership.",
+        "fix": "Use a request counter or AbortController in load() and drop the response if the filter changed (or key the rows by the filter they were loaded for and refuse to save when it differs)."
+      },
+      {
+        "title": "CBC pickers offer every class and subject but Save is refused for ones the teacher does not teach",
+        "severity": "low",
+        "category": "ux",
+        "file": "src/app/dashboard/cbc/page.tsx",
+        "line": 89,
+        "trigger": "A class or subject teacher picks any class/learning area from the lookups (they list all streams and subjects), opens the list, rates the whole class and presses Save.",
+        "impact": "The roster loads and can be filled in, but Save returns 'You can only assess the classes and subjects you teach.' after the work is done. The action is offered to a user the API will refuse.",
+        "evidence": "cbc/page.tsx:89-91 use LookupSelect lookup='streams'/'subjects', which /api/ops/lookups serves for the whole school. GET /api/academics/cbc/route.ts returns the roster for any class, while PUT (:69-82) enforces canTeacherMarkStudent for non-admin/non-duty users.",
+        "fix": "Apply the same canTeacherMarkStudent check on GET (or scope the lookups to the teacher's classes and subjects) so the refusal happens at 'Open class list'."
+      },
+      {
+        "title": "'N submissions' button opens an empty drawer for assignments set by another teacher",
+        "severity": "medium",
+        "category": "api",
+        "file": "src/app/dashboard/assignments/page.tsx",
+        "line": 286,
+        "trigger": "A teacher opens Assignments (Upcoming/All), which lists every assignment in the school, and clicks '5 submissions' on a colleague's assignment.",
+        "impact": "The card advertises a submission count, but the drawer says 'Nothing handed in yet.' because the submissions API filters to the caller's own assignments. The teacher is told a class has handed in nothing, and the 'All - across your classes' tile is also wrong because the list is school-wide.",
+        "evidence": "assignments/page.tsx:286-289 renders the submissions button for every card. GET /api/school/assignments/route.ts:60-88 applies no created_by filter for staff and returns submissionCount. GET /api/school/submissions/route.ts:48 does `if (role !== 'ADMIN') query = query.eq('assignments.created_by', userId)`, so it returns [] for others' work. The drawer (:445-452) then shows the 'Only the teacher who set this' note plus 'Nothing handed in yet.'.",
+        "fix": "Only show the submissions button (or the count) when canManage(a). For others show a read-only label, or scope the assignments list to the caller's classes/own assignments."
+      },
+      {
+        "title": "'Late' flag compares the UTC date of the hand-in with a local due date",
+        "severity": "low",
+        "category": "data",
+        "file": "src/app/dashboard/assignments/page.tsx",
+        "line": 463,
+        "trigger": "A learner hands work in between 00:00 and 03:00 Nairobi time on the day after the due date (late-night homework).",
+        "impact": "The submission's UTC date is still the due date, so `submittedAt.slice(0,10) > dueDate` is false and the hand-in is not marked late. The teacher's late flag is wrong for about three hours of each night.",
+        "evidence": "assignments/page.tsx:463 uses s.submittedAt.slice(0, 10), the UTC date of the ISO timestamp, against assignment.dueDate, a calendar day. The 'Handed in' time on :462 is formatted in local time, so the display and the flag disagree.",
+        "fix": "Convert submittedAt to the local calendar date (localToday(new Date(s.submittedAt))) before comparing."
+      },
+      {
+        "title": "Calendar agenda shows a failed load as 'Nothing coming up on the school calendar'",
+        "severity": "low",
+        "category": "ux",
+        "file": "src/app/dashboard/calendar/page.tsx",
+        "line": 16,
+        "trigger": "Open Calendar while /api/ops/events fails (timeout, 5xx, session expired).",
+        "impact": "Staff conclude the term has no events, exams or holidays and may plan around a calendar that failed to load. useOpsList returns the error, but the Agenda never reads it.",
+        "evidence": "calendar/page.tsx:16 destructures only { rows, loading } from useOpsList('events'). On failure rows stays [], loading becomes false, and :20 renders the empty message. hooks/useOpsList.ts:27-29 sets `error`, which ResourceManager shows but Agenda ignores.",
+        "fix": "Read `error` (and `reload`) and render an error panel with 'Try again' before the empty state."
+      },
+      {
+        "title": "Health 'Today' panel stays a loading skeleton forever when the status request fails",
+        "severity": "low",
+        "category": "ux",
+        "file": "src/app/dashboard/health/page.tsx",
+        "line": 24,
+        "trigger": "Open Health while /api/health/status fails (network drop, 5xx).",
+        "impact": "A toast flashes once and the panel remains a grey placeholder with no error or retry. Staff checking who is in sick bay see an endless spinner and cannot tell whether nobody is unwell or the data did not load.",
+        "evidence": "health/page.tsx:24 `.catch(err => toast.error(...))` never sets any state, and :25 `if (!status) return <div className=\"skeleton-bone ...\"/>` keeps showing the skeleton while status is null.",
+        "fix": "Keep an error state; on failure render a message with a 'Try again' button instead of the skeleton."
+      },
+      {
+        "title": "Library 'Available' count is wrong: total copies for non-managers, stale or failed-load for managers",
+        "severity": "medium",
+        "category": "data",
+        "file": "src/app/dashboard/library/page.tsx",
+        "line": 82,
+        "trigger": "(a) A teacher or learner with library.view opens the Catalogue. (b) A librarian issues or returns a book in the Loans tab and switches back to the Catalogue. (c) The open-loans request fails.",
+        "impact": "(a) The column titled 'Available' shows copies_total, so a book with every copy out reads as available. (b) The count is not refreshed after issuing or returning until the page reloads. (c) With no error handling the count shows all copies on shelf. Borrowers are sent for books that are not there.",
+        "evidence": "library/page.tsx:82 renders `manage ? total - out : b.copies_total` under the header 'Available'. Loans are read only with manage (loans resource read: library.manage). openLoans (:55) lives in LibraryPage while the Loans tab uses its own ResourceManager list, so issuing or returning never reloads it. openLoans.error/loading are never read, so outByBook is empty on failure.",
+        "fix": "For non-managers hide the column or label it 'Copies'. Expose availability from the API for everyone. Call openLoans.reload after loan changes (or lift the loans state), and show an error when openLoans.error is set."
+      },
+      {
+        "title": "Fee structure list totals stay stale after vote heads are added in the items drawer",
+        "severity": "low",
+        "category": "ux",
+        "file": "src/app/dashboard/billing/page.tsx",
+        "line": 84,
+        "trigger": "Create a fee structure, click it, add or edit vote-head amounts in the drawer, then close the drawer.",
+        "impact": "The 'Per year' column in the Fee structures table still shows the old total (KSh 0 for a new structure) until the page is reloaded. The bursar may think the items did not save and re-add them.",
+        "evidence": "billing/page.tsx:64 computes structureTotal(s.items) from the list loaded once by the outer ResourceManager. StructureItems (:20-44) has its own ResourceManager/useOpsList for 'fee-structure-items' and the Drawer's onClose (:84) only calls setOpen(null), so the structures list is never reloaded.",
+        "fix": "Reload the structures list when the drawer closes (key the outer ResourceManager on a version counter bumped in onClose), or compute the total from the drawer's rows and push it up."
+      },
+      {
+        "title": "Gate check keeps showing the previous pass result while a new code is typed",
+        "severity": "low",
+        "category": "ux",
+        "file": "src/app/dashboard/boarding/page.tsx",
+        "line": 62,
+        "trigger": "A gate officer checks pass A (result 'Jane Doe - valid'), then types pass B without pressing Check, or Enter does nothing because there is no form.",
+        "impact": "Jane's 'valid' result stays under the input for the new code, so the officer can read the old learner's approval as the answer for B. At the gate this can wave out the wrong learner.",
+        "evidence": "boarding/page.tsx:62 onChange only calls setCode, and result is cleared only inside check() on failure (:56). The result block (:65-69) renders whenever result is non-null, with no tie to the code that produced it.",
+        "fix": "Clear result in the code input's onChange (or store the checked code with the result and hide it when they differ), and wrap the field in a form so Enter submits."
+      },
+      {
+        "title": "'Show older announcements' response is appended to the list even after the filter or search changed",
+        "severity": "low",
+        "category": "ux",
+        "file": "src/app/dashboard/announcements/page.tsx",
+        "line": 100,
+        "trigger": "Click 'Show older announcements', then quickly tap the Important/Mine tile (or change the search) before the response arrives and after the new first page has loaded.",
+        "impact": "Older items from the previous filter are appended under the new filter's list, so 'Important' shows ordinary notices and the next-cursor belongs to the wrong query.",
+        "evidence": "announcements/page.tsx:100-116 fetches pageUrl(feed.nextCursor) captured at click time and applies setFeed(prev => prev.status === 'ready' ? {items: [...prev.items, ...body.data], nextCursor: body.nextCursor} : prev) with no check that the filter/query is unchanged. The first-page effect (:81-96) is aborted on change, loadMore is not.",
+        "fix": "Keep an AbortController or request id for loadMore, and abort it or ignore its result when filter, query or reloadKey changes."
+      },
+      {
+        "title": "Announcement titles and bodies do not wrap long unbroken text, so links overflow the card on phones",
+        "severity": "low",
+        "category": "responsive",
+        "file": "src/app/dashboard/announcements/page.tsx",
+        "line": 259,
+        "trigger": "A teacher posts an announcement containing a long URL or an unbroken string (for example a Google Forms link) and a parent or teacher opens the page on a 360px phone.",
+        "impact": "The text runs past the card's right edge and makes the whole page scroll sideways, hiding the edit/delete buttons and the time line.",
+        "evidence": "announcements/page.tsx:259 renders renderFormattedText(a.content) in a block with no break-words/overflow-wrap, and the h2 title at :241 has none either. src/app/globals.css has no global overflow-wrap rule (grep returns nothing), and the container is only max-w-5xl.",
+        "fix": "Add `break-words` (or `[overflow-wrap:anywhere]`) to the title and content wrappers and `min-w-0` to the li/article."
+      },
+      {
+        "title": "Onboarding wizard inputs have labels that are not associated with their fields",
+        "severity": "low",
+        "category": "a11y",
+        "file": "src/app/dashboard/onboarding/page.tsx",
+        "line": 445,
+        "trigger": "A screen-reader or keyboard user fills the school-details step (name, email, phone, address) or the invite-code step, or taps a label on a phone expecting the field to focus.",
+        "impact": "The <label> elements are siblings with no htmlFor or wrapping, so the inputs have no accessible name beyond the placeholder, and tapping the label does not focus the field. This is the first screen every new school and joiner sees.",
+        "evidence": "onboarding/page.tsx:445-452, 456-463, 466-473, 476-483 and 593-602 use `<label className=\"text-sm font-semibold\">...</label><input .../>` with no id/htmlFor. Steps 2-3 correctly wrap or associate their labels.",
+        "fix": "Give each input an id and the label a matching htmlFor (or wrap the input in the label)."
+      }
+    ]
+  },
+  {
+    "slice": "s19",
+    "filesReviewed": 40,
+    "findings": [
+      {
+        "title": "Editing a teacher fails whenever their phone is empty: client sends phone:null, server schema only accepts a string",
+        "severity": "medium",
+        "category": "api",
+        "file": "mobile/app/staff/people/[id].tsx",
+        "line": 130,
+        "trigger": "Admin opens a teacher or staff profile that has no phone number (or clears the phone), taps Edit, changes the name or photo, taps Save.",
+        "impact": "Save fails with a cryptic zod message such as 'Invalid input: expected string, received null'. Nothing is saved, so the admin cannot rename a teacher or change their photo from the app unless a phone is typed. Many invited staff have no phone recorded.",
+        "evidence": "people/[id].tsx:130 sends `phone: edit.phone.trim() || null`, and `edit.phone` starts as `p.phone ?? ''`. src/app/api/admin/update-teacher/route.ts:14 declares `phone: z.string().trim().max(20).optional()` (zod ^4.4.3), which rejects null; the route returns issues[0].message with status 400. The web (StaffSection.tsx:68) sends the form strings, so '' is accepted and the route maps it to null (route line 61).",
+        "fix": "Send `phone: edit.phone.trim()` (the route already stores '' as null), or add `.nullable()` to the schema."
+      },
+      {
+        "title": "Announcement posted 'and sent by SMS' is reported as success even when no text went out",
+        "severity": "medium",
+        "category": "ux",
+        "file": "mobile/app/staff/announcements.tsx",
+        "line": 45,
+        "trigger": "Admin posts with 'Also send by SMS' on, and either posts more than 3 SMS blasts in a minute, the school has no guardian phone numbers, or the SMS gateway fails for some or all numbers.",
+        "impact": "The admin is told 'Posted and sent by SMS.' and believes every guardian was informed (fee deadlines, closures, emergencies) when none or only some were.",
+        "evidence": "announcements.tsx:44-45 awaits api.post and ignores its result, then sets the text from `draft.sendSms` alone. The POST route (src/app/api/school/announcements/route.ts) answers `{ data, sms: {sent, failed, total}, warning }` and returns only a `warning` when rate-limited (200 OK) or `sms.total: 0` when no phones exist. The web page reads `json.warning` and `json.sms` (src/app/dashboard/announcements/page.tsx:151-153,299-301).",
+        "fix": "Use the response: show `warning` as a warning and, when `sms` is present, report 'texted X of Y guardians (Z failed)', or 'no guardian phone numbers' when total is 0."
+      },
+      {
+        "title": "Announcements list shows only the newest 20 posts and never loads older ones",
+        "severity": "medium",
+        "category": "data",
+        "file": "mobile/app/staff/announcements.tsx",
+        "line": 29,
+        "trigger": "A school with more than 20 announcements opens Announcements and looks for, edits or deletes an older post.",
+        "impact": "Older announcements are invisible and cannot be edited or deleted from the app. The screen presents the 20 as the complete list and gives no search or 'load more'.",
+        "evidence": "announcements.tsx:29 uses `useApiQuery('/api/school/announcements')`, unwrapping only `.data`. The GET route pages with ANNOUNCEMENTS_PAGE_SIZE = 20 (src/lib/announcements.ts:10) and returns `nextCursor` and `counts`, which the screen never reads (its own comment says older ones were once unreachable). The web uses `before`/`q`/`filter`.",
+        "fix": "Read the raw response and add a 'Load older' control that passes `before=<nextCursor>`, appending pages."
+      },
+      {
+        "title": "Analytics ignores a new ?stream= when the tab is already mounted, so class tiles open the wrong class",
+        "severity": "medium",
+        "category": "ux",
+        "file": "mobile/app/staff/analytics.tsx",
+        "line": 37,
+        "trigger": "Admin opens Analytics once (from the tab, or from one class tile), goes back to Home, then taps a different class tile (router.push('/staff/analytics?stream=<id>')).",
+        "impact": "The tap lands on the previously shown class or 'All classes' instead of the tapped class, so the dashboard tile appears dead or misleading.",
+        "evidence": "analytics.tsx:37 reads `params.stream` only as the useState initial value. Staff tabs stay mounted (tab options use freezeOnBlur; exams.tsx:53 documents 'Tab screens stay mounted, so a later deep link must switch tabs too' and adds an effect for it). The tile navigation is components/dashboard/AdminSections.tsx:142.",
+        "fix": "Add `useEffect(() => { if (params.stream) setStreamId(params.stream); }, [params.stream])` as exams.tsx does."
+      },
+      {
+        "title": "'Bill class' bills the previous class's learners if tapped before the new class's roster has loaded, and 'Billed 0 learners' is shown as success with no class",
+        "severity": "medium",
+        "category": "data",
+        "file": "mobile/app/staff/fees.tsx",
+        "line": 213,
+        "trigger": "(a) In Bill learners > Whole class, switch the Class chip from A to B (B not cached) and tap 'Bill class' before B's list arrives, e.g. on a slow mobile connection. (b) Choose 'Whole class', pick no class, and tap 'Bill class'.",
+        "impact": "(a) Every active learner of class A gets a fee record for the entered amount while the form shows class B. The wrong-class bills must be found and deleted. (b) The form closes with a green 'Billed 0 learners.' and nothing was billed.",
+        "evidence": "fees.tsx:208 `useApiQuery(streamId ? ... : null)`; useApiQuery (lib/useApiQuery.ts) keeps the old `data` when the path changes and only sets loading, and null path gives data null. `roster` (fees.tsx:213) is built from `students.data`. The button is disabled only by `termFees.loading` (line 270), never `students.loading`. In class mode with no class, targets is [], and line 237 reports success.",
+        "fix": "Require a class in class mode. Disable submit while `students.loading`, and ignore `students.data` unless it was fetched for the current streamId. Report 'No learners to bill' as an error."
+      },
+      {
+        "title": "Library 'Available' count is computed from a screen-level loans query that never refreshes (or shows an error)",
+        "severity": "medium",
+        "category": "data",
+        "file": "mobile/app/staff/library.tsx",
+        "line": 52,
+        "trigger": "A librarian issues or returns a book on the Loans tab (or loans load slowly or fail), then opens the Catalogue tab.",
+        "impact": "The catalogue still shows the old figure (e.g. 'Available 5 / 5' for a title whose copies are out) for the whole session, so a book can be promised or issued that is not on the shelf. During loading, or if the loans request fails, every title shows all copies available, with no error. Non-managers see total copies labelled 'Available'.",
+        "evidence": "library.tsx:52 `useOpsList('loans', {open:'1'})` lives in LibraryScreen. The Loans tab's ResourceList uses its own list instance and reload, so this one never changes. useOpsList has no focus/refresh hook and sits outside the RefreshSignalProvider (ModuleScreen pull-to-refresh does not reach it). Line 53 builds `outByBook` from `.rows` and ignores `loading`/`error`. Line 78 prints `copies_total - (outByBook.get(id) ?? 0)`.",
+        "fix": "Compute availability inside the Catalogue tab from a list that reloads with the refresh signal and with the Loans tab's mutations, or call `openLoans.reload` from useRefreshSignal and after loan changes. Show '—' while loading or on error."
+      },
+      {
+        "title": "Saving the register then changing date/class reloads the wrong day and class",
+        "severity": "medium",
+        "category": "data",
+        "file": "mobile/app/staff/attendance.tsx",
+        "line": 99,
+        "trigger": "Teacher taps Save register, then while the request is in flight steps the date back (or switches class). The save completes. They change one chip on the displayed list and save again.",
+        "impact": "The screen shows the old date's statuses under the newly selected date. A second save posts those statuses for the new date, overwriting that day's register.",
+        "evidence": "attendance.tsx:99 `await loadRoster()` calls the loadRoster closed over by the render where Save was tapped (old date/stream). It takes a new loadId (line 52), so it wins over the newer load started by the date change, and sets rows from the old date (line 59). ChipSelect (150) and DateStepper (151) are not disabled while `saving`.",
+        "fix": "Disable class/date controls while saving, or refresh via a ref to the latest loadRoster, or skip the post-save reload if the selection changed."
+      },
+      {
+        "title": "Expense form's supplier and vote-head pickers use lists that never reload, so a new supplier is missing",
+        "severity": "low",
+        "category": "data",
+        "file": "mobile/app/staff/expenses.tsx",
+        "line": 39,
+        "trigger": "Bursar adds a supplier on the Suppliers tab (or a vote head on Billing), then opens Expenses > Record expense and tries to pick it.",
+        "impact": "The new supplier or vote head is not offered, so the expense cannot be recorded against it until the app is restarted. If the lists fail to load, the pickers are silently empty.",
+        "evidence": "expenses.tsx:39-41 `useOpsList('suppliers')`/`('vote-heads')` at ExpensesScreen level feed `expenseFields(suppliers.rows, voteHeads.rows)`. The Suppliers tab's ResourceList uses its own state, and these hooks are outside the RefreshSignalProvider with no reload; errors are ignored.",
+        "fix": "Move the lookups into the tab component (as billing.tsx and inventory.tsx do), or use LookupField/useLookup, or wire `reload` to the refresh signal."
+      },
+      {
+        "title": "Expense decision note, reference and method carry over from a cancelled or failed decision to the next expense",
+        "severity": "low",
+        "category": "ux",
+        "file": "mobile/app/staff/expenses.tsx",
+        "line": 162,
+        "trigger": "Approver opens Reject (typing a note) or Paid (typing an M-Pesa code) on expense A, cancels or gets an error, then opens a decision on expense B.",
+        "impact": "B's form is prefilled with A's note or payment reference. Confirming without noticing saves A's text as B's decision note or payment reference on a voucher.",
+        "evidence": "Note/method/reference state (lines 43-45) is reset only after a successful decide (line 58). `onClose={() => setDecision(null)}` (162) and the Approve/Reject/Paid onPress (128) do not clear it.",
+        "fix": "Reset note, reference and method when opening or closing the sheet."
+      },
+      {
+        "title": "'Also send by SMS' toggle is offered to teachers although the API refuses it for non-admins",
+        "severity": "low",
+        "category": "ux",
+        "file": "mobile/app/staff/announcements.tsx",
+        "line": 89,
+        "trigger": "A class or subject teacher creates an announcement and switches on 'Also send by SMS'.",
+        "impact": "The post is rejected with 403 'Only the admin can text announcements to guardians.' after the teacher has written the post.",
+        "evidence": "announcements.tsx:89-91 renders the toggle for every poster, and line 44 sends send_sms. POST route: `if (send_sms && role !== 'ADMIN') return 403`. The web sends `send_sms: isAdmin && draft.sendSms`.",
+        "fix": "Render the ToggleRow only when role === 'ADMIN'."
+      },
+      {
+        "title": "Delete account can report failure after the account has already been deleted",
+        "severity": "low",
+        "category": "ux",
+        "file": "mobile/app/account/delete.tsx",
+        "line": 55,
+        "trigger": "DELETE /api/account succeeds (it deletes the Clerk user), then Clerk's signOut() rejects or hangs, for example on a weak connection or because the session no longer exists.",
+        "impact": "A rejection shows 'Could not delete your account. Please try again.' with a re-enabled button, though the account is gone. A retry returns 401 'Sign in to delete your account.' A hang leaves the spinner forever.",
+        "evidence": "delete.tsx:54-55 `await api.del(...); await signOut();` sit in one try, whose catch (56-59) sets the failure message. The app already has `useSignOut` (lib/useSignOut.ts), which races signOut against a 6s timeout, swallows errors and routes to sign-in; the root layout uses it for this reason. The route deletes the Clerk user last (src/app/api/account/route.ts).",
+        "fix": "After a successful delete, treat sign-out as best-effort: use useSignOut().signOut() or catch its errors separately."
+      },
+      {
+        "title": "Exam paper upload parses the release time after the files are already uploaded, and bad input gives a cryptic error",
+        "severity": "low",
+        "category": "ux",
+        "file": "mobile/app/staff/exam-papers.tsx",
+        "line": 99,
+        "trigger": "Teacher types a release time that is not exactly 'YYYY-MM-DD HH:MM' (e.g. '21/10/2026 8:00' or '2026-10-21 8:00') and taps Upload with a large paper.",
+        "impact": "The paper and scheme are uploaded to storage first, then the submit fails with 'Invalid time value' or 'Date value out of bounds'. Fixing the text re-uploads every file, and the failed attempt leaves staged files behind.",
+        "evidence": "exam-papers.tsx:99 `await paperUploadForm(...)` uploads each file (lib/examPaperFiles.ts posts upload-url and PUTs). Line 101 then calls paperFormFields, which runs `new Date(v).toISOString()` (src/lib/ops/forms/academics.ts:122) and throws a RangeError, shown via errorMessage. Line 122 is a free-text field with no validation.",
+        "fix": "Validate and parse release_at before uploading and show 'Use YYYY-MM-DD HH:MM'. Better, use a date/time picker."
+      },
+      {
+        "title": "Contact form prefills the placeholder .local email for teachers and students, so replies cannot reach them",
+        "severity": "low",
+        "category": "ux",
+        "file": "mobile/app/help/contact.tsx",
+        "line": 21,
+        "trigger": "A teacher or learner activated without an email (placeholder address like name@school.school.local) opens Contact support and sends the prefilled form.",
+        "impact": "Support receives a reply-to address that never receives mail, and the confirmation says 'We'll reply to x@...local.' The person waits for an answer that bounces.",
+        "evidence": "contact.tsx:21 `email: profile?.email ?? ''`. UserContext.tsx:126 takes Clerk's first address (the placeholder from placeholderEmailFor). src/lib/placeholder-email.ts says `.local` never routes to an inbox. contactSchema accepts any well-formed address.",
+        "fix": "Leave the field empty when isPlaceholderEmail(profile.email), and say the address must be reachable."
+      },
+      {
+        "title": "CBC class list can be filled by a stale response and then saved under a different strand, subject or term",
+        "severity": "low",
+        "category": "data",
+        "file": "mobile/app/staff/cbc.tsx",
+        "line": 55,
+        "trigger": "Teacher taps 'Open class list', then (while it loads) changes the strand, sub-strand, term or learning area, then rates a learner and taps Save.",
+        "impact": "Levels loaded for the old selection appear under the new one and are saved to the new strand/subject/term, overwriting that assessment. The server only checks that learners are in the class.",
+        "evidence": "cbc.tsx:52-57 `load` has no request-id/latest guard; `apply` (line 42) sets rows to null, but the late `setRows` at line 55 repopulates them. `save` (line 64) sends the current `filter` with those rows. Server PUT validates only class membership (src/app/api/academics/cbc/route.ts).",
+        "fix": "Ignore the response unless the filter is unchanged (request id), and disable filter inputs while loading."
+      },
+      {
+        "title": "Parent list can show the previously selected learner's parents after a quick switch",
+        "severity": "low",
+        "category": "ux",
+        "file": "mobile/app/staff/parent-accounts.tsx",
+        "line": 32,
+        "trigger": "Admin picks learner A, then quickly picks learner B before A's /api/admin/parents response arrives.",
+        "impact": "A's slower response overwrites the list, so B's header shows A's parents and 'Unlink' buttons. The admin may unlink a parent from the wrong child.",
+        "evidence": "parent-accounts.tsx:30-35 `load` awaits opsGet and calls setLinks with no check that studentId is still current; the onChange handler (line 65) only clears links up front.",
+        "fix": "Track the latest studentId in a ref (or use a cancelled flag in the effect) and drop outdated responses."
+      },
+      {
+        "title": "Sign-up reports 'Failed to create account' when the account was created and only the follow-on sign-in failed",
+        "severity": "low",
+        "category": "ux",
+        "file": "mobile/app/(auth)/sign-up.tsx",
+        "line": 60,
+        "trigger": "POST /api/auth/signup succeeds, then signIn.create or the code step throws (dropped connection, Clerk error).",
+        "impact": "The user sees a failure and retries. The retry returns 409 'An account with this email already exists', after which they must work out that they should sign in. The first message wrongly implies nothing was created.",
+        "evidence": "sign-up.tsx:51 creates the account; lines 56-57 sign in inside the same try; the catch (59-60) shows `describeAuthError(err, 'Failed to create account.')`. The route returns 409 for an existing email.",
+        "fix": "Track whether signup succeeded; if so, on a later error send the user to sign-in with the 'Account created' notice (as the unsupported branch does)."
+      },
+      {
+        "title": "Adding a fee for one learner silently replaces an existing bill for that term but says 'Fee record added.'",
+        "severity": "low",
+        "category": "data",
+        "file": "mobile/app/staff/fees.tsx",
+        "line": 225,
+        "trigger": "Bursar uses Bill learners > One learner for a learner who already has a fee record for the chosen term, and enters a different amount.",
+        "impact": "The existing total_fee is overwritten (paid amount kept, status recomputed) without warning, and the confirmation claims a record was added. The class mode takes care to skip already-billed learners, so the single-learner path is inconsistent.",
+        "evidence": "fees.tsx:225-226. POST /api/school/fees updates the existing student_fees row for the same student and term (route.ts:~126-140). termFees (fees.tsx:211) already holds this term's bills but is not consulted in 'one' mode.",
+        "fix": "If the learner is in termFees, ask for confirmation ('replace KES X with KES Y') or say 'Fee updated' in the message."
+      },
+      {
+        "title": "Searching classes with no match shows a blank screen",
+        "severity": "low",
+        "category": "ux",
+        "file": "mobile/app/staff/classes.tsx",
+        "line": 169,
+        "trigger": "School has more than 6 classes; admin types text in 'Find a class or class teacher' that matches none.",
+        "impact": "Everything below the search box disappears with no 'no results' message, which looks like the data vanished.",
+        "evidence": "classes.tsx:92 filters into `shown`; line 170 shows the empty state only when `classes.length === 0`, and the curricula map (172-175) returns null for empty groups.",
+        "fix": "Show an EmptyState when `needle && shown.length === 0`."
+      },
+      {
+        "title": "Discharge time is the time the row last rendered, not when Discharge was tapped",
+        "severity": "low",
+        "category": "data",
+        "file": "mobile/app/staff/health.tsx",
+        "line": 113,
+        "trigger": "Nurse keeps the Visits tab open (list rendered at 08:00), then taps Discharge at 11:30 without anything re-rendering the row.",
+        "impact": "discharged_at is recorded as the stale render time, so sick-bay stay length and the 'Today' sick-bay panel are wrong.",
+        "evidence": "health.tsx:113 builds `body={{ discharged_at: new Date().toISOString() }}` inside rowActions, which ResourceList calls during render (ResourceList.tsx:131). ActionButton (components/ops/bits.tsx:71) sends that prop object unchanged.",
+        "fix": "Let ActionButton take a body factory (`body={() => ({ discharged_at: new Date().toISOString() })}`) evaluated on press, or have the server set the time."
+      }
+    ]
+  }
+]

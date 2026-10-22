@@ -238,7 +238,7 @@ export default function AnnouncementsPage() {
                                         </span>
                                         <div className="min-w-0 flex-1">
                                             <div className="flex flex-wrap items-center gap-2">
-                                                <h2 className="text-sm font-semibold text-foreground sm:text-base">{a.title}</h2>
+                                                <h2 className="min-w-0 text-sm font-semibold text-foreground wrap-anywhere sm:text-base">{a.title}</h2>
                                                 {a.isImportant && (
                                                     <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/12 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-rose-600 dark:text-rose-400">
                                                         <AlertTriangle className="size-3" aria-hidden /> Important
@@ -256,7 +256,7 @@ export default function AnnouncementsPage() {
                                             </div>
                                         )}
                                     </header>
-                                    <div className="mt-3 text-sm leading-relaxed text-foreground/90 sm:pl-[3.25rem]">{renderFormattedText(a.content)}</div>
+                                    <div className="mt-3 text-sm leading-relaxed text-foreground/90 wrap-anywhere sm:pl-[3.25rem]">{renderFormattedText(a.content)}</div>
                                 </article>
                             </li>
                         ))}

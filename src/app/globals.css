@@ -305,6 +305,25 @@ body {
       @apply -translate-y-px bg-secondary/80 shadow-sm;
     }
 
+    /* Icon-only actions (edit, delete, receipt…). 40px on phones so a thumb
+       can hit it, 36px from `sm` up, with the same hover and focus cues as
+       the text buttons. The colour stays with the markup. */
+    .btn-icon {
+      @apply inline-flex size-10 shrink-0 items-center justify-center rounded-lg text-muted-foreground no-underline transition-colors duration-200 sm:size-9;
+    }
+
+    .btn-icon:hover:not(:disabled) {
+      @apply bg-muted;
+    }
+
+    .btn-icon:focus-visible {
+      @apply outline-none ring-2 ring-primary/40;
+    }
+
+    .btn-icon:disabled {
+      @apply cursor-not-allowed opacity-50;
+    }
+
     /* --- Form fields ---
      *
      * Sized against .btn-primary / .btn-secondary (h-10, rounded-xl) so a field and

@@ -1,12 +1,12 @@
 "use client";
 
 import React from 'react';
-import { AlertTriangle, RotateCcw } from 'lucide-react';
 import EmptyState from '@/components/dashboard/EmptyState';
 import type { Hue } from '@/components/ui/tones';
 import { cn } from '@/lib/utils';
 
 export { SearchBox } from '@/components/ui/SearchBox';
+export { LoadError } from '@/components/ui/LoadError';
 
 /** The card that holds a section's search, filters and actions. */
 export function Toolbar({ label, children, className }: { label: string; children: React.ReactNode; className?: string }) {
@@ -14,21 +14,6 @@ export function Toolbar({ label, children, className }: { label: string; childre
     <section aria-label={label} className={cn('mb-4 rounded-2xl border border-border/70 bg-card p-3 shadow-sm sm:p-4', className)}>
       {children}
     </section>
-  );
-}
-
-/** A section that could not load, with a way to try again. */
-export function LoadError({ title, message, onRetry }: { title: string; message: string; onRetry: () => void }) {
-  return (
-    <div className="rounded-2xl border border-dashed border-border bg-card">
-      <EmptyState
-        hue="rose"
-        icon={<AlertTriangle className="size-6" />}
-        title={title}
-        description={message}
-        action={<button type="button" className="btn-primary" onClick={onRetry}><RotateCcw className="size-4" aria-hidden="true" />Try again</button>}
-      />
-    </div>
   );
 }
 

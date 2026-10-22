@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Text, View } from 'react-native';
 import { humanize } from '@shared/ops/format';
 import {
@@ -7,6 +7,7 @@ import {
 } from '@shared/ops/forms/platform';
 import { Button, Card, ChipSelect, EmptyState, ListCard, ListRow, Notice, SectionLabel, TextField } from '@/components/ui';
 import { useToast } from '@/components/Toast';
+import { InlineLoader } from '@/components/Loader';
 import { ModuleScreen } from '@/components/ops/ModuleScreen';
 import { LookupField } from '@/components/ops/SelectField';
 import { useRefreshSignal } from '@/components/ops/bits';
@@ -27,10 +28,21 @@ function ParentLinks() {
     const [saving, setSaving] = useState(false);
     const [code, setCode] = useState<string | null>(null);
 
+    // Only the latest learner's answer may fill the list: after a quick
+    // switch, a slower answer for the previous learner showed their parents.
+    const request = useRef(0);
+    const [loadingLinks, setLoadingLinks] = useState(false);
     const load = useCallback(async () => {
         if (!studentId) return;
-        try { setLinks(await opsGet<GuardianLink[]>(api, withQuery('/api/admin/parents', { student_id: studentId }))); }
-        catch (err) { toast.error(errorMessage(err, 'Could not load parents')); }
+        const id = ++request.current;
+        try {
+            const rows = await opsGet<GuardianLink[]>(api, withQuery('/api/admin/parents', { student_id: studentId }));
+            if (id === request.current) setLinks(rows);
+        } catch (err) {
+            if (id === request.current) toast.error(errorMessage(err, 'Could not load parents'));
+        } finally {
+            if (id === request.current) setLoadingLinks(false);
+        }
     }, [api, studentId, toast]);
     useEffect(() => { void load(); }, [load]);
     useRefreshSignal(load);
@@ -62,10 +74,10 @@ function ParentLinks() {
 
     return (
         <View>
-            <LookupField label="Learner" lookup="students" value={studentId} onChange={(v) => { setStudentId(v); setCode(null); setLinks([]); }} />
+            <LookupField label="Learner" lookup="students" value={studentId} onChange={(v) => { setStudentId(v); setCode(null); setLinks([]); setLoadingLinks(Boolean(v)); }} />
             {studentId ? (
                 <>
-                    {links.length === 0 ? <EmptyState title="No parents linked to this learner yet." /> : (
+                    {loadingLinks ? <InlineLoader message="Loading parents…" /> : links.length === 0 ? <EmptyState title="No parents linked to this learner yet." /> : (
                         <ListCard>
                             {links.map((l) => (
                                 <ListRow

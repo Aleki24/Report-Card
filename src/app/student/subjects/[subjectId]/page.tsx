@@ -6,7 +6,7 @@ import { useParams } from 'next/navigation';
 import { ArrowDownRight, ArrowUpRight, BookOpen, Minus, TrendingUp } from 'lucide-react';
 import PageHeader from '@/components/dashboard/PageHeader';
 import KpiTile from '@/components/dashboard/KpiTile';
-import { PerformanceTrendChart } from '@/components/charts/PerformanceTrend';
+import { PerformanceTrendChart } from '@/components/charts/lazy';
 import HomeworkPanel from '@/components/student/dashboard/HomeworkPanel';
 import { Panel, QuietEmpty } from '@/components/student/dashboard/shared';
 import { useSchoolPassMark } from '@/hooks/useSchoolPassMark';

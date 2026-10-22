@@ -23,3 +23,4 @@ export type { Tone, Hue } from './tones';
 export { RankBadge } from './RankBadge';
 export { StatFilterTile } from './StatFilterTile';
 export { SearchBox } from './SearchBox';
+export { LoadError } from './LoadError';
