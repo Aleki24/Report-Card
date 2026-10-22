@@ -6,7 +6,9 @@ import { useApi } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { daysUntil, errorMessage } from '@/lib/format';
 import { spacing, useTheme } from '@/lib/theme';
-import { Badge, Button, ButtonRow, Card, ChipSelect, EmptyState, ErrorBanner, ListCard, ListRow, TextField } from '@/components/ui';
+import { Badge, Button, ButtonRow, Card, ChipSelect, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView, TextField } from '@/components/ui';
+import { useToast } from '@/components/Toast';
+import { confirmAlert } from '@/lib/confirm';
 import type { Subject } from '@/lib/types';
 
 interface Goal {
@@ -30,7 +32,8 @@ function deadlineLabel(deadline: string | null): { text: string; overdue: boolea
 export function StudyGoals() {
     const { colors } = useTheme();
     const api = useApi();
-    const { data, error, refresh } = useApiQuery<Goal[]>('/api/school/student/goals');
+    const { data, error, loading, refresh } = useApiQuery<Goal[]>('/api/school/student/goals');
+    const toast = useToast();
     const subjects = useApiQuery<Subject[]>('/api/school/student/subjects');
     const [adding, setAdding] = useState(false);
     const [title, setTitle] = useState('');
@@ -62,15 +65,23 @@ export function StudyGoals() {
         }
     };
 
+    // Failures used to be swallowed, so a tick or removal could silently not happen.
     const toggle = async (g: Goal) => {
-        await api.patch('/api/school/student/goals', { id: g.id, completed: !g.completed }).catch(() => undefined);
+        try { await api.patch('/api/school/student/goals', { id: g.id, completed: !g.completed }); }
+        catch (err) { toast.error(errorMessage(err, 'Could not update the goal')); }
         refresh();
     };
 
-    const remove = async (g: Goal) => {
-        await api.del(`/api/school/student/goals?id=${g.id}`).catch(() => undefined);
-        refresh();
-    };
+    const remove = (g: Goal) => confirmAlert('Remove this goal?', g.title, [
+        { text: 'Cancel', style: 'cancel' },
+        {
+            text: 'Remove',
+            style: 'destructive',
+            onPress: () => void api.del(`/api/school/student/goals?id=${g.id}`)
+                .catch((err: unknown) => toast.error(errorMessage(err, 'Could not remove the goal')))
+                .finally(refresh),
+        },
+    ]);
 
     return (
         <View>
@@ -89,7 +100,9 @@ export function StudyGoals() {
                 </Card>
             ) : null}
             <ListCard>
-                {goals.length === 0 ? (
+                {loading && data == null ? (
+                    <LoadingView />
+                ) : error && data == null ? null : goals.length === 0 ? (
                     <EmptyState title="No goals yet" description="Set a target to work towards." />
                 ) : (
                     goals.map((g) => {
@@ -107,7 +120,9 @@ export function StudyGoals() {
                                 right={
                                     <View style={{ alignItems: 'flex-end', gap: 4 }}>
                                         {dl && !g.completed ? <Badge label={dl.text} variant={dl.overdue ? 'danger' : 'info'} /> : null}
-                                        <Text onPress={() => void remove(g)} style={{ fontSize: 12, color: colors.muted }}>Remove</Text>
+                                        <Pressable onPress={() => remove(g)} hitSlop={10} accessibilityRole="button" accessibilityLabel={`Remove ${g.title}`} style={{ minHeight: 32, justifyContent: 'center', paddingHorizontal: 4 }}>
+                                            <Text style={{ fontSize: 13, color: colors.muted }}>Remove</Text>
+                                        </Pressable>
                                     </View>
                                 }
                             />

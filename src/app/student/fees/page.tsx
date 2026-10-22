@@ -60,6 +60,8 @@ export default function StudentFeesPage() {
     const [historyFee, setHistoryFee] = useState<FeeRecord | null>(null);
     const [historyPayments, setHistoryPayments] = useState<FeePayment[]>([]);
     const [historyLoading, setHistoryLoading] = useState(false);
+    const [historyError, setHistoryError] = useState(false);
+    const historyRequest = useRef(0);
     const [paymentProvider, setPaymentProvider] = useState<PaymentProvider>('NONE');
     const [bankAccounts, setBankAccounts] = useState<SchoolBankAccount[]>([]);
     const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -102,15 +104,23 @@ export default function StudentFeesPage() {
         return stopPolling;
     }, [fetchFees]);
 
+    // Only the term opened last may fill the list: a slow answer for an
+    // earlier term used to show its receipts under this term's name.
     const openHistory = async (fee: FeeRecord) => {
+        const request = ++historyRequest.current;
         setHistoryFee(fee);
         setHistoryLoading(true);
+        setHistoryError(false);
+        setHistoryPayments([]);
         try {
             const res = await fetch(`/api/school/fees/${fee.id}/payments`, { cache: 'no-store' });
+            if (!res.ok) throw new Error(String(res.status));
             const json: { data?: FeePayment[] } = await res.json();
+            if (request !== historyRequest.current) return;
             setHistoryPayments(json.data || []);
         } catch {
-            setHistoryPayments([]);
+            if (request !== historyRequest.current) return;
+            setHistoryError(true);
         }
         setHistoryLoading(false);
     };
@@ -265,6 +275,12 @@ export default function StudentFeesPage() {
     const overdueCount = fees.filter(f => isOverdue(f.dueDate, f.balance)).length;
     const termCount = fees.length;
     const canPayOnline = paymentProvider !== 'NONE';
+    // Until the fees have loaded the totals are unknown, not zero: "KES 0 · All
+    // settled" told learners who owe that they owed nothing.
+    const ready = loadState === 'ready';
+    const unconfirmed = payState === 'failed' && (payError === PAYMENT_UNCONFIRMED_MESSAGE || payError === PESAPAL_NOT_CONFIRMED_MESSAGE);
+    const amount = (n: number) => (ready ? formatCurrency(n) : '—');
+    const pendingHint = loadState === 'loading' ? 'Loading…' : 'Not loaded';
 
     const columns: DataTableColumn<FeeRecord>[] = [
         { key: 'termName', header: 'Term', render: f => <span className="font-semibold text-foreground">{f.termName || '—'}</span> },
@@ -301,15 +317,15 @@ export default function StudentFeesPage() {
 
             <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-3">
                 <StatTile
-                    icon={owed > 0 ? AlertTriangle : CheckCircle2}
+                    icon={!ready ? Wallet : owed > 0 ? AlertTriangle : CheckCircle2}
                     label="Balance to pay"
-                    value={formatCurrency(owed)}
-                    hint={owed === 0 ? (credit > 0 ? `${formatCurrency(credit)} in credit` : 'All settled') : overdueCount > 0 ? `${overdueCount} term${overdueCount === 1 ? '' : 's'} overdue` : 'Not yet overdue'}
-                    tone={owed === 0 ? 'good' : overdueCount > 0 ? 'bad' : 'warn'}
+                    value={amount(owed)}
+                    hint={!ready ? pendingHint : owed === 0 ? (credit > 0 ? `${formatCurrency(credit)} in credit` : 'All settled') : overdueCount > 0 ? `${overdueCount} term${overdueCount === 1 ? '' : 's'} overdue` : 'Not yet overdue'}
+                    tone={!ready ? 'default' : owed === 0 ? 'good' : overdueCount > 0 ? 'bad' : 'warn'}
                     className="col-span-2 lg:col-span-1"
                 />
-                <StatTile icon={Wallet} hue="blue" label="Total billed" value={formatCurrency(totalBilled)} hint={`${termCount} term${termCount === 1 ? '' : 's'} on record`} />
-                <StatTile icon={Clock3} label="Total paid" value={formatCurrency(totalPaid)} hint="settled so far" tone="good" />
+                <StatTile icon={Wallet} hue="blue" label="Total billed" value={amount(totalBilled)} hint={ready ? `${termCount} term${termCount === 1 ? '' : 's'} on record` : pendingHint} />
+                <StatTile icon={Clock3} label="Total paid" value={amount(totalPaid)} hint={ready ? 'settled so far' : pendingHint} tone={ready ? 'good' : 'default'} />
             </div>
 
             {/* How to pay: always answered, whether or not online payment is set up. */}
@@ -400,6 +416,13 @@ export default function StudentFeesPage() {
                         {historyLoading ? (
                             <div className="space-y-2" aria-hidden="true">
                                 {Array.from({ length: 3 }, (_, i) => <div key={i} className="h-10 animate-pulse rounded-lg bg-muted/60" />)}
+                            </div>
+                        ) : historyError ? (
+                            <div role="alert" className="flex flex-col items-center gap-3 py-8 text-center text-sm">
+                                <p className="text-muted-foreground">We couldn&apos;t load the payments for this term.</p>
+                                <button type="button" className="btn-secondary" onClick={() => void openHistory(historyFee)}>
+                                    <RotateCcw className="size-4" aria-hidden="true" />Try again
+                                </button>
                             </div>
                         ) : historyPayments.filter(p => p.status === 'COMPLETED').length === 0 ? (
                             <p className="py-8 text-center text-sm text-muted-foreground">No payments recorded for this term yet.</p>
@@ -501,6 +524,18 @@ export default function StudentFeesPage() {
                                         </a>
                                     )}
                                     <button type="button" className="btn-primary" onClick={closePay}>Done</button>
+                                </div>
+                            </div>
+                        ) : unconfirmed ? (
+                            // The money may still arrive: lead with checking, so a second
+                            // prompt is not one tap away from someone who already paid.
+                            <div className="py-6 text-center" role="status">
+                                <Clock3 className="mx-auto mb-2 h-8 w-8 text-amber-600" aria-hidden="true" />
+                                <p className="mb-1 text-sm font-medium">Not confirmed yet</p>
+                                <p className="text-sm text-muted-foreground">{payError}</p>
+                                <div className="mt-4 flex flex-col-reverse justify-center gap-2 sm:flex-row">
+                                    <button type="button" className="btn-secondary" onClick={() => setPayState('form')}>Pay again</button>
+                                    <button type="button" className="btn-primary" onClick={() => { closePay(); void fetchFees(); }}>Check my fees</button>
                                 </div>
                             </div>
                         ) : (

@@ -57,7 +57,7 @@ export default function AttendanceScreen() {
             <SectionLabel>Days</SectionLabel>
             {loading ? (
                 <LoadingView />
-            ) : records.length === 0 ? (
+            ) : error && data == null ? null : records.length === 0 ? (
                 <EmptyState title="No attendance records" description="Your attendance history will appear here." />
             ) : (
                 <ListCard>

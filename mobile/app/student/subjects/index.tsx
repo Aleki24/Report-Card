@@ -33,7 +33,7 @@ export default function SubjectsScreen() {
             ) : null}
             {loading ? (
                 <LoadingView />
-            ) : subjects.length === 0 ? (
+            ) : error && data == null ? null : subjects.length === 0 ? (
                 <EmptyState title="No subjects found" description="Subjects assigned to your class will appear here." />
             ) : (
                 <>

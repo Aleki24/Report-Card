@@ -8,6 +8,7 @@ import { Avatar } from '@/components/Avatar';
 import PageHeader from '@/components/dashboard/PageHeader';
 import DashboardCard from '@/components/dashboard/DashboardCard';
 import { FormField, InputField } from '@/components/ui/FormField';
+import { LoadError } from '@/components/ui/LoadError';
 
 interface StudentProfile {
     admission_number: string | null;
@@ -25,16 +26,26 @@ export default function StudentProfilePage() {
     const { schoolName, profile: authProfile } = useAuth();
     const [profile, setProfile] = useState<StudentProfile | null>(null);
     const [loading, setLoading] = useState(true);
+    // A failed load used to show a blank profile ("Guardian Not Set") with a live Save.
+    const [loadError, setLoadError] = useState<string | null>(null);
+    const [attempt, setAttempt] = useState(0);
 
     const [phone, setPhone] = useState('');
     const [saving, setSaving] = useState(false);
 
     useEffect(() => {
-        fetch('/api/school/student/profile').then(r => r.json()).then(j => {
-            setProfile(j.data);
-            setPhone(j.data?.users?.phone || '');
-        }).catch(() => {}).finally(() => setLoading(false));
-    }, []);
+        let live = true;
+        fetch('/api/school/student/profile')
+            .then(async r => {
+                const j: { data?: StudentProfile; error?: string } = await r.json().catch(() => ({}));
+                if (!r.ok || !j.data) throw new Error(j.error || 'Could not load your profile. Check your connection.');
+                return j.data;
+            })
+            .then(data => { if (!live) return; setProfile(data); setPhone(data.users?.phone || ''); setLoadError(null); })
+            .catch((err: unknown) => { if (live) setLoadError(err instanceof Error ? err.message : 'Could not load your profile.'); })
+            .finally(() => { if (live) setLoading(false); });
+        return () => { live = false; };
+    }, [attempt]);
 
     const handleSavePhone = async () => {
         setSaving(true);
@@ -53,6 +64,19 @@ export default function StudentProfilePage() {
         return (
             <div className="w-full mx-auto max-w-[1100px] py-10 text-center">
                 <div className="skeleton-spinner mx-auto" />
+            </div>
+        );
+    }
+
+    if (loadError || !profile) {
+        return (
+            <div className="w-full mx-auto max-w-[1100px] pb-10">
+                <PageHeader title="My profile" eyebrow="Account" icon={UserCircle} hue="blue" description="Your academic information and personal details." />
+                <LoadError
+                    title="Your profile did not load"
+                    message={loadError ?? 'Could not load your profile.'}
+                    onRetry={() => { setLoading(true); setLoadError(null); setAttempt(n => n + 1); }}
+                />
             </div>
         );
     }
@@ -98,7 +122,8 @@ export default function StudentProfilePage() {
                         </div>
                     </div>
 
-                    <div className="flex gap-5">
+                    {/* Stacked on phones: beside an 80px avatar the fields were squeezed and the email clipped. */}
+                    <div className="flex flex-col items-center gap-5 sm:flex-row sm:items-start">
                         <Avatar
                             imageUrl={authProfile?.imageUrl}
                             firstName={user?.first_name}
@@ -110,7 +135,7 @@ export default function StudentProfilePage() {
                             style={{ boxShadow: '0 4px 12px color-mix(in srgb, var(--primary) 20%, transparent)' }}
                         />
 
-                        <div className="flex flex-1 flex-col gap-3">
+                        <div className="flex w-full min-w-0 flex-1 flex-col gap-3">
                             <FormField label="Full Name">
                                 <div className="rounded-md border border-border bg-muted px-3 py-1.5 text-sm font-semibold text-foreground">
                                     {user?.first_name} {user?.last_name}
@@ -123,7 +148,7 @@ export default function StudentProfilePage() {
                                 </div>
                             </FormField>
                             <FormField label="Email Address">
-                                <div className="rounded-md border border-border bg-muted px-3 py-1.5 text-[13px] font-semibold text-foreground">
+                                <div className="rounded-md border border-border bg-muted px-3 py-1.5 text-[13px] font-semibold text-foreground wrap-anywhere">
                                     {user?.email || '—'}
                                 </div>
                             </FormField>

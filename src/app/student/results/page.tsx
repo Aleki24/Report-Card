@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Trophy, Download, FileText, ChevronDown, ChevronUp, GraduationCap, RotateCcw } from 'lucide-react';
 import { REPORT_TEMPLATES, DEFAULT_TEMPLATE, isReportTemplateId, type ReportTemplateId } from '@/lib/pdf/templateMeta';
 import PageHeader from '@/components/dashboard/PageHeader';
@@ -37,6 +37,7 @@ type ReportSubject = StudentReportSubject;
 
 export default function StudentCombinedResultsPage() {
     const [activeTab, setActiveTab] = useState<'marks' | 'reports'>('marks');
+    const [reportsOpened, setReportsOpened] = useState(false);
 
     return (
         <div className="w-full mx-auto max-w-[1100px] pb-10">
@@ -50,14 +51,17 @@ export default function StudentCombinedResultsPage() {
                     Exam marks
                 </button>
                 <button
-                    onClick={() => setActiveTab('reports')}
+                    onClick={() => { setActiveTab('reports'); setReportsOpened(true); }}
                     className={`whitespace-nowrap border-b-2 px-4 py-3 text-sm font-semibold transition-colors ${activeTab === 'reports' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
                 >
                     Report cards
                 </button>
             </div>
 
-            {activeTab === 'marks' ? <ExamMarksTab /> : <ReportCardsTab />}
+            {/* Each tab mounts on first visit and then stays, hidden, so switching
+                back neither refetches nor resets the filters. */}
+            <div hidden={activeTab !== 'marks'}><ExamMarksTab /></div>
+            {reportsOpened && <div hidden={activeTab !== 'reports'}><ReportCardsTab /></div>}
         </div>
     );
 }
@@ -79,20 +83,12 @@ const optionsOf = (results: readonly ExamResult[], pick: (r: ExamResult) => { id
 function ExamMarksTab() {
     // Green from the school's own pass mark, as on its dashboards.
     const passMark = useSchoolPassMark();
-    const [results, setResults] = useState<ExamResult[] | null>(null);
-    const [failed, setFailed] = useState(false);
+    // The shared list hook, for its Try again: a failed load used to say "reload the page".
+    const marks = useJsonList<ExamResult>('/api/school/student/results', 'Couldn’t load your results.');
+    const results = marks.loading ? null : marks.rows;
     const [yearFilter, setYearFilter] = useState('');
     const [termFilter, setTermFilter] = useState('');
     const [subjectFilter, setSubjectFilter] = useState('');
-
-    useEffect(() => {
-        let cancelled = false;
-        fetch('/api/school/student/results')
-            .then(async r => { if (!r.ok) throw new Error(); return (await r.json()) as { data?: ExamResult[] }; })
-            .then(j => { if (!cancelled) setResults(j.data ?? []); })
-            .catch(() => { if (!cancelled) { setFailed(true); setResults([]); } });
-        return () => { cancelled = true; };
-    }, []);
 
     const all = useMemo(() => results ?? [], [results]);
     const years = useMemo(() => optionsOf(all, r => r.exams?.academic_years), [all]);
@@ -145,8 +141,13 @@ function ExamMarksTab() {
                 <div className="flex flex-col gap-2">
                     {Array.from({ length: 5 }).map((_, i) => <div key={i} className="skeleton-bone h-12 rounded-xl" />)}
                 </div>
-            ) : failed ? (
-                <EmptyState icon={<Trophy className="h-6 w-6" />} title="Couldn’t load your results" description="Check your connection and reload the page." />
+            ) : marks.error ? (
+                <EmptyState
+                    icon={<Trophy className="h-6 w-6" />}
+                    title="Couldn’t load your results"
+                    description={marks.error}
+                    action={<button type="button" onClick={marks.retry} className="btn-primary"><RotateCcw className="size-4" aria-hidden />Try again</button>}
+                />
             ) : grouped.length === 0 ? (
                 <EmptyState
                     icon={<Trophy className="h-6 w-6" />}

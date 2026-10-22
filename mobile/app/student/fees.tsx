@@ -36,6 +36,10 @@ export default function StudentFeesScreen() {
     const [paying, setPaying] = useState<FeeRecord | null>(null);
 
     const fees = data ?? [];
+    // Until the fees have loaded the totals are unknown, not zero: "KES 0 · All
+    // settled" told learners who owe that they owed nothing.
+    const known = data != null;
+    const amount = (n: number) => (known ? formatCurrency(n) : '—');
     const billed = fees.reduce((s, f) => s + f.totalFee, 0);
     const paid = fees.reduce((s, f) => s + f.paidAmount, 0);
     const balance = totalOwed(fees);
@@ -43,15 +47,15 @@ export default function StudentFeesScreen() {
     const provider = settings.data?.provider ?? 'NONE';
 
     return (
-        <Screen onRefresh={refresh} refreshing={refreshing}>
+        <Screen onRefresh={() => { refresh(); settings.refresh(); }} refreshing={refreshing}>
             <ScreenHeader title="Fees" description="Your balance, payment history and ways to pay." />
             {error ? <ErrorBanner message={error} onRetry={refresh} /> : null}
 
             <StatGrid>
-                <StatTile label="Total billed" value={formatCurrency(billed)} />
-                <StatTile label="Total paid" value={formatCurrency(paid)} tone={colors.success} />
-                <StatTile label="Balance" value={formatCurrency(balance)} tone={balance > 0 ? colors.danger : colors.success} sub={balance > 0 ? 'Outstanding' : 'All settled'} />
-                <StatTile label="Overdue" value={overdue} tone={overdue > 0 ? colors.danger : undefined} />
+                <StatTile label="Total billed" value={amount(billed)} />
+                <StatTile label="Total paid" value={amount(paid)} tone={known ? colors.success : undefined} />
+                <StatTile label="Balance" value={amount(balance)} tone={!known ? undefined : balance > 0 ? colors.danger : colors.success} sub={!known ? (loading ? 'Loading…' : 'Not loaded') : balance > 0 ? 'Outstanding' : 'All settled'} />
+                <StatTile label="Overdue" value={known ? overdue : '—'} tone={known && overdue > 0 ? colors.danger : undefined} />
             </StatGrid>
 
             {paying ? (
@@ -70,7 +74,7 @@ export default function StudentFeesScreen() {
             <SectionLabel>Fee records</SectionLabel>
             {loading ? (
                 <LoadingView />
-            ) : fees.length === 0 ? (
+            ) : !known ? null : fees.length === 0 ? (
                 <EmptyState title="No fee records yet" description="Your school hasn't billed any fees to your account yet." />
             ) : (
                 <ListCard>
@@ -229,11 +233,13 @@ function PayPanel({ fee, provider, onClose, onPaid }: { fee: FeeRecord; provider
         }
     };
 
+    const unconfirmed = state === 'failed' && (error === PAYMENT_UNCONFIRMED_MESSAGE || error === PESAPAL_NOT_CONFIRMED_MESSAGE);
+
     return (
         <Card style={{ marginVertical: spacing.md, borderColor: colors.primary }}>
             <Text style={styles.title}>Pay {fee.termName ?? 'fees'}</Text>
             <Text style={styles.hint}>Balance {formatCurrency(fee.balance)}</Text>
-            {error ? <ErrorBanner message={error} /> : null}
+            {error ? (unconfirmed ? <Notice tone="info" message={error} /> : <ErrorBanner message={error} />) : null}
             {state === 'success' ? (
                 <Notice message="Payment received — thank you. Your balance has been updated." />
             ) : state === 'waiting' ? (
@@ -244,12 +250,21 @@ function PayPanel({ fee, provider, onClose, onPaid }: { fee: FeeRecord; provider
                     <TextField label="Amount (KES)" value={amount} onChangeText={setAmount} keyboardType="decimal-pad" />
                 </>
             )}
-            <ButtonRow>
-                <Button variant="secondary" label={state === 'success' ? 'Done' : 'Close'} onPress={onClose} />
-                {state === 'form' || state === 'sending' || state === 'failed' ? (
-                    <Button label={state === 'failed' ? 'Try again' : provider === 'PESAPAL' ? 'Continue to Pesapal' : 'Send M-Pesa prompt'} onPress={() => void pay()} loading={state === 'sending'} />
-                ) : null}
-            </ButtonRow>
+            {unconfirmed ? (
+                // The money may still arrive: lead with checking, so a second
+                // M-Pesa prompt is not one tap away from someone who already paid.
+                <ButtonRow>
+                    <Button variant="secondary" label="Pay again" onPress={() => void pay()} />
+                    <Button label="Check my fees" onPress={() => { onPaid(); onClose(); }} />
+                </ButtonRow>
+            ) : (
+                <ButtonRow>
+                    <Button variant="secondary" label={state === 'success' ? 'Done' : 'Close'} onPress={onClose} />
+                    {state === 'form' || state === 'sending' || state === 'failed' ? (
+                        <Button label={state === 'failed' ? 'Try again' : provider === 'PESAPAL' ? 'Continue to Pesapal' : 'Send M-Pesa prompt'} onPress={() => void pay()} loading={state === 'sending'} />
+                    ) : null}
+                </ButtonRow>
+            )}
         </Card>
     );
 }
