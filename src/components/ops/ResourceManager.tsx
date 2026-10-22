@@ -8,6 +8,7 @@ import { ConfirmDialog } from '@/components/ui/Modal';
 import { Drawer } from '@/components/ui/Drawer';
 import DataTable, { type DataTableColumn } from '@/components/ui/DataTable';
 import { SearchBox } from '@/components/ui/SearchBox';
+import { LoadError } from '@/components/ui/LoadError';
 import { useOpsList, type QueryParams } from '@/hooks/useOpsList';
 import { RESOURCES, type ResourceName } from '@/lib/ops/registry';
 import { RecordForm } from './RecordForm';
@@ -124,20 +125,21 @@ export function ResourceManager<R extends ResourceName, T extends { id: string }
                 </div>
             )}
 
-            {error && !loading && (
-                <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">{error}</div>
+            {/* A failed load is not an empty list: say so, and offer a retry, instead of "No … yet". */}
+            {error && !loading ? (
+                <LoadError title={`${def.label.plural} did not load`} message={error} onRetry={() => void reload()} />
+            ) : (
+                <DataTable
+                    columns={columns}
+                    rows={shown}
+                    rowKey={r => r.id}
+                    loading={loading}
+                    rowActions={rowActions || canEdit || canDelete ? actionsFor : undefined}
+                    emptyState={emptyText ?? `No ${def.label.plural.toLowerCase()} yet.`}
+                    mobileTitleKey={mobileTitleKey}
+                    onRowClick={onRowClick}
+                />
             )}
-
-            <DataTable
-                columns={columns}
-                rows={shown}
-                rowKey={r => r.id}
-                loading={loading}
-                rowActions={rowActions || canEdit || canDelete ? actionsFor : undefined}
-                emptyState={emptyText ?? `No ${def.label.plural.toLowerCase()} yet.`}
-                mobileTitleKey={mobileTitleKey}
-                onRowClick={onRowClick}
-            />
 
             {fields && (
                 <Drawer
