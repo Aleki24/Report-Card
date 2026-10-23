@@ -28,6 +28,7 @@ import TeacherDashboard from '@/components/dashboard/teacher/TeacherDashboard';
 import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
 import UpcomingRounds from '@/components/dashboard/UpcomingRounds';
 import { OperationsOverview } from '@/components/dashboard/OperationsOverview';
+import { AUTO_FIT_GRID } from '@/components/dashboard/grid';
 import { homePathForRole } from '@/lib/roles';
 
 // ── Admin Dashboard ──────────────────────────────────────────
@@ -124,6 +125,10 @@ function AdminDashboard({ userName }: { userName: string }) {
         </form>
       </DashboardHeader>
 
+      {/* Live figures from the school's other modules, under the greeting and
+          on the same edges as everything else. */}
+      <OperationsOverview />
+
       {/* What needs doing */}
       <section aria-labelledby="todo-heading">
         <SectionTitle><span id="todo-heading">Needs your attention</span></SectionTitle>
@@ -132,7 +137,7 @@ function AdminDashboard({ userName }: { userName: string }) {
 
       {/* The figures, once */}
       {/* A grid rather than the 3-wide carousel: every figure in view at once. */}
-      <section aria-label="Key figures" className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+      <section aria-label="Key figures" className={cn(AUTO_FIT_GRID.tile, 'gap-3')}>
           <KpiTile title="Learners" value={(data?.totalStudents ?? 0).toLocaleString()} icon={<Users size={17} />} href="/dashboard/people" tone="blue" />
           <KpiTile title="Teachers" value={data?.totalTeachers ?? 0} icon={<GraduationCap size={17} />} href="/dashboard/people?tab=teachers" tone="purple" />
           <KpiTile title="Classes" value={data?.totalClasses ?? 0} icon={<BookOpen size={17} />} href="/dashboard/classes" tone="blue" />
@@ -155,7 +160,25 @@ function AdminDashboard({ userName }: { userName: string }) {
         </div>
       </section>
 
-      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-3 lg:gap-5">
+      {/* The headline snapshots side by side, so the two columns below stay
+          close in height instead of one running far past the other. */}
+      <section aria-label="Snapshots" className={cn(AUTO_FIT_GRID.card, 'gap-4 lg:gap-5')}>
+        <InsightCard title="Academic performance" meta="This year">
+          <AcademicSummary summary={data?.academicSummary ?? null} />
+        </InsightCard>
+        {data?.hasAttendanceData && (
+          <InsightCard title="Attendance today" meta={`${attendanceTotal} marked`}>
+            <AttendanceBreakdown present={data.attendanceToday?.present ?? 0} absent={data.attendanceToday?.absent ?? 0} late={data.attendanceToday?.late ?? 0} excused={data.attendanceToday?.excused ?? 0} />
+          </InsightCard>
+        )}
+        {data?.hasFeeData && (
+          <InsightCard title="Fee collection" meta="Current term">
+            <FinanceSnapshot collected={data.financeSummary?.totalCollected ?? 0} unpaid={data.financeSummary?.unpaidBalance ?? 0} overdue={data.financeSummary?.overdueCount ?? 0} />
+          </InsightCard>
+        )}
+      </section>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:gap-5">
         <div className="flex min-w-0 flex-col gap-4 lg:col-span-2 lg:gap-5">
           <section>
             <SectionTitle>Class results</SectionTitle>
@@ -166,24 +189,12 @@ function AdminDashboard({ userName }: { userName: string }) {
           </InsightCard>
         </div>
 
+        {/* Recent activity grows to the left column's height on large screens. */}
         <div className="flex min-w-0 flex-col gap-4 lg:gap-5">
           <InsightCard title="Coming up" meta="Next three weeks" action={{ label: 'Exams', href: '/dashboard/exams-marks' }}>
             <UpcomingRounds rounds={data?.upcomingRounds ?? []} />
           </InsightCard>
-          <InsightCard title="Academic performance" meta="This year">
-            <AcademicSummary summary={data?.academicSummary ?? null} />
-          </InsightCard>
-          {data?.hasAttendanceData && (
-            <InsightCard title="Attendance today" meta={`${attendanceTotal} marked`}>
-              <AttendanceBreakdown present={data.attendanceToday?.present ?? 0} absent={data.attendanceToday?.absent ?? 0} late={data.attendanceToday?.late ?? 0} excused={data.attendanceToday?.excused ?? 0} />
-            </InsightCard>
-          )}
-          {data?.hasFeeData && (
-            <InsightCard title="Fee collection" meta="Current term">
-              <FinanceSnapshot collected={data.financeSummary?.totalCollected ?? 0} unpaid={data.financeSummary?.unpaidBalance ?? 0} overdue={data.financeSummary?.overdueCount ?? 0} />
-            </InsightCard>
-          )}
-          <InsightCard title="Recent activity">
+          <InsightCard title="Recent activity" className="lg:flex-1">
             <RecentActivity activities={data?.recentActivities ?? []} />
           </InsightCard>
         </div>
@@ -209,7 +220,7 @@ function TodoList({ data }: { data: DashboardData | null }) {
     );
   }
   return (
-    <ul className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+    <ul className={cn(AUTO_FIT_GRID.card, 'gap-3')}>
       {todos.map(({ key, hue, title, detail, cta, href }) => {
         const Icon = TODO_ICONS[key];
         return (
@@ -449,7 +460,8 @@ export default function DashboardPage() {
 
   return (
     <div className="flex-1 p-2 md:p-6 lg:p-8 pt-1">
-      <OperationsOverview className="mb-6 px-1 pt-2 sm:px-2" />
+      {/* The admin home places this under its greeting. */}
+      {!isAdmin && <OperationsOverview className="mb-6 px-1 pt-2 sm:px-2" />}
       {isAdmin && <AdminDashboard userName={userName} />}
       {role === 'CLASS_TEACHER' && <TeacherDashboard variant="class" />}
       {role === 'SUBJECT_TEACHER' && <TeacherDashboard variant="subject" />}

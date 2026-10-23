@@ -6,6 +6,7 @@ import { ArrowUpRight } from 'lucide-react';
 import { opsFetch } from '@/lib/ops/client';
 import type { OverviewTile, TileTone } from '@/lib/ops/overview';
 import { cn } from '@/lib/utils';
+import { AUTO_FIT_GRID } from './grid';
 
 const VALUE_TONE: Record<TileTone, string> = {
     default: 'text-foreground',
@@ -29,7 +30,7 @@ export function OperationsOverview({ className }: { className?: string }) {
     return (
         <section aria-label="School operations" className={cn('mx-auto w-full max-w-7xl', className)}>
             <h2 className="mb-3 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">Across the school</h2>
-            <ul className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+            <ul className={cn(AUTO_FIT_GRID.tile, 'gap-3')}>
                 {tiles.map(t => (
                     <li key={t.key}>
                         <Link href={t.href} className="group flex h-full flex-col gap-1 rounded-2xl border border-border/70 bg-card p-3 no-underline shadow-sm transition-colors hover:border-primary/40 sm:p-4">
