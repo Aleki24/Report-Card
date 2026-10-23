@@ -34,15 +34,28 @@ export interface TermPerformance {
   average: number;
 }
 
+/**
+ * A term's report card: one for every term with released results, the card
+ * /api/reports/student/[id] builds from them (as the learner and parent
+ * portals list it).
+ */
 export interface ReportSummary {
   id: string;
-  generated_at: string;
+  term_id: string;
+  year_id: string;
+  /** When the class's cards were last generated in bulk, if ever. */
+  generated_at: string | null;
   term: string;
   year: string;
   average: number | null;
   position: number | null;
+  /** Subjects with released results that term. */
+  subjects: number;
+  /** Opens (downloads) this term's report card. */
+  href: string;
 }
 
+/** A term's attendance, from the daily register. */
 export interface AttendanceSummary {
   id: string;
   term: string;
@@ -57,6 +70,8 @@ export interface StudentProfileResponse {
   academicHistory: TermPerformance[];
   reportHistory: ReportSummary[];
   attendanceHistory: AttendanceSummary[];
+  /** Whether the viewer may open the report cards: admins, the class teacher and the learner. */
+  canOpenReports: boolean;
 }
 
 /* ------------------------------------------------------------------ */

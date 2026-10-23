@@ -178,7 +178,9 @@ export function StudentProfile({ data, username, actions }: { data: StudentProfi
                     <Reveal index={1}>
                         <KpiGrid>
                             <KpiTile title={latestTerm ? `Latest average · ${latestTerm.term_name}` : 'Latest average · no marks yet'} value={latestTerm ? `${latestTerm.average}%` : '—'} icon={TrendingUp} hue="violet" />
-                            <KpiTile title={latestReport ? `Position · ${latestReport.term} report` : 'Position · no reports yet'} value={latestReport?.position ?? '—'} icon={Award} hue="amber" />
+                            {latestReport?.position != null
+                                ? <KpiTile title={`Position · ${latestReport.term} report`} value={latestReport.position} icon={Award} hue="amber" />
+                                : <KpiTile title={latestReport ? `Report cards · latest ${latestReport.term}` : 'Report cards · none released yet'} value={reportHistory.length || '—'} icon={FileText} hue="amber" />}
                             <KpiTile title={latestAttendance ? `Attendance · ${latestAttendance.term}` : 'Attendance · not recorded'} value={latestAttendance?.percentage != null ? `${latestAttendance.percentage}%` : '—'} icon={ClipboardCheck} hue="teal" />
                             <KpiTile title={p.enrolled_subjects.length ? 'Subjects · enrolled' : 'Subjects · with marks this term'} value={p.enrolled_subjects.length || latestTerm?.subjects.length || '—'} icon={BookOpen} hue="emerald" />
                         </KpiGrid>
@@ -269,12 +271,12 @@ export function StudentProfile({ data, username, actions }: { data: StudentProfi
             ) : (
                 <Reveal index={1}>
                     <InsightCard title="Report cards">
-                        {reportHistory.length === 0 ? <Quiet>No report cards have been generated yet.</Quiet> : reportHistory.map((r, i) => (
+                        {reportHistory.length === 0 ? <Quiet>A term's report card appears here once its results are released.</Quiet> : reportHistory.map((r, i) => (
                             <View key={r.id} style={[styles.report, i > 0 && styles.divider]}>
                                 <View style={[styles.reportIcon, { backgroundColor: colors.primarySoft }]}><FileText size={16} color={colors.primary} /></View>
                                 <View style={{ flex: 1, minWidth: 0 }}>
                                     <Text style={styles.reportTitle} numberOfLines={1}>{r.term} · {r.year}</Text>
-                                    <Text style={styles.reportMeta}>Generated {formatDate(r.generated_at)}</Text>
+                                    <Text style={styles.reportMeta}>{r.subjects} {r.subjects === 1 ? 'subject' : 'subjects'} released{r.generated_at ? ` · generated ${formatDate(r.generated_at)}` : ''}</Text>
                                 </View>
                                 <View style={{ alignItems: 'flex-end', gap: 4 }}>
                                     {r.average !== null ? <Text style={[styles.pill, { color: gradeTone(colors, r.average), backgroundColor: colors.mutedBg }]}>{Math.round(r.average)}% avg</Text> : null}
@@ -283,8 +285,8 @@ export function StudentProfile({ data, username, actions }: { data: StudentProfi
                             </View>
                         ))}
                     </InsightCard>
-                    <InsightCard title="Attendance" meta="From report cards">
-                        {attendanceHistory.length === 0 ? <Quiet>No attendance has been recorded on a report card yet.</Quiet> : attendanceHistory.map((a) => (
+                    <InsightCard title="Attendance" meta="From the daily register">
+                        {attendanceHistory.length === 0 ? <Quiet>No attendance has been taken in the daily register yet.</Quiet> : attendanceHistory.map((a) => (
                             <ScoreRow key={a.id} label={`${a.term} · ${a.year}`} percent={a.percentage} right={`${a.present}/${a.total} days${a.percentage !== null ? ` · ${a.percentage}%` : ''}`} />
                         ))}
                     </InsightCard>

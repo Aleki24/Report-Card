@@ -2,7 +2,7 @@
 
 import React from 'react';
 import {
-  AtSign, Award, BookMarked, BookOpen, Cake, CalendarDays, ClipboardCheck, FileText, Hash, Layers, Mail, Phone,
+  AtSign, Award, BookMarked, BookOpen, Cake, CalendarDays, ClipboardCheck, Download, FileText, Hash, Layers, Mail, Phone,
   Pencil, School, TrendingUp, UserRound, Users,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -40,7 +40,7 @@ interface StudentProfileViewProps {
 }
 
 export function StudentProfileView({ user, data, tab, editing, onEditingChange, onSaved }: StudentProfileViewProps) {
-  const { profile, academicHistory, reportHistory, attendanceHistory } = data;
+  const { profile, academicHistory, reportHistory, attendanceHistory, canOpenReports } = data;
   const latestTerm = latestTermWithMarks(academicHistory);
   const latestAttendance = attendanceHistory[0] ?? null;
   const latestReport = reportHistory[0] ?? null;
@@ -109,18 +109,24 @@ export function StudentProfileView({ user, data, tab, editing, onEditingChange, 
       <div className="space-y-4">
         <ProfileSection title="Report cards" icon={FileText}>
           {reportHistory.length === 0 ? (
-            <EmptyNote>No report cards have been generated yet.</EmptyNote>
+            <EmptyNote>A term&apos;s report card appears here once its results are released.</EmptyNote>
           ) : (
             <ul className="divide-y divide-border/60">
               {reportHistory.map(r => (
-                <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 py-3">
+                <li key={r.id} className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium">{r.term} · {r.year}</p>
-                    <p className="text-xs text-muted-foreground">Generated {formatDate(r.generated_at)}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {r.subjects} {r.subjects === 1 ? 'subject' : 'subjects'} released
+                      {r.generated_at && <> · generated {formatDate(r.generated_at)}</>}
+                    </p>
                   </div>
-                  <div className="flex items-center gap-2 text-xs">
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
                     {r.average !== null && <span className={cn('rounded-full bg-muted px-2.5 py-1 font-semibold tabular-nums', scoreTone(r.average).text)}>{Math.round(r.average)}% avg</span>}
                     {r.position !== null && <span className="rounded-full bg-primary/10 px-2.5 py-1 font-semibold text-primary tabular-nums">Position {r.position}</span>}
+                    {canOpenReports && <a href={r.href} target="_blank" rel="noopener noreferrer" className="btn-secondary h-8 rounded-lg px-3 text-xs">
+                      <Download className="size-3.5" aria-hidden="true" />Report card
+                    </a>}
                   </div>
                 </li>
               ))}
@@ -130,7 +136,7 @@ export function StudentProfileView({ user, data, tab, editing, onEditingChange, 
 
         <ProfileSection title="Attendance" icon={ClipboardCheck}>
           {attendanceHistory.length === 0 ? (
-            <EmptyNote>No attendance has been recorded on a report card yet.</EmptyNote>
+            <EmptyNote>No attendance has been taken in the daily register yet.</EmptyNote>
           ) : (
             <ul className="space-y-3">
               {attendanceHistory.map(a => (
@@ -154,8 +160,10 @@ export function StudentProfileView({ user, data, tab, editing, onEditingChange, 
   const stats = (
     <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
       <StatTile icon={TrendingUp} hue="violet" label="Latest average" value={latestTerm ? `${latestTerm.average}%` : '—'} hint={latestTerm?.term_name ?? 'No marks yet'} />
-      <StatTile icon={Award} hue="amber" label="Position" value={latestReport?.position ?? '—'} hint={latestReport ? `${latestReport.term} report` : 'No reports yet'} />
-      <StatTile icon={ClipboardCheck} hue="teal" label="Attendance" value={latestAttendance?.percentage != null ? `${latestAttendance.percentage}%` : '—'} hint={latestAttendance ? latestAttendance.term : 'Not recorded'} />
+      {latestReport?.position != null
+        ? <StatTile icon={Award} hue="amber" label="Position" value={latestReport.position} hint={`${latestReport.term} report`} />
+        : <StatTile icon={FileText} hue="amber" label="Report cards" value={reportHistory.length || '—'} hint={latestReport ? `Latest: ${latestReport.term} ${latestReport.year}` : 'None released yet'} />}
+      <StatTile icon={ClipboardCheck} hue="teal" label="Attendance" value={latestAttendance?.percentage != null ? `${latestAttendance.percentage}%` : '—'} hint={latestAttendance ? `${latestAttendance.term} register` : 'No register yet'} />
       <StatTile icon={BookOpen} hue="emerald" label="Subjects" value={profile.enrolled_subjects.length || latestTerm?.subjects.length || '—'} hint={profile.enrolled_subjects.length ? 'Enrolled' : 'With marks this term'} />
     </div>
   );
