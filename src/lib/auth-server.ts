@@ -176,11 +176,22 @@ export async function canViewStudentRecords(caller: Caller, studentId: string): 
 /**
  * Fee records are the bursar's: whoever holds `fees.view` (the admin, or
  * staff with a finance duty) sees every learner's, a learner sees their own,
- * and teachers see none. Callers must already have checked the fee belongs to
- * their school.
+ * a parent their linked children's, and teachers see none. Callers must
+ * already have checked the fee belongs to their school.
  */
 export async function canViewStudentFees(caller: Caller & { can: (p: Permission) => boolean }, studentId: string): Promise<boolean> {
   if (caller.role === 'STUDENT') return caller.userId === studentId;
+  if (caller.role === 'PARENT') {
+    if (!caller.schoolId) return false;
+    const { data } = await createSupabaseAdmin()
+      .from('student_guardians')
+      .select('id')
+      .eq('school_id', caller.schoolId)
+      .eq('parent_user_id', caller.userId)
+      .eq('student_id', studentId)
+      .maybeSingle();
+    return !!data;
+  }
   return caller.can('fees.view');
 }
 

@@ -11,6 +11,8 @@ import { ConfirmDialog, Modal } from '@/components/ui/Modal';
 import { PageTabs, useUrlTab, type PageTab } from '@/components/ui/PageTabs';
 import { DataTable, LoadError, StatTile, TermSelect, type TermSelectYear } from '@/components/ui';
 import { UnmatchedPaymentsPanel } from '@/components/fees/UnmatchedPaymentsPanel';
+import { FeeAccountDrawer } from '@/components/fees/FeeAccountDrawer';
+import { feeReceiptUrl, type FeeAccountLearner, type FeeAccountTerm } from '@/lib/fee-account';
 import { humanize } from '@/lib/text';
 import { cn } from '@/lib/utils';
 import { findActiveTermId } from '@/lib/term-calendar';
@@ -144,7 +146,7 @@ function todayIso(): string {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-const receiptUrl = (paymentId: string) => `/api/school/fees/payments/${paymentId}/receipt`;
+const receiptUrl = feeReceiptUrl;
 
 /** Runs `task` over `items`, at most `limit` at a time. */
 async function runLimited<T>(items: readonly T[], limit: number, task: (item: T) => Promise<void>): Promise<void> {
@@ -265,6 +267,10 @@ function FeesPageInner() {
     const [payDate, setPayDate] = useState('');
     const [paySaving, setPaySaving] = useState(false);
     const [payError, setPayError] = useState('');
+
+    // A learner's whole fee account (every term), opened from their row.
+    const [account, setAccount] = useState<{ studentId: string; name: string | null } | null>(null);
+    const [accountVersion, setAccountVersion] = useState(0);
 
     // Payment history modal
     const [historyFee, setHistoryFee] = useState<FeeRecord | null>(null);
@@ -532,6 +538,17 @@ function FeesPageInner() {
         setPayError('');
     };
 
+    /** Pay a term picked in the fee account, which may not be the term on screen. */
+    const payFromAccount = (term: FeeAccountTerm, learner: FeeAccountLearner) => {
+        const onScreen = fees.find(f => f.id === term.feeId);
+        openPay(onScreen ?? {
+            id: term.feeId, totalFee: term.billed, paidAmount: term.paid, balance: term.balance, dueDate: term.dueDate ?? '',
+            status: term.status, notes: term.notes ?? '', termId: term.termId, termName: term.termName,
+            studentName: learner.name, admissionNumber: learner.admissionNumber, studentId: learner.id,
+            gradeStreamId: null, className: learner.className, createdAt: '', updatedAt: '',
+        });
+    };
+
     const submitPayment = async () => {
         if (!payingFee) return;
         const amountValue = parseFloat(payAmount);
@@ -570,6 +587,7 @@ function FeesPageInner() {
                 duration: 10000,
             });
             setPayingFee(null);
+            setAccountVersion(v => v + 1);
             await fetchFees();
         } catch (err) {
             console.error('Record payment failed:', err);
@@ -1314,7 +1332,7 @@ function FeesPageInner() {
                             ]}
                             rows={filtered}
                             rowKey={fee => fee.id}
-                            onRowClick={openHistory}
+                            onRowClick={fee => { if (fee.studentId) setAccount({ studentId: fee.studentId, name: fee.studentName }); }}
                             rowActions={fee => (
                                 <span className="inline-flex items-center gap-1 whitespace-nowrap">
                                     <button className="btn-primary h-8 rounded-lg px-3 text-xs" onClick={() => openPay(fee)} title="Record a payment" aria-label={`Record payment for ${fee.studentName ?? 'student'}`}><CircleDollarSign className="size-3.5" aria-hidden="true" />Pay</button>
@@ -1396,6 +1414,15 @@ function FeesPageInner() {
                             </div>
                         </div>
                     </Modal>
+
+                    {/* ── A learner's account; before Record payment so that dialog opens over it ── */}
+                    <FeeAccountDrawer
+                        studentId={account?.studentId ?? null}
+                        studentName={account?.name}
+                        onClose={() => setAccount(null)}
+                        onRecordPayment={canCollect ? payFromAccount : undefined}
+                        version={accountVersion}
+                    />
 
                     {/* ── Record Payment ── */}
                     <Modal
