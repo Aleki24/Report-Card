@@ -212,6 +212,9 @@ export async function getStudentResults(
 
 // ── Report Cards ────────────────────────────────────────────
 
+/** What the report and trend queries need to know about a learner: the learner's own session, a parent's child, or a profile staff open. */
+export type StudentRef = Pick<CurrentStudent, 'studentId' | 'schoolId' | 'academicLevelId' | 'gradeStreamId'>;
+
 /** One subject on a report card in the learner's list: its average over the term's released exams. */
 export interface StudentReportSubject {
     id: string;
@@ -255,7 +258,7 @@ export interface StudentReportCardListItem {
  * Pass `trends` when they are already loaded.
  */
 export async function getStudentReportCards(
-    student: CurrentStudent,
+    student: StudentRef,
     trends?: StudentTermTrend[],
 ): Promise<StudentReportCardListItem[]> {
     const supabase = createSupabaseAdmin();
@@ -325,7 +328,7 @@ export async function getStudentAttendance(
 
 // ── Performance Trends ──────────────────────────────────────
 
-export async function getStudentPerformanceTrends(student: CurrentStudent): Promise<StudentTermTrend[]> {
+export async function getStudentPerformanceTrends(student: StudentRef): Promise<StudentTermTrend[]> {
     const supabase = createSupabaseAdmin();
 
     // KCSE (8-4-4) grades only the best 7 of a student's subjects; CBC has no

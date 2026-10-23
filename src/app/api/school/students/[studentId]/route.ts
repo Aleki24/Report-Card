@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { getActiveUserProfile } from '@/lib/auth-server';
-import type { StudentProfileResponse } from '@/types/user-profile';
+import type { ReportSummary, StudentProfileResponse } from '@/types/user-profile';
+import type { UserRole } from '@/types';
+import { getStudentReportCards, type StudentRef } from '@/lib/student/queries';
+import { termAttendance, termPerformance } from '@/lib/student/profile-history';
+import { canStaffReportOnStream } from '@/lib/reports/report-access';
 import { embedOne } from '@/lib/postgrest';
 import { getTeacherPermissions, isStudentVisibleToTeacher } from '@/lib/teacher-utils';
 import { getAccess, seesAllStudents } from '@/lib/platform/access';
@@ -69,117 +73,41 @@ export async function GET(
       }
     }
 
-    // 2. Academic history — marks grouped by term
-    const { data: currentYear } = await supabase
-      .from('academic_years')
-      .select('id')
-      .eq('school_id', schoolId)
-      .order('start_date', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    // Report cards, term performance and attendance, side by side.
+    const stream = embedOne(student.grade_streams);
+    const ref: StudentRef = {
+      studentId,
+      schoolId,
+      academicLevelId: student.academic_level_id ?? '',
+      gradeStreamId: stream?.id ?? student.current_grade_stream_id ?? '',
+    };
+    const [academicHistory, reportCards, attendanceHistory, enrollments, canOpenReports] = await Promise.all([
+      termPerformance(supabase, schoolId, studentId, isRoleIn(role, STAFF_TEACHING_ROLES)),
+      // The cards the learner and their parents see: every term with released results.
+      getStudentReportCards(ref),
+      termAttendance(supabase, schoolId, studentId),
+      supabase.from('student_subjects').select('role, subjects ( id, name, code )').eq('student_id', studentId),
+      // The same rule the report card itself applies.
+      role === 'STUDENT' || (!!ref.gradeStreamId && canStaffReportOnStream({ role: role as UserRole, userId }, ref.gradeStreamId)),
+    ]);
 
-    let academicHistory: {
-      term_id: string;
-      term_name: string;
-      subjects: { subject_name: string; percentage: number; grade_symbol: string | null }[];
-      average: number;
-    }[] = [];
-
-    if (currentYear) {
-      const { data: terms } = await supabase
-        .from('terms')
-        .select('id, name')
-        .eq('academic_year_id', currentYear.id)
-        .order('start_date');
-
-      if (terms) {
-        for (const term of terms) {
-          let marksQuery = supabase
-            .from('exam_marks')
-            .select(`
-              percentage, grade_symbol, raw_score,
-              exams!inner ( name, max_score, subjects ( name ) )
-            `)
-            .eq('student_id', studentId)
-            .eq('exams.term_id', term.id);
-          // Only admins and teachers see results before they are released,
-          // like everywhere else in the app.
-          if (!isRoleIn(role, STAFF_TEACHING_ROLES)) marksQuery = marksQuery.eq('exams.status', 'APPROVED');
-          const { data: marks } = await marksQuery;
-
-          const subjects = (marks || []).map((m: any) => ({
-            subject_name: m.exams?.subjects?.name || 'Unknown',
-            percentage: Number(m.percentage),
-            grade_symbol: m.grade_symbol,
-          }));
-
-          const avg = subjects.length > 0
-            ? Math.round(subjects.reduce((s, sub) => s + sub.percentage, 0) / subjects.length)
-            : 0;
-
-          academicHistory.push({
-            term_id: term.id,
-            term_name: term.name,
-            subjects,
-            average: avg,
-          });
-        }
-      }
-    }
-
-    // 2.5 Subject enrollments (CBC senior pathway feature)
-    const { data: enrollments } = await supabase
-      .from('student_subjects')
-      .select('role, subjects ( id, name, code )')
-      .eq('student_id', studentId);
-    const enrolledSubjects = (enrollments || [])
+    // Subject enrolments (CBC senior pathways)
+    const enrolledSubjects = (enrollments.data || [])
       .map((e: any) => ({ role: e.role, ...((Array.isArray(e.subjects) ? e.subjects[0] : e.subjects) || {}) }))
       .filter((s: any) => s.id)
       .sort((a: any, b: any) => (a.role === b.role ? a.name.localeCompare(b.name) : a.role === 'CORE' ? -1 : 1));
 
-    // 3. Report history
-    const { data: reportCards } = await supabase
-      .from('report_cards')
-      .select(`
-        id, generated_at, overall_average, overall_position,
-        term_id, academic_year_id,
-        terms ( name ),
-        academic_years ( name )
-      `)
-      .eq('student_id', studentId)
-      .order('generated_at', { ascending: false });
-
-    const reportHistory = (reportCards || []).map((rc: any) => ({
+    const reportHistory: ReportSummary[] = reportCards.map(rc => ({
       id: rc.id,
+      term_id: rc.terms.id,
+      year_id: rc.academic_years.id,
       generated_at: rc.generated_at,
-      term: rc.terms?.name || '—',
-      year: rc.academic_years?.name || '—',
+      term: rc.terms.name,
+      year: rc.academic_years.name,
       average: rc.overall_average,
       position: rc.overall_position,
-    }));
-
-    // 4. Attendance history — from report_cards attendance fields
-    const { data: attendanceRecords } = await supabase
-      .from('report_cards')
-      .select(`
-        id, attendance_present, attendance_total,
-        term_id, academic_year_id,
-        terms ( name ),
-        academic_years ( name )
-      `)
-      .eq('student_id', studentId)
-      .not('attendance_present', 'is', null)
-      .order('generated_at', { ascending: false });
-
-    const attendanceHistory = (attendanceRecords || []).map((rc: any) => ({
-      id: rc.id,
-      term: rc.terms?.name || '—',
-      year: rc.academic_years?.name || '—',
-      present: rc.attendance_present ?? 0,
-      total: rc.attendance_total ?? 0,
-      percentage: rc.attendance_total > 0
-        ? Math.round((rc.attendance_present / rc.attendance_total) * 100)
-        : null,
+      subjects: rc.report_card_subjects.length,
+      href: `/api/reports/student/${studentId}?${new URLSearchParams({ term: rc.terms.id, year: rc.academic_years.id }).toString()}`,
     }));
 
     return NextResponse.json<StudentProfileResponse>({
@@ -208,6 +136,7 @@ export async function GET(
       academicHistory,
       reportHistory,
       attendanceHistory,
+      canOpenReports,
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unknown error';
