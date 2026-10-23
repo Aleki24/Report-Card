@@ -292,11 +292,14 @@ export default function HeroSection() {
 
           <div className="relative transform-3d transition-transform duration-250 ease-out [transform:rotateX(var(--rx))_rotateY(var(--ry))] motion-reduce:[transform:none]">
             {/* What the parent sees on their phone: the same results, a minute later */}
-            <div className="absolute top-1/2 -right-3 z-3 hidden w-24 -translate-y-1/2 rotate-[5deg] animate-float translate-z-[70px] sm:block md:-right-8 md:w-32 lg:w-36">
+            {/* It sits in room kept beside the panel, overlapping only its padding, never its marks. */}
+            <div className="absolute top-1/2 right-0 z-3 hidden w-24 -translate-y-1/2 rotate-[5deg] animate-float translate-z-[70px] sm:block md:w-32 lg:w-36">
               <PhoneShot src="/manual/mobile-parent.jpg" alt="" sizes="144px" />
             </div>
 
-            <MockMarksPanel />
+            <div className="sm:mr-20 md:mr-28 lg:mr-32">
+              <MockMarksPanel />
+            </div>
 
             {/* Chips sit over the panel's empty zones (tab strip, footer middle), never over data */}
             <FloatingChip

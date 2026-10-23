@@ -20,7 +20,11 @@ interface BrowserShotProps {
   className?: string;
 }
 
-/** A desktop screen in a browser window. Screenshots are 16:10. */
+/**
+ * A desktop screen in a browser window. The 16:10 screenshots are shown 4:3
+ * from the right, so most of the sidebar falls away and the page itself is
+ * large enough to read.
+ */
 export function BrowserShot({ src, alt, path, priority, sizes = '(max-width: 1024px) 100vw, 50vw', className }: BrowserShotProps) {
   return (
     <figure className={cn('overflow-hidden rounded-2xl border border-border bg-card shadow-2xl shadow-black/10 dark:shadow-black/50', className)}>
@@ -34,8 +38,8 @@ export function BrowserShot({ src, alt, path, priority, sizes = '(max-width: 102
           skulbase.com{path}
         </span>
       </div>
-      <div className="relative aspect-[16/10] bg-background">
-        <Image src={src} alt={alt} fill sizes={sizes} priority={priority} className="object-cover object-top" />
+      <div className="relative aspect-[4/3] bg-background">
+        <Image src={src} alt={alt} fill sizes={sizes} priority={priority} className="object-cover object-right-top" />
       </div>
     </figure>
   );

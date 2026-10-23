@@ -6,18 +6,19 @@ import { PhoneShot } from './ui/ProductShot';
 
 type FloatingShot = { src: string; alt: string; className: string };
 
-// Phones pinned to the card's corners on large screens: the teacher's marks
-// and the parent's view, the two ends of what the school runs here.
+// Phones rising from the card's bottom edge on large screens: the teacher's
+// marks and the parent's view, the two ends of what the school runs here.
+// The card clips them, so both sit on the edge it cuts.
 const FLOATING_SHOTS: FloatingShot[] = [
   {
     src: '/manual/mobile-teacher-marks.jpg',
     alt: 'A teacher entering Grade 7 Mathematics marks on a phone',
-    className: '-top-10 right-[4%] w-32 rotate-6',
+    className: '-bottom-24 right-[5%] w-32 rotate-6',
   },
   {
     src: '/manual/mobile-parent.jpg',
     alt: 'A parent viewing their child’s results, fees and bus on a phone',
-    className: '-bottom-12 left-[4%] w-28 -rotate-6 [animation-delay:2s]',
+    className: '-bottom-28 left-[5%] w-32 -rotate-6 [animation-delay:2s]',
   },
 ];
 
