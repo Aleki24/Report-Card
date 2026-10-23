@@ -131,6 +131,7 @@ function ExamsContent() {
                     fillGaps={role === 'ADMIN' ? fillGaps : undefined}
                     // Teachers entering marks go straight to the exam the school opened.
                     followOpen={tab === 'entry' && role !== 'ADMIN'}
+                    manageOpen={tab === 'entry'}
                     onSelect={(e) => setExam(e)}
                     emptyAction={(term, reload) => <SeedExamsButton term={term} onDone={reload} />}
                     headerAction={(term, reload) => <CreateExamToggle term={term} structure={structure.data} onCreated={reload} />}

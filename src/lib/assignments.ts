@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { localToday } from './local-date';
 
 /** Client-safe rules and shapes shared by the Assignments page and its API. */
 
@@ -52,10 +53,7 @@ export interface Submission {
     admissionNumber: string | null;
 }
 
-/** Today in the viewer's time zone, as the date inputs show it. */
-export function localToday(now = new Date()): string {
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-}
+export { localToday };
 
 export type DueState = 'overdue' | 'today' | 'soon' | 'later';
 
