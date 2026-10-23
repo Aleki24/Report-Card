@@ -9,6 +9,8 @@ import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { embedOne, fetchAllRows, isUuid } from '@/lib/postgrest';
 import { guardianKey, type ParentContact } from '@/lib/guardians';
 import { SCHOOL_SUBJECT_VIEW, gradingSystemBySubject } from '@/lib/school-subjects';
+import { isSubjectOfferedAtGrade } from '@/lib/curriculum-bands';
+import { isTaughtInGrade, seniorSubjectsTaught } from '@/lib/senior-subjects';
 import { canTeacherMarkStudent, getTeacherPermissions, isStudentVisibleToTeacher, isStreamVisibleToTeacher, isExamVisibleToTeacher } from '@/lib/teacher-utils';
 
 type DataType =
@@ -278,12 +280,23 @@ export async function GET(request: NextRequest) {
         // my_subjects, this isn't scoped to a specific teacher's assignments.
         const { data, error } = await supabase
           .from(SCHOOL_SUBJECT_VIEW)
-          .select('id, code, name, academic_level_id, category, display_order, band')
+          .select('id, code, name, academic_level_id, category, display_order, band, subject_type')
           .eq('school_id', schoolId)
           .order('display_order');
 
         if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-        return NextResponse.json({ data: data ?? [] });
+
+        // ?grade_id=: only what that class takes — its band, and in Senior
+        // School only the electives its learners actually sit.
+        const forGradeId = searchParams.get('grade_id');
+        if (!forGradeId) return NextResponse.json({ data: data ?? [] });
+        if (!isUuid(forGradeId)) return NextResponse.json({ error: 'Invalid grade id' }, { status: 400 });
+        const { data: grade } = await supabase.from('grades').select('id, code, name_display').eq('id', forGradeId).maybeSingle();
+        if (!grade) return NextResponse.json({ data: [] });
+        const taught = await seniorSubjectsTaught(supabase, schoolId, [grade]);
+        return NextResponse.json({
+          data: (data ?? []).filter(s => isSubjectOfferedAtGrade(s, grade) && isTaughtInGrade(taught, grade.id, s)),
+        });
       }
 
       case 'grade_streams': {

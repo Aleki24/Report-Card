@@ -4,8 +4,17 @@ import { isSubjectOfferedAtGrade } from '@/lib/curriculum-bands';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { SCHOOL_SUBJECT_VIEW } from '@/lib/school-subjects';
-import { fetchAllRows, isUuid } from '@/lib/postgrest';
+import { embedOne, fetchAllRows, isUuid } from '@/lib/postgrest';
 import { findActiveTermId } from '@/lib/term-calendar';
+import { isTaughtInGrade, seniorSubjectsTaught } from '@/lib/senior-subjects';
+
+/** The fields of an exam row that say which class and subject it is for. */
+interface PlacedExam {
+  grade_id: string;
+  subject_id: string;
+  grades: { code: string | null; name_display: string | null } | { code: string | null; name_display: string | null }[] | null;
+  subjects: { code: string | null; subject_type: string | null } | { code: string | null; subject_type: string | null }[] | null;
+}
 
 async function getSession() {
   const { userId } = await auth();
@@ -68,10 +77,11 @@ export async function GET(request: NextRequest) {
       let query = supabase
         .from('exams')
         .select(`
-          id, name, exam_type, max_score, grade_stream_id, grade_id, subject_id, term_id, created_by_teacher_id,
-          status, published_by, published_at, approved_by,${ready ? '\n        exam_marks ( count ),' : ''}
-          subjects:subject_id ( name, code, category ),
-          grades:grade_id ( name_display ),
+          id, name, exam_type, max_score, exam_date, grade_stream_id, grade_id, subject_id, term_id, created_by_teacher_id,
+          status, published_by, published_at, approved_by,
+          exam_marks ( count ),
+          subjects:subject_id ( name, code, category, subject_type ),
+          grades:grade_id ( name_display, code ),
           grade_streams:grade_stream_id ( full_name ),
           terms:term_id ( name ),
           publisher:published_by ( first_name, last_name )
@@ -110,7 +120,7 @@ export async function GET(request: NextRequest) {
     const { rows: data, error } = await fetchAllRows(buildQuery);
     if (error) return NextResponse.json({ error: (error as { message?: string }).message ?? 'Could not load exams' }, { status: 400 });
 
-    /** Marks entered for an exam; only selected (as an aggregate) with ?ready=1. */
+    /** Marks entered for an exam. */
     const markCount = (e: object): number => (e as { exam_marks?: { count: number }[] | null }).exam_marks?.[0]?.count ?? 0;
     let filteredExams = ready ? (data || []).filter(e => markCount(e) > 0) : data || [];
     if (auth.role !== 'ADMIN') {
@@ -119,11 +129,24 @@ export async function GET(request: NextRequest) {
       filteredExams = filteredExams.filter((exam: any) => isExamVisibleToTeacher(exam, perms, auth.userId));
     }
 
+    // Senior School papers for electives a class doesn't take, seeded before
+    // that was checked. Hidden until someone enters a mark in one.
+    const placed = filteredExams as unknown as PlacedExam[];
+    const seniorGrades = new Map(placed.map(e => [e.grade_id, { id: e.grade_id, code: embedOne(e.grades)?.code ?? null, name_display: embedOne(e.grades)?.name_display ?? null }]));
+    const taught = await seniorSubjectsTaught(supabase, schoolId, [...seniorGrades.values()]);
+    filteredExams = filteredExams.filter((_, i) => {
+      const e = placed[i];
+      const subject = embedOne(e.subjects);
+      return markCount(e) > 0 || isTaughtInGrade(taught, e.grade_id, { id: e.subject_id, code: subject?.code ?? '', subject_type: subject?.subject_type });
+    });
+
     const mapped = (filteredExams).map((e: any) => ({
       id: e.id,
       name: e.name,
       exam_type: e.exam_type,
       max_score: e.max_score,
+      exam_date: e.exam_date,
+      mark_count: markCount(e),
       subject_id: e.subject_id,
       subject_name: e.subjects?.name || 'N/A',
       subject_code: e.subjects?.code || '',
@@ -140,7 +163,6 @@ export async function GET(request: NextRequest) {
       published_at: e.published_at,
       approved_by: e.approved_by,
       created_by_teacher_id: e.created_by_teacher_id,
-      ...(ready ? { mark_count: markCount(e) } : {}),
     }));
 
     return NextResponse.json({ data: mapped });
