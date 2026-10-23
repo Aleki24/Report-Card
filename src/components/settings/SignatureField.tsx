@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { Camera, Loader2, PenLine, Trash2 } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api-error-message';
 import { SIGNATURES_URL, SIGNATURE_PHOTO_MAX_BYTES, SIGNATURE_TIPS, type SignatureRecord, type SignatureTarget } from '@/lib/signatures';
+import { useConfirm } from '@/components/ui/ConfirmProvider';
 
 const urlFor = (target: SignatureTarget) => `${SIGNATURES_URL}?target=${encodeURIComponent(target)}`;
 
@@ -21,6 +22,7 @@ async function readRecord(res: Response, fallback: string): Promise<SignatureRec
  * `target` is `me`, `principal` or a staff member's id.
  */
 export function SignatureField({ target, label, description }: { target: SignatureTarget; label: string; description: string }) {
+    const confirm = useConfirm();
     const id = useId();
     const input = useRef<HTMLInputElement>(null);
     const [record, setRecord] = useState<SignatureRecord | null>(null);
@@ -59,7 +61,7 @@ export function SignatureField({ target, label, description }: { target: Signatu
     };
 
     const remove = async () => {
-        if (!window.confirm('Remove this signature? Report cards and mark sheets will print an empty line to sign by hand.')) return;
+        if (!(await confirm({ title: 'Remove this signature?', message: 'Report cards and mark sheets will print an empty line to sign by hand.', confirmText: 'Remove', variant: 'danger' }))) return;
         setBusy(true);
         setError(null);
         try {

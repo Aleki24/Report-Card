@@ -6,6 +6,7 @@ import { Loader2, Send } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api-error-message';
 import { groupReadyPapers, type ReadyGroup, type ReadyPaper } from '@/lib/release-ready';
 import { releasePapers } from './releasePapers';
+import { useConfirm } from '@/components/ui/ConfirmProvider';
 
 const plural = (n: number, word: string) => `${n.toLocaleString()} ${word}${n === 1 ? '' : 's'}`;
 
@@ -18,6 +19,7 @@ const plural = (n: number, word: string) => `${n.toLocaleString()} ${word}${n ==
  * `version` changes whenever the page below releases or withdraws something.
  */
 export function ReadyToReleasePanel({ version, onReleased }: { version: number; onReleased: () => void }) {
+    const confirm = useConfirm();
     const [papers, setPapers] = useState<ReadyPaper[] | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [busyKey, setBusyKey] = useState<string | null>(null);
@@ -39,7 +41,11 @@ export function ReadyToReleasePanel({ version, onReleased }: { version: number; 
     const groups = useMemo(() => groupReadyPapers(papers ?? []), [papers]);
 
     const release = async (key: string, list: readonly ReadyPaper[], what: string) => {
-        if (!window.confirm(`Release ${plural(list.length, 'paper')} (${what})? Learners and parents will see these marks. A learner with no mark in a subject simply won't see it.`)) return;
+        if (!(await confirm({
+            title: `Release ${plural(list.length, 'paper')}?`,
+            message: `${what}.\nLearners and parents will see these marks. A learner with no mark in a subject simply won't see it.`,
+            confirmText: `Release ${list.length}`,
+        }))) return;
         setBusyKey(key);
         const { ok, failures } = await releasePapers(list);
         setBusyKey(null);

@@ -18,6 +18,7 @@ import {
 import { cn } from '@/lib/utils';
 import { MarkSheetRow, type GradeOption, type MarkSheetLearner } from './entry/MarkSheetRow';
 import { examRosterUrl } from '@/lib/marks/roster-url';
+import { useConfirm } from '@/components/ui/ConfirmProvider';
 
 /* ── API shapes ─────────────────────────────────────────── */
 
@@ -112,6 +113,7 @@ function fromDraftRow(row: DraftRow): EntryValues {
 }
 
 export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId, subjectId }: Props) {
+    const confirm = useConfirm();
     const { profile } = useAuth();
     const isAdmin = profile?.role === 'ADMIN';
 
@@ -276,8 +278,8 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
     }, [syncNow]);
 
     const retryRefused = (batch: QueuedMarkBatch) => { retryBatch(batch.id); void syncNow(); };
-    const discardRefused = (batch: QueuedMarkBatch) => {
-        if (!window.confirm(`Discard ${batch.label ?? 'these marks'} saved on this device? They were never saved to the school.`)) return;
+    const discardRefused = async (batch: QueuedMarkBatch) => {
+        if (!(await confirm({ title: `Discard ${batch.label ?? 'these marks'}?`, message: 'They are only on this device and were never saved to the school.', confirmText: 'Discard', variant: 'danger' }))) return;
         removeBatch(batch.id);
         setRefusedSync(rejectedBatchesForExam(examId));
     };
@@ -403,8 +405,8 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
         });
     };
 
-    const discardAll = () => {
-        if (!window.confirm('Discard every unsaved change on this sheet? Saved marks are not affected.')) return;
+    const discardAll = async () => {
+        if (!(await confirm({ title: 'Discard every unsaved change?', message: 'Marks already saved on this sheet are not affected.', confirmText: 'Discard changes', variant: 'danger' }))) return;
         setEdits({});
         setRestoredDraft(false);
     };
@@ -524,7 +526,7 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
         const removals = pending.filter(r => r.status === 'removing');
         if (removals.length > 0) {
             const names = removals.slice(0, 3).map(r => r.learner.name).join(', ') + (removals.length > 3 ? ` and ${removals.length - 3} more` : '');
-            if (!window.confirm(`Remove the saved mark for ${names}? This cannot be undone.`)) return;
+            if (!(await confirm({ title: `Remove the saved mark for ${names}?`, message: 'This cannot be undone.', confirmText: 'Remove', variant: 'danger' }))) return;
         }
 
         setSaving(true);

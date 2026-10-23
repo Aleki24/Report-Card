@@ -12,6 +12,7 @@ import {
     type SchoolSection, type SchoolSectionInput, type SchoolSectionsOverview,
 } from '@/lib/school-sections';
 import { SignatureField } from './SignatureField';
+import { useConfirm } from '@/components/ui/ConfirmProvider';
 
 async function call<T>(input: string, init?: RequestInit): Promise<T> {
     const res = await fetch(input, { cache: 'no-store', ...init });
@@ -26,6 +27,7 @@ async function call<T>(input: string, init?: RequestInit): Promise<T> {
  * its own, apart from the profile form above it.
  */
 export function SchoolSectionsPanel() {
+    const confirm = useConfirm();
     const [overview, setOverview] = useState<SchoolSectionsOverview | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [editing, setEditing] = useState<string | 'new' | null>(null);
@@ -105,8 +107,8 @@ export function SchoolSectionsPanel() {
                                 busy={busy}
                                 onCancel={() => setEditing(null)}
                                 onSave={input => void run(() => call(`${SCHOOL_SECTIONS_URL}/${section.id}`, jsonBody('PATCH', input)), `${input.name} saved.`)}
-                                onDelete={() => {
-                                    if (!window.confirm(`Remove ${section.name}? Its classes will be signed by the school-wide principal again.`)) return;
+                                onDelete={async () => {
+                                    if (!(await confirm({ title: `Remove ${section.name}?`, message: 'Its classes will be signed by the school-wide principal again.', confirmText: 'Remove', variant: 'danger' }))) return;
                                     void run(() => call(`${SCHOOL_SECTIONS_URL}/${section.id}`, { method: 'DELETE' }), `${section.name} removed.`);
                                 }}
                             />
