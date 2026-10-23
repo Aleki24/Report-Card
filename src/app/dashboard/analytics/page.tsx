@@ -3,11 +3,12 @@
 import PageHeader from '@/components/dashboard/PageHeader';
 import React, { Suspense, useCallback, useEffect, useId, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, CalendarRange, LineChart } from 'lucide-react';
+import { ArrowLeft, CalendarRange } from 'lucide-react';
 import ClassAnalytics from '@/components/analytics/ClassAnalytics';
 import SchoolOverview from '@/components/analytics/SchoolOverview';
 import { SelectField, type SelectOption } from '@/components/ui/FormField';
 import { defaultTermFor, defaultYear, termsOfYear, useAnalyticsPeriods } from '@/components/analytics/useAnalyticsPeriods';
+import { FEATURE_ICONS } from '@/components/ui/featureIcons';
 
 /**
  * Analytics, at two levels, because only one of them was ever coherent.
@@ -123,7 +124,7 @@ function AnalyticsPageInner() {
             <PageHeader
                 title={selectedClass ? selectedClass.full_name : 'Analytics'}
                 eyebrow="Insights"
-                icon={LineChart}
+                icon={FEATURE_ICONS.analytics}
                 hue="sky"
                 description={selectedClass
                     ? 'Subject ranking, merit list and exam series for this class.'

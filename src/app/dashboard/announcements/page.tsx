@@ -20,6 +20,7 @@ import {
     ANNOUNCEMENT_CONTENT_MAX, ANNOUNCEMENT_SMS_CHARS, ANNOUNCEMENT_TITLE_MAX, announcementSmsText,
     type Announcement, type AnnouncementCounts, type AnnouncementFilter, type AnnouncementSmsResult, type AnnouncementsResponse,
 } from '@/lib/announcements';
+import { FEATURE_ICONS } from '@/components/ui/featureIcons';
 
 type Feed = { status: 'loading' } | { status: 'error'; message: string } | { status: 'ready'; items: Announcement[]; nextCursor: string | null };
 
@@ -193,7 +194,7 @@ export default function AnnouncementsPage() {
             <PageHeader
                 title="Announcements"
                 eyebrow="Communication"
-                icon={Bell}
+                icon={FEATURE_ICONS.announcements}
                 hue="rose"
                 description={canPost ? 'Post notices to the whole school, and text the important ones to guardians.' : 'Notices from the school.'}
                 action={canPost ? (

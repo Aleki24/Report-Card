@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback, useId } from 'react';
-import { FileText } from 'lucide-react';
+
 import PageHeader from '@/components/dashboard/PageHeader';
 import { TermComparisonModal, type ComparisonTerm } from '@/components/reports/TermComparisonModal';
 import { StudentCommentsSection, type CommentField, type StudentComment } from '@/components/reports/StudentCommentsSection';
@@ -20,6 +20,7 @@ import { MANAGED_STREAMS_URL, type ManagedStream } from '@/lib/managed-streams';
 import type { ReportRound, ReportRoundsResponse } from '@/lib/reports/exam-round';
 import { toRosterLearner, type RosterLearner } from '@/lib/reports/class-roster';
 import { toast } from 'sonner';
+import { FEATURE_ICONS } from '@/components/ui/featureIcons';
 
 interface AcademicYearOption { id: string; name: string }
 
@@ -407,7 +408,7 @@ export default function ReportsPage() {
       <PageHeader
         title="Report cards"
         eyebrow="Academics"
-        icon={FileText}
+        icon={FEATURE_ICONS.reports}
         hue="violet"
         description="Download report cards and mark sheets, text results to parents and compare terms."
       />

@@ -6,8 +6,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { toast } from 'sonner';
 import {
     ArrowDownRight, ArrowUpRight, BookOpen, CalendarCheck, CalendarDays, Clock3, DownloadCloud,
-    FileText, GraduationCap, Megaphone, Minus, RefreshCw, TrendingUp, Wallet,
-} from 'lucide-react';
+    FileText, GraduationCap, Megaphone, Minus, RefreshCw, TrendingUp, } from 'lucide-react';
 import type { StudentDashboardSummary } from '@/types';
 import { PerformanceTrendChart } from '@/components/charts/lazy';
 import KpiTile from '@/components/dashboard/KpiTile';
@@ -22,6 +21,7 @@ import { useSchoolPassMark } from '@/hooks/useSchoolPassMark';
 import { cn } from '@/lib/utils';
 import { AUTO_FIT_GRID } from '@/components/dashboard/grid';
 import { totalOwed } from '@/lib/fees';
+import { FEATURE_ICONS } from '@/components/ui/featureIcons';
 
 interface Announcement { id: string; title: string; content: string; isImportant: boolean; createdAt: string }
 interface LearningMaterial { id: string; title: string; subjectName: string; fileUrl: string | null; fileType: string | null; fileSizeBytes: number | null }
@@ -157,7 +157,7 @@ export default function StudentDashboardPage() {
     const kpis: React.ReactNode[] = [
         <KpiTile key="avg" title={stats?.averageTerm ? `${stats.averageTerm} average` : 'Average score'} value={average != null ? `${average}%` : '—'} icon={<TrendingUp size={17} />} href="/student/results" tone="blue" />,
         <KpiTile key="subjects" title="Subjects" value={stats?.subjectsCount ?? 0} icon={<BookOpen size={17} />} href="/student/subjects" hue="emerald" />,
-        <KpiTile key="exams" title="Results released" value={stats?.examsTaken ?? 0} icon={<GraduationCap size={17} />} href="/student/results" hue="violet" />,
+        <KpiTile key="exams" title="Results released" value={stats?.examsTaken ?? 0} icon={<FEATURE_ICONS.results size={17} />} href="/student/results" hue="violet" />,
     ];
     // Attendance and fees only once the school uses them — a permanent "0%"
     // or "—" for a feature nobody switched on is noise, not information.
@@ -165,7 +165,7 @@ export default function StudentDashboardPage() {
         kpis.push(<KpiTile key="att" title="Attendance" value={`${stats?.attendanceRate ?? 0}%`} icon={<CalendarCheck size={17} />} href="/student/attendance" tone="green" />);
     }
     if (feesData.length > 0) {
-        kpis.push(<KpiTile key="fees" title="Fees balance" value={`KShs ${feesBalance.toLocaleString()}`} icon={<Wallet size={17} />} href="/student/fees" alert={feesBalance > 0} tone={feesBalance > 0 ? 'red' : 'green'} />);
+        kpis.push(<KpiTile key="fees" title="Fees balance" value={`KShs ${feesBalance.toLocaleString()}`} icon={<FEATURE_ICONS.fees size={17} />} href="/student/fees" alert={feesBalance > 0} tone={feesBalance > 0 ? 'red' : 'green'} />);
     }
 
     return (

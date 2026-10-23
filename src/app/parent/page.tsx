@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from 'react';
-import { Bell, Bus, CalendarCheck, CalendarDays, DollarSign, FileText, GraduationCap, Users } from 'lucide-react';
+import { Bus, CalendarCheck, CalendarDays, FileText, GraduationCap, Users } from 'lucide-react';
 import { StatTile } from '@/components/ui/StatTile';
 import { LoadError } from '@/components/ui/LoadError';
 import EmptyState from '@/components/dashboard/EmptyState';
@@ -15,6 +15,7 @@ import {
 } from '@/lib/ops/forms/platform';
 import { cn } from '@/lib/utils';
 import { AUTO_FIT_GRID } from '@/components/dashboard/grid';
+import { FEATURE_ICONS } from '@/components/ui/featureIcons';
 
 function Section({ title, icon: Icon, children }: { title: string; icon: React.ComponentType<{ className?: string }>; children: React.ReactNode }) {
     return (
@@ -48,7 +49,7 @@ function ChildOverview({ childId }: { childId: string }) {
             <div className={cn(AUTO_FIT_GRID.tile, 'gap-3')}>
                 {data.summary && <StatTile icon={GraduationCap} label="Average score" value={data.summary.stats.examsTaken ? `${data.summary.stats.averageScore}%` : '—'} hint={data.summary.stats.averageTerm ?? undefined} hue="blue" />}
                 {data.attendance.length > 0 && <StatTile icon={CalendarCheck} label="Absent (30 days)" value={absences} tone={absences > 2 ? 'warn' : 'good'} />}
-                {data.fees.length > 0 && <StatTile icon={DollarSign} label="Fee balance" value={money(balance)} tone={balance > 0 ? 'warn' : 'good'} />}
+                {data.fees.length > 0 && <StatTile icon={FEATURE_ICONS.fees} label="Fee balance" value={money(balance)} tone={balance > 0 ? 'warn' : 'good'} />}
             </div>
 
             {data.bus && (
@@ -64,7 +65,7 @@ function ChildOverview({ childId }: { childId: string }) {
                 differ in height, and a grid left a hole beside every short one. */}
             <div className="columns-1 gap-5 xl:columns-2 *:mb-5 *:break-inside-avoid">
                 {data.summary && (
-                    <Section title="Latest results" icon={GraduationCap}>
+                    <Section title="Latest results" icon={FEATURE_ICONS.results}>
                         {data.summary.latestResults.length === 0 ? <p className="text-sm text-muted-foreground">No released results yet.</p> : (
                             <ul className="flex flex-col divide-y divide-border/60">
                                 {data.summary.latestResults.map(r => (
@@ -79,7 +80,7 @@ function ChildOverview({ childId }: { childId: string }) {
                 )}
 
                 {data.fees.length > 0 && (
-                    <Section title="Fees" icon={DollarSign}>
+                    <Section title="Fees" icon={FEATURE_ICONS.fees}>
                         <ul className="flex flex-col divide-y divide-border/60">
                             {data.fees.map(f => (
                                 <li key={f.id} className="flex items-center justify-between gap-3 py-2 text-sm">
@@ -129,7 +130,7 @@ function ChildOverview({ childId }: { childId: string }) {
                 )}
 
                 {data.summary && data.summary.announcements.length > 0 && (
-                    <Section title="Notices" icon={Bell}>
+                    <Section title="Notices" icon={FEATURE_ICONS.announcements}>
                         <ul className="flex flex-col gap-3 text-sm">
                             {data.summary.announcements.map(a => (
                                 <li key={a.id}><p className="font-medium">{a.title}</p><p className="line-clamp-3 text-muted-foreground">{a.content}</p></li>
@@ -185,7 +186,7 @@ export default function ParentHomePage() {
             title="My children"
             eyebrow="Parent portal"
             description="Results, fees, attendance, the bus and school news for each of your children."
-            icon={Users}
+            icon={FEATURE_ICONS.people}
             hue="rose"
             tabs={[{ id: 'children', label: 'Children', icon: Users, hue: 'rose', render: () => <Children /> }]}
         />

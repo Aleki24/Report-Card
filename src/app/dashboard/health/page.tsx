@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { Activity, AlertTriangle, BedSingle, ClipboardList, FileHeart, HeartPulse, MessageSquare, Pill, Package } from 'lucide-react';
+import { Activity, AlertTriangle, BedSingle, ClipboardList, FileHeart, MessageSquare, Pill, Package } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { StatTile } from '@/components/ui/StatTile';
 import { LoadError } from '@/components/ui/LoadError';
@@ -18,6 +18,7 @@ import {
     outbreakMessage, shouldTellParent, stockExpiring, stockLow, visitDefaults, visitOutcomeLabel,
     type Dose, type HealthStatus, type MedicalProfile, type Stock, type StatusVisit, type Visit,
 } from '@/lib/ops/forms/welfare';
+import { FEATURE_ICONS } from '@/components/ui/featureIcons';
 
 /** Today at a glance for any staff: who is in sick bay or went home, no clinical detail. */
 function TodayPanel() {
@@ -124,7 +125,7 @@ export default function HealthPage() {
             title="Health & sick bay"
             eyebrow="Welfare"
             description="Clinic visits, sick bay, medical profiles, medication and medicine stock. Clinical detail is visible only to the nurse and principal."
-            icon={HeartPulse}
+            icon={FEATURE_ICONS.health}
             hue="rose"
             tabs={[
                 { id: 'today', label: 'Today', icon: Activity, hue: 'rose', render: () => <TodayPanel /> },

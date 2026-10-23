@@ -6,9 +6,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
 import {
-  Users, GraduationCap, FileText, ArrowRight, BarChart3, ClipboardList, Wallet,
-  BookOpen, Search, CheckCircle2, Send, Bell, Award, CalendarCheck, UserPlus, Megaphone, Briefcase,
-  AlertTriangle, DoorOpen, type LucideIcon,
+  ArrowRight, Search, CheckCircle2, Send, Award, UserPlus, AlertTriangle, DoorOpen, type LucideIcon,
 } from 'lucide-react';
 import { buildTodos, totalAttendanceCount, type DashboardData, type TodoKey } from '@/lib/dashboard';
 
@@ -28,6 +26,7 @@ import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
 import UpcomingRounds from '@/components/dashboard/UpcomingRounds';
 import { OperationsOverview } from '@/components/dashboard/OperationsOverview';
 import { AUTO_FIT_GRID } from '@/components/dashboard/grid';
+import { FEATURE_ICONS as I } from '@/components/ui/featureIcons';
 import { QuickActions, type QuickActionItem } from '@/components/dashboard/QuickActions';
 import { homePathForRole } from '@/lib/roles';
 
@@ -138,17 +137,17 @@ function AdminDashboard({ userName }: { userName: string }) {
       {/* The figures, once */}
       {/* A grid rather than the 3-wide carousel: every figure in view at once. */}
       <section aria-label="Key figures" className={cn(AUTO_FIT_GRID.tile, 'gap-3')}>
-          <KpiTile title="Learners" value={(data?.totalStudents ?? 0).toLocaleString()} icon={<Users size={17} />} href="/dashboard/people" tone="blue" />
-          <KpiTile title="Teachers" value={data?.totalTeachers ?? 0} icon={<GraduationCap size={17} />} href="/dashboard/people?tab=teachers" tone="purple" />
-          <KpiTile title="Classes" value={data?.totalClasses ?? 0} icon={<BookOpen size={17} />} href="/dashboard/classes" tone="blue" />
+          <KpiTile title="Learners" value={(data?.totalStudents ?? 0).toLocaleString()} icon={<I.people size={17} />} href="/dashboard/people" tone="blue" />
+          <KpiTile title="Teachers" value={data?.totalTeachers ?? 0} icon={<I.teachers size={17} />} href="/dashboard/people?tab=teachers" tone="purple" />
+          <KpiTile title="Classes" value={data?.totalClasses ?? 0} icon={<I.classes size={17} />} href="/dashboard/classes" tone="blue" />
           {passRate != null && (
-            <KpiTile title={`Pass rate (≥${data?.academicSummary?.passMark ?? 50}%)`} value={`${passRate}%`} icon={<BarChart3 size={17} />} href="/dashboard/analytics" tone={passRate >= 70 ? 'green' : passRate >= 40 ? 'amber' : 'red'} />
+            <KpiTile title={`Pass rate (≥${data?.academicSummary?.passMark ?? 50}%)`} value={`${passRate}%`} icon={<I.analytics size={17} />} href="/dashboard/analytics" tone={passRate >= 70 ? 'green' : passRate >= 40 ? 'amber' : 'red'} />
           )}
           {data?.hasAttendanceData && presentRate != null && (
-            <KpiTile title="Present today" value={`${presentRate}%`} icon={<CheckCircle2 size={17} />} href="/dashboard/attendance" tone="green" />
+            <KpiTile title="Present today" value={`${presentRate}%`} icon={<I.attendance size={17} />} href="/dashboard/attendance" tone="green" />
           )}
           {data?.hasFeeData && collectedRate != null && (
-            <KpiTile title="Fees collected" value={`${collectedRate}%`} icon={<Wallet size={17} />} href="/dashboard/fees" tone={collectedRate >= 80 ? 'green' : 'amber'} />
+            <KpiTile title="Fees collected" value={`${collectedRate}%`} icon={<I.fees size={17} />} href="/dashboard/fees" tone={collectedRate >= 80 ? 'green' : 'amber'} />
           )}
       </section>
 
@@ -202,7 +201,7 @@ function AdminDashboard({ userName }: { userName: string }) {
 }
 
 
-const TODO_ICONS: Record<TodoKey, LucideIcon> = { 'open-exam': DoorOpen, release: Send, marks: ClipboardList, grading: Award, attendance: CalendarCheck, fees: Wallet };
+const TODO_ICONS: Record<TodoKey, LucideIcon> = { 'open-exam': DoorOpen, release: Send, marks: I.examsMarks, grading: Award, attendance: I.attendance, fees: I.fees };
 
 function TodoList({ data }: { data: DashboardData | null }) {
   const todos = buildTodos(data);
@@ -241,14 +240,14 @@ function TodoList({ data }: { data: DashboardData | null }) {
 }
 
 const QUICK_ACTIONS: readonly QuickActionItem[] = [
-  { label: 'Enter marks', href: '/dashboard/exams-marks', icon: ClipboardList },
-  { label: 'Report cards', href: '/dashboard/reports', icon: FileText },
-  { label: 'Attendance', href: '/dashboard/attendance', icon: CalendarCheck },
+  { label: 'Enter marks', href: '/dashboard/exams-marks', icon: I.examsMarks },
+  { label: 'Report cards', href: '/dashboard/reports', icon: I.reports },
+  { label: 'Attendance', href: '/dashboard/attendance', icon: I.attendance },
   { label: 'Add learner', href: '/dashboard/people', icon: UserPlus },
-  { label: 'Add staff', href: '/dashboard/people?tab=teachers', icon: GraduationCap },
-  { label: 'Announcement', href: '/dashboard/announcements', icon: Megaphone },
-  { label: 'Assignment', href: '/dashboard/assignments', icon: Briefcase },
-  { label: 'Record payment', href: '/dashboard/fees', icon: Wallet },
+  { label: 'Add staff', href: '/dashboard/people?tab=teachers', icon: I.teachers },
+  { label: 'Announcement', href: '/dashboard/announcements', icon: I.announcements },
+  { label: 'Assignment', href: '/dashboard/assignments', icon: I.assignments },
+  { label: 'Record payment', href: '/dashboard/fees', icon: I.fees },
 ];
 
 function RecentActivity({ activities }: { activities: DashboardData['recentActivities'] }) {
@@ -461,7 +460,7 @@ export default function DashboardPage() {
           </section>
           <OperationsOverview />
           <Link href="/dashboard/announcements" className="group flex items-center gap-4 rounded-2xl border border-border/60 bg-card p-5 no-underline shadow-sm transition-all hover:-translate-y-px hover:border-primary/40 hover:shadow-md">
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><Bell size={20} aria-hidden /></span>
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><I.announcements size={20} aria-hidden /></span>
             <span className="min-w-0 flex-1">
               <span className="block text-sm font-semibold text-foreground group-hover:text-primary">Announcements</span>
               <span className="block text-xs text-muted-foreground">Read the latest notices from the school</span>

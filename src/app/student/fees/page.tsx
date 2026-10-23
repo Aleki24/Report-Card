@@ -11,6 +11,7 @@ import { isOverdue, PAYMENT_UNCONFIRMED_MESSAGE, PESAPAL_NOT_CONFIRMED_MESSAGE, 
 import { normalizeMpesaPhone } from '@/lib/phone';
 import { humanize } from '@/lib/text';
 import { cn } from '@/lib/utils';
+import { FEATURE_ICONS } from '@/components/ui/featureIcons';
 
 type FeeStatus = 'PENDING' | 'PARTIAL' | 'PAID' | 'OVERPAID';
 
@@ -314,7 +315,7 @@ export default function StudentFeesPage() {
             <PageHeader
               title="Fees"
               eyebrow="Finance"
-              icon={Wallet}
+              icon={FEATURE_ICONS.fees}
               hue="emerald"
               description="Your fee balance and payment history, term by term. Tap a term for its receipts."
             />

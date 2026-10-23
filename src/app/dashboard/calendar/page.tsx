@@ -11,6 +11,7 @@ import { useOpsList } from '@/hooks/useOpsList';
 import { date, humanize } from '@/lib/ops/format';
 import { EVENT_FIELDS, EVENT_TYPE_TONES, eventDefaults, isHappeningToday, monthLabel, upcomingByMonth, type SchoolEvent } from '@/lib/ops/forms/academics';
 import { cn } from '@/lib/utils';
+import { FEATURE_ICONS } from '@/components/ui/featureIcons';
 
 /** Upcoming events grouped by month: what everyone in school needs to plan around. */
 function Agenda() {
@@ -65,7 +66,7 @@ export default function CalendarPage() {
             title="School calendar"
             eyebrow="Academics"
             description="Exams, marks deadlines, report release, meetings and holidays in one place."
-            icon={CalendarDays}
+            icon={FEATURE_ICONS.calendar}
             hue="blue"
             tabs={[
                 { id: 'agenda', label: 'Upcoming', icon: CalendarDays, hue: 'blue', render: () => <Agenda /> },

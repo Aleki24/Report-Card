@@ -1,19 +1,6 @@
 import type { Metadata } from 'next';
 import type { LucideIcon } from 'lucide-react';
-import {
-  FileText,
-  Users,
-  GraduationCap,
-  School,
-  BookOpen,
-  ClipboardList,
-  CalendarCheck,
-  Heart,
-  LineChart,
-  Settings,
-  CreditCard,
-  MessageSquare,
-} from 'lucide-react';
+import { FEATURE_ICONS as I } from '@/components/ui/featureIcons';
 
 // ── Types ────────────────────────────────────────────────────
 export type ModuleStatus = 'active';
@@ -46,7 +33,7 @@ export const modules: Module[] = [
       'Generate professional report cards with marks, grades, comments, attendance, and PDF export.',
     longDescription:
       'The Report Cards module helps schools create accurate, branded, and downloadable academic reports for every learner. From bulk generation to individual customization, streamline your end-of-term reporting workflow.',
-    icon: FileText,
+    icon: I.reports,
     featureHref: '/features/report-cards',
     dashboardHref: '/dashboard/reports',
     status: 'active',
@@ -83,7 +70,7 @@ export const modules: Module[] = [
       'Manage student biodata, admissions, class assignments, and academic history in one place.',
     longDescription:
       'The Student Management module centralizes all student information — from enrollment and biodata to class assignments and academic records. Track every learner\'s journey through your school.',
-    icon: Users,
+    icon: I.people,
     featureHref: '/features/students',
     dashboardHref: '/dashboard/people',
     status: 'active',
@@ -120,7 +107,7 @@ export const modules: Module[] = [
       'Manage teacher profiles, assign subjects and classes, and track teacher roles across the school.',
     longDescription:
       'The Teacher Management module helps administrators organize their teaching staff efficiently. Assign subjects, designate class teachers, and maintain comprehensive teacher profiles.',
-    icon: GraduationCap,
+    icon: I.teachers,
     featureHref: '/features/teachers',
     dashboardHref: '/dashboard/people?tab=teachers',
     status: 'active',
@@ -157,7 +144,7 @@ export const modules: Module[] = [
       'Organize your school into academic levels, classes, and streams with teacher and student assignments.',
     longDescription:
       'The Classes & Streams module provides the organizational backbone of your school. Define academic levels, create classes and streams, assign class teachers, and enroll students into their respective groups.',
-    icon: School,
+    icon: I.classes,
     featureHref: '/features/classes',
     dashboardHref: '/dashboard/classes',
     status: 'active',
@@ -194,7 +181,7 @@ export const modules: Module[] = [
       'Manage subjects, assign them to classes and teachers, and support multiple curriculum frameworks.',
     longDescription:
       'The Subjects module lets you define and organize all subjects offered at your school. Assign subjects to specific academic levels, link them to teachers, and support CBC, 8-4-4, Cambridge, and custom curricula.',
-    icon: BookOpen,
+    icon: I.subjects,
     featureHref: '/features/subjects',
     dashboardHref: '/dashboard/subjects',
     status: 'active',
@@ -231,7 +218,7 @@ export const modules: Module[] = [
       'Create exams, enter marks, view results, auto-calculate grades, and connect everything to report cards.',
     longDescription:
       'The Exams & Marks module is the academic heart of Skulbase. Create exams, enter student marks efficiently, auto-calculate grades using your school\'s grading system, and feed results directly into report cards and analytics.',
-    icon: ClipboardList,
+    icon: I.examsMarks,
     featureHref: '/features/exams',
     dashboardHref: '/dashboard/exams-marks',
     status: 'active',
@@ -268,7 +255,7 @@ export const modules: Module[] = [
       'Mark daily attendance, track present, absent, late, and excused status, and generate attendance reports.',
     longDescription:
       'The Attendance module provides a simple, efficient way to track daily student attendance. Mark students as present, absent, late, or excused, generate summaries, and include attendance data in report cards.',
-    icon: CalendarCheck,
+    icon: I.attendance,
     featureHref: '/features/attendance',
     dashboardHref: '/dashboard/attendance',
     status: 'active',
@@ -305,7 +292,7 @@ export const modules: Module[] = [
       'Store parent and guardian contacts, link them to students, and prepare for a parent communication portal.',
     longDescription:
       'The Parents & Guardians module manages parent and guardian information, linking them to their children\'s records. This lays the foundation for parent portals, SMS alerts, fee tracking, and direct report card access.',
-    icon: Heart,
+    icon: I.parents,
     featureHref: '/features/parents',
     dashboardHref: '/dashboard/people?tab=parents',
     status: 'active',
@@ -342,7 +329,7 @@ export const modules: Module[] = [
       'Visualize school-wide performance trends, subject analysis, class comparisons, and student progress.',
     longDescription:
       'The Academic Analytics module transforms your school\'s data into actionable insights. Track performance trends, compare classes and subjects, identify at-risk students, and make data-driven decisions for academic improvement.',
-    icon: LineChart,
+    icon: I.analytics,
     featureHref: '/features/analytics',
     dashboardHref: '/dashboard/analytics',
     status: 'active',
@@ -379,7 +366,7 @@ export const modules: Module[] = [
       'Track fee balances per student and term, record payments, and see who\'s paid, partial, or outstanding.',
     longDescription:
       'The Fees module keeps a clear record of what each student owes and has paid, term by term. Record payments as they come in, filter by status, and always know your school\'s fee collection picture at a glance.',
-    icon: CreditCard,
+    icon: I.fees,
     featureHref: '/features/fees',
     dashboardHref: '/dashboard/fees',
     status: 'active',
@@ -414,7 +401,7 @@ export const modules: Module[] = [
       'Reach every parent instantly — send your school announcements out by SMS with one click.',
     longDescription:
       'SMS Announcements connects your existing Announcements to real-world delivery. When you post an announcement, send it straight to every parent and guardian\'s phone on file — no separate app or login required on their end.',
-    icon: MessageSquare,
+    icon: I.announcements,
     featureHref: '/features/sms',
     dashboardHref: '/dashboard/announcements',
     status: 'active',
@@ -448,7 +435,7 @@ export const modules: Module[] = [
       'Configure your school profile, academic calendar, curriculum, grading systems, and platform preferences.',
     longDescription:
       'The Settings module is your school\'s command center. Configure your school profile, set up academic years and terms, define grading systems, choose your curriculum framework, and customize the platform to match your school\'s needs.',
-    icon: Settings,
+    icon: I.settings,
     featureHref: '/features',
     dashboardHref: '/dashboard/settings',
     status: 'active',

@@ -15,6 +15,7 @@ import {
     AWARDS_NOTE, AWARD_DEFAULTS, AWARD_FIELDS, STRUCTURE_DEFAULTS, STRUCTURE_FIELDS, VOTE_HEAD_DEFAULTS, VOTE_HEAD_FIELDS,
     structureItemFields, structureTotal, termShare, type Award, type Structure, type StructureItem, type VoteHead,
 } from '@/lib/ops/forms/finance';
+import { FEATURE_ICONS } from '@/components/ui/featureIcons';
 
 /** The vote heads of one structure, with annual amounts. */
 function StructureItems({ structure, canManage }: { structure: Structure; canManage: boolean }) {
@@ -97,7 +98,7 @@ export default function BillingPage() {
             title="Billing"
             eyebrow="Finance"
             description="Vote heads and fee structures, termly invoicing, bursaries and the vote-head statement."
-            icon={Receipt}
+            icon={FEATURE_ICONS.billing}
             hue="emerald"
             tabs={[
                 { id: 'invoice', label: 'Invoicing', icon: Receipt, hue: 'emerald', render: () => <InvoicingPanel canManage={manage} /> },

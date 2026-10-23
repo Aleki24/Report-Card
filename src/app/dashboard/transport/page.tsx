@@ -21,6 +21,7 @@ import {
     routeFields, stopDefaults, tripFields, vehicleOptions as toVehicleOptions,
     type ComplianceAlert as Alert, type Crew, type Rider, type Stop, type TransportRoute, type Trip, type Vehicle, type VehicleLog as Log,
 } from '@/lib/ops/forms/transport';
+import { FEATURE_ICONS } from '@/components/ui/featureIcons';
 
 function ComplianceChips({ items }: { items: ComplianceItem[] }) {
     const worst = items.filter(i => i.level !== 'ok');
@@ -114,7 +115,7 @@ export default function TransportPage() {
                 title="Transport"
                 eyebrow="Operations"
                 description="Fleet and NTSA compliance, drivers, routes and stops, trips with boarding check-in, and every bus live on the map."
-                icon={Bus}
+                icon={FEATURE_ICONS.transport}
                 hue="amber"
                 tabs={[
                     { id: 'live', label: 'Live map', shortLabel: 'Live', icon: MapIcon, hue: 'emerald', visible: viewer && hasModule('transport_tracking'), render: () => <LiveMap /> },

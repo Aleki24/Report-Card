@@ -1,12 +1,13 @@
 "use client";
 
 import React from 'react';
-import { CalendarClock, Clock, Layers, UserCheck } from 'lucide-react';
+import { CalendarClock, Layers, UserCheck } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { ModulePage } from '@/components/ops/ModulePage';
 import { TimetableViewer } from '@/components/academics/timetable/TimetableViewer';
 import { TimetableWizard } from '@/components/academics/timetable/TimetableWizard';
 import { CoverPanel } from '@/components/academics/timetable/CoverPanel';
+import { FEATURE_ICONS } from '@/components/ui/featureIcons';
 
 export default function TimetablePage() {
     const { can, role } = useAuth();
@@ -17,7 +18,7 @@ export default function TimetablePage() {
             title="Timetable"
             eyebrow="Academics"
             description="Generate a clash-free timetable from teaching loads, publish it to everyone, and arrange cover when teachers are away."
-            icon={Clock}
+            icon={FEATURE_ICONS.timetable}
             hue="teal"
             tabs={[
                 // In working order for whoever builds it: set up, then the timetable, then cover.

@@ -14,6 +14,7 @@ import {
     ITEM_DEFAULTS, ITEM_FIELDS, REQUISITION_TONES, needsReorder, requisitionDecisions, requisitionFields, stockValue,
     type Item, type Requisition,
 } from '@/lib/ops/forms/operations';
+import { FEATURE_ICONS } from '@/components/ui/featureIcons';
 
 function Requisitions({ manage }: { manage: boolean }) {
     const { profile, role } = useAuth();
@@ -56,7 +57,7 @@ export default function InventoryPage() {
             title="Inventory & stores"
             eyebrow="Operations"
             description="The asset register and store stock, with requisitions that are approved, issued and taken off stock."
-            icon={Package}
+            icon={FEATURE_ICONS.inventory}
             hue="orange"
             tabs={[
                 {

@@ -13,6 +13,7 @@ import { AddGradeModal, RenameClassModal } from '@/components/classes/ClassDialo
 import { deleteClass } from '@/components/classes/classApi';
 import { apiErrorMessage } from '@/lib/api-error-message';
 import { CLASSES_OVERVIEW_URL, classDeleteBlocker, type ClassesOverview, type ClassSummary } from '@/lib/classes-overview';
+import { FEATURE_ICONS } from '@/components/ui/featureIcons';
 
 /** One colour per curriculum, so CBC and 8-4-4 grades read apart at a glance. */
 const CURRICULUM_HUES: readonly Hue[] = ['amber', 'violet', 'teal', 'sky'];
@@ -91,7 +92,7 @@ export default function ClassesPage() {
       <PageHeader
         title="Classes"
         eyebrow="School"
-        icon={School}
+        icon={FEATURE_ICONS.classes}
         hue="amber"
         description="Every grade you teach and its classes. Students, teachers, mark sheets and report cards all hang off a class."
         action={data && (

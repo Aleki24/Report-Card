@@ -12,6 +12,7 @@ import { errorText, opsFetch } from '@/lib/ops/client';
 import { CBC_LEVELS, CBC_LEVEL_LABELS } from '@/lib/ops/resources/academics';
 import { EMPTY_CBC_FILTER, cbcCounts, cbcFilterReady, type CbcLevel as Level, type CbcRow as Row, type StrandOption } from '@/lib/ops/forms/academics';
 import { cn } from '@/lib/utils';
+import { FEATURE_ICONS } from '@/components/ui/featureIcons';
 
 const LEVEL_STYLE: Record<Level, string> = {
     EE: 'bg-emerald-500 text-white',
@@ -140,7 +141,7 @@ export default function CbcPage() {
             title="CBC assessment"
             eyebrow="Academics"
             description="Rate each learner per strand and sub-strand: Exceeding, Meeting, Approaching or Below expectations."
-            icon={Target}
+            icon={FEATURE_ICONS.cbc}
             hue="emerald"
             tabs={[{ id: 'rubric', label: 'Rubric', icon: Target, hue: 'emerald', render: () => <RubricGrid /> }]}
         />

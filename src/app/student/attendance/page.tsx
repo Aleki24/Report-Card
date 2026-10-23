@@ -10,6 +10,7 @@ import DataTable, { type DataTableColumn } from '@/components/ui/DataTable';
 import { apiErrorMessage } from '@/lib/api-error-message';
 import { formatIsoDate } from '@/lib/dates';
 import { ATTENDANCE_LABELS, attendanceRate, countAttendance, type AttendanceStatus } from '@/lib/attendance';
+import { FEATURE_ICONS } from '@/components/ui/featureIcons';
 
 interface AttendanceRecord {
     id: string;
@@ -85,7 +86,7 @@ export default function StudentAttendancePage() {
 
     return (
         <div className="mx-auto w-full max-w-[900px] pb-10">
-            <PageHeader title="Attendance" eyebrow="My school" icon={CalendarCheck} hue="teal" description="Your daily attendance, as recorded by your class teacher." />
+            <PageHeader title="Attendance" eyebrow="My school" icon={FEATURE_ICONS.attendance} hue="teal" description="Your daily attendance, as recorded by your class teacher." />
 
             <FilterBar>
                 <FilterField label="Month">

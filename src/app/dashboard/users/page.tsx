@@ -2,7 +2,7 @@
 
 import PageHeader from '@/components/dashboard/PageHeader';
 import React, { useState } from 'react';
-import { Printer, UserPlus, UserCog } from 'lucide-react';
+import { Printer, UserPlus } from 'lucide-react';
 import { useUsersPage, type UserRow } from '@/hooks/useUsersPage';
 import { UsersStats } from '@/components/users/UsersStats';
 import { UsersDirectory } from '@/components/users/UsersDirectory';
@@ -12,6 +12,7 @@ import { InviteUserModal } from '@/components/users/InviteUserModal';
 import { EditUserModal } from '@/components/users/EditUserModal';
 import { InviteResultModal, ResetPasswordResultModal } from '@/components/users/UserResultModals';
 import { InviteCodesPrintModal } from '@/components/users/InviteCodesPrintModal';
+import { FEATURE_ICONS } from '@/components/ui/featureIcons';
 
 export default function UsersPage() {
   const h = useUsersPage();
@@ -28,7 +29,7 @@ export default function UsersPage() {
       <PageHeader
         title="Users"
         eyebrow="Administration"
-        icon={UserCog}
+        icon={FEATURE_ICONS.users}
         hue="rose"
         description="Everyone with an account at your school. Open anyone to see their full profile."
         action={

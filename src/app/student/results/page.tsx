@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useMemo } from 'react';
-import { Trophy, Download, FileText, ChevronDown, ChevronUp, GraduationCap, RotateCcw } from 'lucide-react';
+import { Trophy, Download, FileText, ChevronDown, ChevronUp, RotateCcw } from 'lucide-react';
 import { REPORT_TEMPLATES, DEFAULT_TEMPLATE, isReportTemplateId, type ReportTemplateId } from '@/lib/pdf/templateMeta';
 import PageHeader from '@/components/dashboard/PageHeader';
 import DashboardCard from '@/components/dashboard/DashboardCard';
@@ -13,6 +13,7 @@ import { useSchoolPassMark } from '@/hooks/useSchoolPassMark';
 import { useJsonList } from '@/hooks/useJsonList';
 import type { StudentReportCardListItem, StudentReportSubject } from '@/lib/student/queries';
 import { groupResultsByRound } from '@/lib/student/result-groups';
+import { FEATURE_ICONS } from '@/components/ui/featureIcons';
 
 interface ExamResult {
     id: string;
@@ -41,7 +42,7 @@ export default function StudentCombinedResultsPage() {
 
     return (
         <div className="w-full mx-auto max-w-[1100px] pb-10">
-            <PageHeader title="My results" eyebrow="Academics" icon={GraduationCap} hue="violet" description="Your exam marks and official report cards." />
+            <PageHeader title="My results" eyebrow="Academics" icon={FEATURE_ICONS.results} hue="violet" description="Your exam marks and official report cards." />
 
             <div className="mb-6 flex overflow-x-auto border-b border-border">
                 <button

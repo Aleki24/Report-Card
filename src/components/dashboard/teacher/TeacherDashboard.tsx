@@ -3,9 +3,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
-  ArrowRight, BarChart3, CalendarCheck, CheckCircle2, ClipboardList, FileText,
-  GraduationCap, Hash, Megaphone, NotebookPen, PenLine, Send, Users,
-} from 'lucide-react';
+  ArrowRight, BarChart3, CheckCircle2, ClipboardList, FileText,
+  Hash, PenLine, Send, } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/components/AuthProvider';
 import { InfoGuide } from '@/components/ui/InfoGuide';
@@ -22,6 +21,7 @@ import { AUTO_FIT_GRID } from '@/components/dashboard/grid';
 import type { TermSummary, UpcomingRound } from '@/lib/dashboard';
 import MarkingProgressPanel from './MarkingProgressPanel';
 import { markEntryHref, summarizeMarking, type MarkingProgressResponse } from '@/lib/marking-progress';
+import { FEATURE_ICONS } from '@/components/ui/featureIcons';
 
 type Variant = 'class' | 'subject';
 
@@ -32,17 +32,17 @@ interface DashboardSummary { term?: TermSummary; upcomingRounds?: UpcomingRound[
 const QUICK_LINKS: Record<Variant, readonly QuickActionItem[]> = {
   class: [
     { label: 'Enter or correct marks', desc: 'Type, fix or remove marks', href: '/dashboard/exams-marks', icon: PenLine },
-    { label: 'Class results', desc: 'Broadsheet and rankings', href: '/dashboard/exams-marks?tab=results', icon: BarChart3 },
-    { label: 'Report cards', desc: 'Generate and send to parents', href: '/dashboard/reports', icon: FileText },
-    { label: 'Attendance', desc: 'Mark today’s register', href: '/dashboard/attendance', icon: CalendarCheck },
-    { label: 'My students', desc: 'Your class roster', href: '/dashboard/people', icon: Users },
+    { label: 'Class results', desc: 'Broadsheet and rankings', href: '/dashboard/exams-marks?tab=results', icon: FEATURE_ICONS.results },
+    { label: 'Report cards', desc: 'Generate and send to parents', href: '/dashboard/reports', icon: FEATURE_ICONS.reports },
+    { label: 'Attendance', desc: 'Mark today’s register', href: '/dashboard/attendance', icon: FEATURE_ICONS.attendance },
+    { label: 'My students', desc: 'Your class roster', href: '/dashboard/people', icon: FEATURE_ICONS.people },
   ],
   subject: [
     { label: 'Enter or correct marks', desc: 'Type, fix or remove marks', href: '/dashboard/exams-marks', icon: PenLine },
-    { label: 'Results', desc: 'Broadsheet and subject averages', href: '/dashboard/exams-marks?tab=results', icon: BarChart3 },
+    { label: 'Results', desc: 'Broadsheet and subject averages', href: '/dashboard/exams-marks?tab=results', icon: FEATURE_ICONS.results },
     { label: 'Release results', desc: 'Let learners see their marks', href: '/dashboard/exams-marks?tab=publish', icon: Send },
-    { label: 'Assignments', desc: 'Set work for your classes', href: '/dashboard/assignments', icon: NotebookPen },
-    { label: 'Announcements', desc: 'Post to your classes', href: '/dashboard/announcements', icon: Megaphone },
+    { label: 'Assignments', desc: 'Set work for your classes', href: '/dashboard/assignments', icon: FEATURE_ICONS.assignments },
+    { label: 'Announcements', desc: 'Post to your classes', href: '/dashboard/announcements', icon: FEATURE_ICONS.announcements },
   ],
 };
 
@@ -159,7 +159,7 @@ export default function TeacherDashboard({ variant }: { variant: Variant }) {
           />
           {variant === 'class' ? (
             <>
-              <KpiTile title={streamName ? `Learners in ${streamName}` : 'Learners'} value={classStats?.studentCount ?? 0} icon={<GraduationCap size={17} />} href="/dashboard/people" hue="orange" />
+              <KpiTile title={streamName ? `Learners in ${streamName}` : 'Learners'} value={classStats?.studentCount ?? 0} icon={<FEATURE_ICONS.people size={17} />} href="/dashboard/people" hue="orange" />
               <KpiTile title="Class average" value={avgText} icon={<BarChart3 size={17} />} href="/dashboard/exams-marks?tab=results" hue="violet" />
             </>
           ) : (

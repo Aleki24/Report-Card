@@ -22,6 +22,7 @@ import { moderatorNames, type PaperModerator, type PaperStatus } from '@/lib/aca
 import {
     EMPTY_PAPER_FORM, PAPER_STATUS_TONES, PRINT_STATUS_TONES, paperFormFields, paperSearchText, papersToPrint, type ExamPaper,
 } from '@/lib/ops/forms/academics';
+import { FEATURE_ICONS } from '@/components/ui/featureIcons';
 
 type TabId = 'mine' | 'moderation' | 'print' | 'archive';
 
@@ -133,7 +134,7 @@ export default function ExamPapersPage() {
                 title="Exam paper bank"
                 eyebrow="Academics"
                 description="Upload papers securely, moderate them, print the right number of copies and release them after the exam."
-                icon={FileLock2}
+                icon={FEATURE_ICONS.examPapers}
                 hue="violet"
                 action={can('exam_papers.upload') ? <Button onClick={() => setUploading(true)}><FilePlus2 />Upload paper</Button> : undefined}
                 tabs={tabs.map(t => ({

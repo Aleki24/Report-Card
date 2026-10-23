@@ -14,6 +14,7 @@ import {
     EMPTY_PARENT_FORM as EMPTY, GUARDIAN_RELATIONSHIPS as RELATIONSHIPS, guardianName, guardianStatus, parentLinkedMessage,
     type GuardianLink as Link, type ParentLinkResult,
 } from '@/lib/ops/forms/platform';
+import { FEATURE_ICONS } from '@/components/ui/featureIcons';
 
 /** Link parents to learners; new parents get an invite code by SMS. */
 function ParentLinks() {
@@ -90,7 +91,7 @@ export default function ParentAccountsPage() {
             title="Parent accounts"
             eyebrow="School"
             description="Give parents their own sign-in to follow each of their children."
-            icon={HeartHandshake}
+            icon={FEATURE_ICONS.parents}
             hue="rose"
             tabs={[{ id: 'links', label: 'Parents', icon: HeartHandshake, hue: 'rose', render: () => <ParentLinks /> }]}
         />
