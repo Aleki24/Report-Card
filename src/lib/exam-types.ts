@@ -271,3 +271,12 @@ const ANYTIME_EXAM_TYPES: ReadonlySet<string> = new Set(['CAT', 'TOPICAL']);
 export function isAnytimeExamType(code: string): boolean {
   return ANYTIME_EXAM_TYPES.has(code) || !isBuiltInExamType(code);
 }
+
+/**
+ * Exams the school opens for marking, one at a time per class, in running
+ * order: the term's own and the external rounds. Excludes the "any time"
+ * ones and the legacy codes (CBC, 844, END TERM).
+ */
+export const SCHEDULED_EXAM_TYPES: readonly string[] = [
+  'OPENER', 'MIDTERM', 'ENDTERM', 'PRE_MOCK', 'MOCK', 'POST_MOCK', 'ZONE', 'SUB_COUNTY', 'COUNTY', 'REGIONAL',
+];

@@ -806,7 +806,19 @@ export function MarksSetupTab() {
           classes={windowInfo.classes}
           windows={windows}
           requests={windowInfo.requests}
-          onSaved={() => setWindowsVersion(v => v + 1)}
+          onSaved={(rows, created) => {
+            // Shown straight away; answered requests drop off.
+            setWindowInfo(prev => prev && {
+              ...prev,
+              data: rows,
+              requests: prev.requests.filter(r => !rows.some(w => w.grade_id === r.grade_id)),
+            });
+            // A newly opened exam created papers: reload what lists them.
+            if (created > 0) {
+              setWindowsVersion(v => v + 1);
+              void reloadExams();
+            }
+          }}
         />
       )}
 
@@ -902,7 +914,12 @@ export function MarksSetupTab() {
         )}
         </>
       ) : (
-      /* ①–③ side by side from lg: each holds only a few controls. */
+      <>
+      {/* The card above sets the exam for teachers; these steps are for marking yourself. */}
+      {canOpenExams && windowInfo?.classes.length ? (
+        <h3 className="mt-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Enter or correct marks yourself</h3>
+      ) : null}
+      {/* ①–③ side by side from lg: each holds only a few controls. */}
       <div className="grid gap-3 lg:grid-cols-3">
       {/* ① Term */}
       <StepCard step={1} title="Term" done={!!selectedTermId}>
@@ -1022,6 +1039,7 @@ export function MarksSetupTab() {
           )}
         </StepCard>
       </div>
+      </>
       )}
 
       {/* ④ Subject */}

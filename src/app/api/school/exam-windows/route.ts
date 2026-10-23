@@ -3,6 +3,7 @@ import { getAccess, type Access } from '@/lib/platform/access';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { embedOne, fetchAllRows, isUuid } from '@/lib/postgrest';
 import { findActiveTermId } from '@/lib/term-calendar';
+import { seedExamSlots } from '@/lib/seed-exam-slots';
 import { ALL_EXAM_TYPES, isAnytimeExamType, isValidExamType } from '@/lib/exam-types';
 import { EXAM_REQUESTS_TABLE, EXAM_WINDOWS_TABLE, readExamRequests, readExamWindows } from '@/lib/exam-windows-server';
 import type { ExamClass, ExamRequest, ExamWindowsResponse } from '@/lib/exam-windows';
@@ -30,15 +31,40 @@ async function staffAccess(): Promise<Access | NextResponse> {
   return access;
 }
 
-async function schoolTerm(supabase: Db, schoolId: string, termId: string | null): Promise<{ id: string; name: string } | null> {
+async function schoolTerm(supabase: Db, schoolId: string, termId: string | null): Promise<{ id: string; name: string; academicYearId: string } | null> {
   const { data: terms } = await supabase
     .from('terms')
-    .select('id, name, start_date, end_date, is_current')
+    .select('id, name, start_date, end_date, is_current, academic_year_id')
     .eq('school_id', schoolId);
   const list = terms ?? [];
   const id = termId ?? findActiveTermId(list);
   const term = list.find(t => t.id === id);
-  return term ? { id: term.id as string, name: term.name as string } : null;
+  return term ? { id: term.id as string, name: term.name as string, academicYearId: term.academic_year_id as string } : null;
+}
+
+/**
+ * Opening an exam a class doesn't have this term (Mock for Form 4, say)
+ * creates its papers for those classes first, so teachers land on a sheet.
+ * Returns how many papers were created.
+ */
+async function ensurePapers(supabase: Db, schoolId: string, term: { id: string; academicYearId: string }, set: readonly { gradeId: string; examType: string }[]): Promise<number> {
+  const { data: existing, error } = await supabase
+    .from('exams')
+    .select('grade_id, exam_type')
+    .eq('school_id', schoolId)
+    .eq('term_id', term.id)
+    .in('grade_id', [...new Set(set.map(e => e.gradeId))]);
+  if (error) throw new Error('Could not check this term’s exams');
+  const has = new Set((existing ?? []).map(e => `${e.grade_id}|${e.exam_type}`));
+  const missing = new Map<string, string[]>();
+  for (const e of set) if (!has.has(`${e.gradeId}|${e.examType}`)) missing.set(e.examType, [...(missing.get(e.examType) ?? []), e.gradeId]);
+  let created = 0;
+  for (const [examType, gradeIds] of missing) {
+    const result = await seedExamSlots({ termId: term.id, schoolId, academicYearId: term.academicYearId, examTypes: [examType], gradeIds });
+    if (result.error) throw new Error(result.error);
+    created += result.created ?? 0;
+  }
+  return created;
 }
 
 interface ExamRow { grade_id: string; exam_type: string; grades: { name_display: string; code: string | null } | { name_display: string; code: string | null }[] | null }
@@ -152,13 +178,20 @@ export async function PUT(request: NextRequest) {
   if (!termId || !entries) return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
 
   const supabase = createSupabaseAdmin();
-  if (!(await schoolTerm(supabase, access.schoolId, termId))) return NextResponse.json({ error: 'Term not found' }, { status: 404 });
+  const term = await schoolTerm(supabase, access.schoolId, termId);
+  if (!term) return NextResponse.json({ error: 'Term not found' }, { status: 404 });
 
   const set = entries.filter((e): e is Entry & { examType: string } => e.examType !== null);
   const cleared = entries.filter(e => e.examType === null).map(e => e.gradeId);
   const failed = NextResponse.json({ error: 'Could not save the open exam' }, { status: 500 });
 
+  let created = 0;
   if (set.length > 0) {
+    try {
+      created = await ensurePapers(supabase, access.schoolId, term, set);
+    } catch (err) {
+      return NextResponse.json({ error: err instanceof Error ? err.message : 'Could not set up the exam' }, { status: 500 });
+    }
     const { error } = await supabase.from(EXAM_WINDOWS_TABLE).upsert(
       set.map(e => ({ school_id: access.schoolId, term_id: termId, grade_id: e.gradeId, exam_type: e.examType, set_by: access.userId, updated_at: new Date().toISOString() })),
       { onConflict: 'school_id,term_id,grade_id' },
@@ -172,7 +205,7 @@ export async function PUT(request: NextRequest) {
     if (error) return failed;
   }
 
-  return NextResponse.json({ data: await readExamWindows(supabase, access.schoolId, termId) });
+  return NextResponse.json({ data: await readExamWindows(supabase, access.schoolId, termId), created });
 }
 
 export async function POST(request: NextRequest) {

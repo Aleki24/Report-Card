@@ -20,10 +20,12 @@ interface SeedOptions {
   schoolId: string;
   academicYearId: string;
   examTypes?: string[];  // defaults to all 3
+  /** Only these classes (e.g. Mock for Form 4 alone); every class when left out. */
+  gradeIds?: readonly string[];
 }
 
 export async function seedExamSlots(options: SeedOptions) {
-  const { termId, schoolId, academicYearId, examTypes } = options;
+  const { termId, schoolId, academicYearId, examTypes, gradeIds: onlyGrades } = options;
   const types = examTypes || [...STANDARD_EXAM_TYPES];
   const supabase = createSupabaseAdmin();
 
@@ -43,7 +45,7 @@ export async function seedExamSlots(options: SeedOptions) {
     .select('grade_id')
     .eq('school_id', schoolId);
 
-  const gradeIds = [...new Set((streams || []).map(s => s.grade_id))];
+  const gradeIds = [...new Set((streams || []).map(s => s.grade_id))].filter(id => !onlyGrades || onlyGrades.includes(id));
   if (gradeIds.length === 0) return { created: 0, skipped: 0, error: 'No grades found for this school' };
 
   // Get all subjects
