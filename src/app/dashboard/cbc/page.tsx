@@ -13,6 +13,7 @@ import { CBC_LEVELS, CBC_LEVEL_LABELS } from '@/lib/ops/resources/academics';
 import { EMPTY_CBC_FILTER, cbcCounts, cbcFilterReady, type CbcLevel as Level, type CbcRow as Row, type StrandOption } from '@/lib/ops/forms/academics';
 import { cn } from '@/lib/utils';
 import { FEATURE_ICONS } from '@/components/ui/featureIcons';
+import { useConfirm } from '@/components/ui/ConfirmProvider';
 
 const LEVEL_STYLE: Record<Level, string> = {
     EE: 'bg-emerald-500 text-white',
@@ -22,6 +23,7 @@ const LEVEL_STYLE: Record<Level, string> = {
 };
 
 function RubricGrid() {
+    const confirm = useConfirm();
     const { can } = useAuth();
     const canAssess = can('cbc.assess');
     const listId = useId();
@@ -71,8 +73,8 @@ function RubricGrid() {
     const counts = useMemo(() => cbcCounts(rows), [rows]);
     const subStrands = strands.find(s => s.strand === filter.strand)?.subStrands ?? [];
     // Changing what is shown drops the list, so ask first when ratings are unsaved.
-    const set = (patch: Partial<typeof filter>) => {
-        if (dirty && !window.confirm('Discard the levels you have not saved?')) return;
+    const set = async (patch: Partial<typeof filter>) => {
+        if (dirty && !(await confirm({ title: 'Discard unsaved levels?', message: 'Changing what is shown drops the ratings you have not saved.', confirmText: 'Discard', variant: 'danger' }))) return;
         setFilter(f => ({ ...f, ...patch }));
         setRows(null);
         setDirty(false);

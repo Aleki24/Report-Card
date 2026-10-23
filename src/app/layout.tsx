@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import { ClerkProvider } from '@clerk/nextjs';
 import { ThemeProvider } from '@/components/ThemeProvider';
 import { Toaster } from 'sonner';
+import { ConfirmProvider } from '@/components/ui/ConfirmProvider';
 import { Merriweather, Source_Serif_4, JetBrains_Mono } from "next/font/google";
 import { cn } from "@/lib/utils";
 
@@ -41,7 +42,7 @@ export default function RootLayout({
       <html lang="en" data-theme="light" className={cn("font-sans", fontSans.variable, fontSerif.variable, fontMono.variable)}>
         <body className={`overflow-x-hidden antialiased bg-background text-foreground`}>
           <div id="clerk-captcha" />
-          <ThemeProvider>{children}</ThemeProvider>
+          <ThemeProvider><ConfirmProvider>{children}</ConfirmProvider></ThemeProvider>
           <Toaster richColors position="top-right" />
         </body>
       </html>

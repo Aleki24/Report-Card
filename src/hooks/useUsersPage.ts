@@ -5,6 +5,8 @@ import { useAuth, type UserRole } from '@/components/AuthProvider';
 import { jsonBody } from '@/lib/api-error-message';
 import { CLASS_TEACHER_REPLACE } from '@/lib/class-teacher';
 import { fullName, roleGroupOf, type ClassFilter, type GradeGroup, type RoleFilter, type StatusFilter, type UserSort } from '@/components/users/userMeta';
+import { toast } from 'sonner';
+import { useConfirm } from '@/components/ui/ConfirmProvider';
 
 export interface UserRow {
   id: string;
@@ -47,6 +49,7 @@ export interface GradeOption { id: string; name_display: string; code?: string |
 export const isTeacherRole = (role: UserRole) => role === 'CLASS_TEACHER' || role === 'SUBJECT_TEACHER';
 
 export function useUsersPage() {
+  const confirm = useConfirm();
   const { profile } = useAuth();
   const [users, setUsers] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -205,14 +208,14 @@ export function useUsersPage() {
   };
 
   const resetUserPassword = async (user: UserRow) => {
-    if (!confirm(`Reset password for ${user.first_name} ${user.last_name}?`)) return;
+    if (!(await confirm({ title: `Reset ${user.first_name} ${user.last_name}'s password?`, message: 'They will get a new one-time code to sign in with.', confirmText: 'Reset password', variant: 'warning' }))) return;
     setResettingPasswordId(user.id);
     try {
       const res = await fetch('/api/admin/reset-user-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_id: user.id }) });
       const data = await res.json();
-      if (!res.ok) { alert(data.error || 'Failed to reset password'); }
+      if (!res.ok) { toast.error(data.error || 'Failed to reset password'); }
       else { setResetResultInviteCode(data.password); setResetResultNotified(data.notified ?? null); setShowResetResult(true); fetchData(); }
-    } catch { alert('Network error'); }
+    } catch { toast.error('Network error'); }
     finally { setResettingPasswordId(null); }
   };
 
@@ -269,7 +272,7 @@ export function useUsersPage() {
       // Giving the teacher a class someone else holds (or moving them from
       // their own) asks first, in the server's words, then goes ahead.
       if (res.status === 409 && data.code === CLASS_TEACHER_REPLACE) {
-        if (!window.confirm(data.error)) return;
+        if (!(await confirm({ title: 'Replace the class teacher?', message: data.error, confirmText: 'Replace', variant: 'warning' }))) return;
         ({ res, data } = await save({ ...payload, replace_class_teacher: true }));
       }
       if (!res.ok) { setFormError(data.error || 'Failed to update user'); }

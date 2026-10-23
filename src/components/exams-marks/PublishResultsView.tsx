@@ -12,6 +12,7 @@ import { RankBadge } from '@/components/ui/RankBadge';
 import { SUBJECT_CATEGORY_THEME, subjectCategory } from './examTheme';
 import { ReadyToReleasePanel } from './ReadyToReleasePanel';
 import { releasePapers } from './releasePapers';
+import { useConfirm } from '@/components/ui/ConfirmProvider';
 
 type Embedded<T> = T | T[] | null | undefined;
 interface GradeStreamOption {
@@ -86,6 +87,7 @@ function Pill({ active, onClick, children }: { active: boolean; onClick: () => v
  * mark, and marks can still be corrected after release.
  */
 export function PublishResultsView() {
+    const confirm = useConfirm();
     const [streams, setStreams] = useState<GradeStreamOption[]>([]);
     const [terms, setTerms] = useState<TermOption[]>([]);
     const [streamId, setStreamId] = useState('');
@@ -240,7 +242,7 @@ export function PublishResultsView() {
     };
 
     const withdraw = async (exam: ExamRow) => {
-        if (!window.confirm(`Hide ${exam.subject_name} from learners again? Staff still see the marks, and you can release it again at any time.`)) return;
+        if (!(await confirm({ title: `Hide ${exam.subject_name} from learners again?`, message: 'Staff still see the marks, and you can release it again at any time.', confirmText: 'Withdraw', variant: 'warning' }))) return;
         setBusyExamId(exam.id);
         try {
             const res = await fetch(`/api/school/exams/${exam.id}/status`, {
@@ -284,7 +286,11 @@ export function PublishResultsView() {
             return;
         }
         const skipNote = unmarkedCount > 0 ? ` ${unmarkedCount} with no marks yet will stay hidden.` : '';
-        if (!window.confirm(`Release ${releasable.length} subject${releasable.length !== 1 ? 's' : ''} to learners? Learners with no mark in a subject simply won't see it, and a missing paper counts as 0.${skipNote}`)) return;
+        if (!(await confirm({
+            title: `Release ${releasable.length} subject${releasable.length !== 1 ? 's' : ''} to learners?`,
+            message: `Learners with no mark in a subject simply won't see it, and a missing paper counts as 0.${skipNote}`,
+            confirmText: `Release ${releasable.length}`,
+        }))) return;
         setBulkBusy(true);
         const { ok, failures } = await releasePapers(releasable);
         setBulkBusy(false);

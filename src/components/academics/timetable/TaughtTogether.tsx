@@ -8,6 +8,7 @@ import { BAND_LABELS, type CurriculumBand } from '@/lib/curriculum-bands';
 import { errorText, opsFetch } from '@/lib/ops/client';
 import { TOGETHER_URL, levelsOf, ruleScope, subjectsAt, toggled, type TogetherRules } from '@/lib/timetable/together';
 import { cn } from '@/lib/utils';
+import { useConfirm } from '@/components/ui/ConfirmProvider';
 
 /** A toggle chip for picking several values. */
 function Chip({ label, on, onClick }: { label: string; on: boolean; onClick: () => void }) {
@@ -33,6 +34,7 @@ function Chip({ label, on, onClick }: { label: string; on: boolean; onClick: () 
  * the school adds its own by picking the subjects.
  */
 export function TaughtTogether({ onChange }: { onChange: () => void }) {
+    const confirm = useConfirm();
     const [data, setData] = useState<TogetherRules | null>(null);
     const [adding, setAdding] = useState(false);
     const [name, setName] = useState('');
@@ -59,7 +61,7 @@ export function TaughtTogether({ onChange }: { onChange: () => void }) {
     };
 
     const remove = async (id: string, label: string) => {
-        if (!window.confirm(`Remove “${label}”? These subjects will no longer be kept in one slot.`)) return;
+        if (!(await confirm({ title: `Remove “${label}”?`, message: 'These subjects will no longer be kept in one slot.', confirmText: 'Remove', variant: 'danger' }))) return;
         try { await opsFetch(`${TOGETHER_URL}?id=${encodeURIComponent(id)}`, { method: 'DELETE' }); await load(); onChange(); }
         catch (err) { toast.error(errorText(err)); }
     };

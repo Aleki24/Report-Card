@@ -20,6 +20,7 @@ import {
     basisLine, unfitTitle, daySummary, firstCard, isLightLoad, loadsSummary, overloadMessage, type Blocker, type StudioCard as StudioCardId, type TimetablePlan,
 } from '@/lib/timetable/readiness';
 import { cn } from '@/lib/utils';
+import { useConfirm } from '@/components/ui/ConfirmProvider';
 
 function Loads({ onChange }: { onChange: () => void }) {
     const [perWeek, setPerWeek] = useState('5');
@@ -147,12 +148,13 @@ function FitOption({ title, recommended, lines, busy, onUse }: { title: string; 
 
 /** A class with more lessons than its week, as a simple choice between two ready-made fixes. */
 function FitChooser({ c, onApplied }: { c: TimetablePlan['classes'][number]; onApplied: () => void }) {
+    const confirm = useConfirm();
     const [busy, setBusy] = useState<FitFix | null>(null);
     const over = c.needed - c.capacity;
     const day = c.fixes?.longerDay ?? null;
     const cuts = c.fixes?.fewerLessons ?? null;
     const apply = async (fix: FitFix, question: string) => {
-        if (!window.confirm(question)) return;
+        if (!(await confirm({ title: question, confirmText: 'Apply' }))) return;
         setBusy(fix);
         try {
             const r = await opsFetch<{ message: string }>('/api/academics/timetable/fit', { method: 'POST', json: { stream_id: c.streamId, fix } });
