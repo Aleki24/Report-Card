@@ -40,3 +40,12 @@ export function groupReadyPapers(papers: readonly ReadyPaper[]): ReadyGroup[] {
     return [...groups.values()].sort((a, b) =>
         a.classLabel.localeCompare(b.classLabel, undefined, { numeric: true }) || examOrder(a.examType) - examOrder(b.examType));
 }
+
+/** POST /api/school/exams/release: many papers released in one request. */
+export const RELEASE_BATCH = 200;
+export interface ReleaseRequest { examIds: string[] }
+export interface ReleaseResponse {
+    released: string[];
+    /** Papers left as they were, and why. */
+    failures: { id: string; reason: string }[];
+}
