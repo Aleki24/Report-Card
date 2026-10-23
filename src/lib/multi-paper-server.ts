@@ -8,6 +8,7 @@ import type { ExamSubjectComponentScheme, GradeBand } from '@/types';
 import { gradeSymbolFromScales } from '@/lib/analytics';
 import { calculateCompositeSubjectScore, isMultiPaper, normalizeResolvedRawScore } from '@/lib/multi-paper';
 import { fetchAllRows } from '@/lib/postgrest';
+import { stamped, writeWithAuthor } from '@/lib/mark-history-server';
 import { findOfferedSubject } from '@/lib/school-subjects';
 
 /**
@@ -200,7 +201,9 @@ export async function recomputeExamComposites(supabase: SupabaseClient, examId: 
         });
     }
     for (let i = 0; i < updates.length; i += 500) {
-        const { error } = await supabase.from('exam_marks').upsert(updates.slice(i, i + 500), { onConflict: 'exam_id,student_id' });
+        // No one typed these: the history shows them as a recalculation.
+        const batch = updates.slice(i, i + 500);
+        const { error } = await writeWithAuthor(stamp => supabase.from('exam_marks').upsert(stamped(batch, null, stamp), { onConflict: 'exam_id,student_id' }));
         if (error) throw error;
     }
     return updates.length;

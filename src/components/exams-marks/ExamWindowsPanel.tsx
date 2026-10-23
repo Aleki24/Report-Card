@@ -1,10 +1,11 @@
 "use client";
 
 import React, { useState } from 'react';
-import { ArrowRight, BellRing, Check, CheckCircle2, ChevronDown, DoorOpen, Loader2 } from 'lucide-react';
+import { ArrowRight, BellRing, CalendarDays, Check, CheckCircle2, ChevronDown, DoorOpen, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { SCHEDULED_EXAM_TYPES, getExamType } from '@/lib/exam-types';
-import { LEVEL_ORDER, levelLabel, levelOf, type ExamClass, type ExamRequest, type ExamWindow, type LevelKey } from '@/lib/exam-windows';
+import { LEVEL_ORDER, levelLabel, levelOf, type ExamClass, type ExamDateUpdate, type ExamRequest, type ExamWindow, type LevelKey } from '@/lib/exam-windows';
+import { examDay } from '@/lib/exam-schedule';
 
 interface ExamWindowsPanelProps {
   termId: string;
@@ -16,6 +17,8 @@ interface ExamWindowsPanelProps {
   requests: readonly ExamRequest[];
   /** The saved windows, and how many papers were created for an exam a class didn't have. */
   onSaved: (windows: ExamWindow[], created: number) => void;
+  /** An exam's start date was saved for these classes. */
+  onDateSaved: (update: ExamDateUpdate) => void;
 }
 
 interface Level { key: LevelKey; classes: ExamClass[]; types: string[]; waiting: number }
@@ -30,7 +33,7 @@ function examName(code: string): string {
 const HOW_IT_WORKS = [
   { title: 'Pick the exam', body: 'Choose the exam each level is sitting, or set a class on its own.' },
   { title: 'Teachers go straight in', body: 'Their mark sheets open on that exam, so marks land in the right one.' },
-  { title: 'Switch when it changes', body: 'Move a level to the next exam when it starts; earlier ones stay open for corrections.' },
+  { title: 'Switch when it changes', body: 'Set when each exam starts, and move a level on when the next one begins; earlier ones stay open for corrections.' },
 ] as const;
 
 /**
@@ -39,7 +42,7 @@ const HOW_IT_WORKS = [
  * Choices show at once and save in the background; opening an exam a class
  * doesn't have yet creates its papers.
  */
-export function ExamWindowsPanel({ termId, termName, classes, windows, requests, onSaved }: ExamWindowsPanelProps) {
+export function ExamWindowsPanel({ termId, termName, classes, windows, requests, onSaved, onDateSaved }: ExamWindowsPanelProps) {
   // Choices not yet confirmed by the server, shown as if saved.
   const [pending, setPending] = useState<ReadonlyMap<string, string | null>>(new Map());
   const [saveState, setSaveState] = useState<Partial<Record<LevelKey, SaveState>>>({});
@@ -100,6 +103,42 @@ export function ExamWindowsPanel({ termId, termName, classes, windows, requests,
   /** One exam for every class in the level (papers are created where missing). */
   const setLevel = (level: Level, examType: string | null) =>
     void save(level.key, level.classes.map(c => ({ gradeId: c.grade_id, examType })));
+
+  // Dates not yet confirmed by the server, per level and exam.
+  const [dateEdits, setDateEdits] = useState<ReadonlyMap<string, string>>(new Map());
+  const [dateState, setDateState] = useState<Partial<Record<LevelKey, SaveState>>>({});
+
+  /** When an exam starts for a level: its earliest class. */
+  const levelDate = (level: Level, type: string): string | undefined => {
+    const edit = dateEdits.get(`${level.key}|${type}`);
+    if (edit) return edit;
+    let earliest: string | undefined;
+    for (const c of level.classes) {
+      const d = c.dates[type];
+      if (d && (!earliest || d < earliest)) earliest = d;
+    }
+    return earliest;
+  };
+
+  const saveDate = async (level: Level, examType: string, date: string) => {
+    const key = `${level.key}|${examType}`;
+    const update: ExamDateUpdate = { termId, gradeIds: level.classes.filter(c => c.types.includes(examType)).map(c => c.grade_id), examType, date };
+    if (update.gradeIds.length === 0) return;
+    setDateEdits(prev => new Map(prev).set(key, date));
+    setDateState(prev => ({ ...prev, [level.key]: { status: 'saving' } }));
+    const forget = () => setDateEdits(prev => { const next = new Map(prev); next.delete(key); return next; });
+    try {
+      const res = await fetch('/api/school/exam-windows', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(update) });
+      const json = (await res.json().catch(() => null)) as { error?: string } | null;
+      if (!res.ok) throw new Error(json?.error || 'Could not save the date.');
+      onDateSaved(update);
+      forget();
+      setDateState(prev => ({ ...prev, [level.key]: { status: 'saved' } }));
+    } catch (err) {
+      forget();
+      setDateState(prev => ({ ...prev, [level.key]: { status: 'error', message: err instanceof Error ? err.message : 'Could not save the date.' } }));
+    }
+  };
 
   const levelValue = (level: Level): string | 'mixed' => {
     const values = new Set(level.classes.map(c => openFor(c.grade_id)));
@@ -204,7 +243,10 @@ export function ExamWindowsPanel({ termId, termName, classes, windows, requests,
                       onClick={() => setLevel(level, next)}
                       className="inline-flex items-center justify-between gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-left text-xs font-semibold text-primary transition-colors hover:bg-primary/10 disabled:opacity-60"
                     >
-                      <span>{examName(value)} done? Move on to {examName(next)}</span>
+                      <span>
+                        {examName(value)} done? Move on to {examName(next)}
+                        {levelDate(level, next) && <span className="font-normal"> · starts {examDay(levelDate(level, next) as string)}</span>}
+                      </span>
                       <ArrowRight className="size-3.5 shrink-0" aria-hidden />
                     </button>
                   )}
@@ -280,6 +322,13 @@ export function ExamWindowsPanel({ termId, termName, classes, windows, requests,
                     </ul>
                   )}
 
+                  <LevelDates
+                    level={level}
+                    dateOf={type => levelDate(level, type)}
+                    state={dateState[level.key]}
+                    onChange={(type, date) => void saveDate(level, type, date)}
+                  />
+
                   {state?.status === 'error' && <p role="alert" className="rounded-lg bg-destructive/10 px-2.5 py-1.5 text-xs text-destructive">{state.message}</p>}
                 </li>
               );
@@ -322,5 +371,43 @@ function LevelStatus({ value, state }: { value: string; state?: SaveState }) {
       {saved && <Check className="size-3" aria-hidden />}
       Marking {examName(value)}
     </span>
+  );
+}
+
+/** When each of a level's exams starts, set here instead of guessed from the term. */
+function LevelDates({ level, dateOf, state, onChange }: { level: Level; dateOf: (type: string) => string | undefined; state?: SaveState; onChange: (type: string, date: string) => void }) {
+  if (level.types.length === 0) return null;
+  const set = level.types.filter(t => dateOf(t)).length;
+  return (
+    <details className="group rounded-lg border border-border/60 bg-card">
+      <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-xs font-medium text-foreground [&::-webkit-details-marker]:hidden">
+        <CalendarDays className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+        <span className="flex-1">Exam dates</span>
+        {state?.status === 'saving' ? (
+          <span className="inline-flex items-center gap-1 text-muted-foreground"><Loader2 className="size-3 animate-spin" aria-hidden /> Saving…</span>
+        ) : state?.status === 'saved' ? (
+          <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-400"><Check className="size-3" aria-hidden /> Saved</span>
+        ) : (
+          <span className="text-muted-foreground">{set} of {level.types.length} set</span>
+        )}
+        <ChevronDown className="size-3.5 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" aria-hidden />
+      </summary>
+      <ul className="flex flex-col divide-y divide-border/60 border-t border-border/60">
+        {level.types.map(t => (
+          <li key={t} className="flex items-center justify-between gap-2 px-3 py-1.5">
+            <label htmlFor={`date-${level.key}-${t}`} className="min-w-0 truncate text-xs text-foreground">{examName(t)} starts</label>
+            <input
+              id={`date-${level.key}-${t}`}
+              type="date"
+              value={dateOf(t) ?? ''}
+              disabled={state?.status === 'saving'}
+              onChange={e => { if (e.target.value) onChange(t, e.target.value); }}
+              className="input-field h-8 w-auto py-0 text-xs"
+            />
+          </li>
+        ))}
+      </ul>
+      {state?.status === 'error' && <p role="alert" className="border-t border-border/60 px-3 py-1.5 text-xs text-destructive">{state.message}</p>}
+    </details>
   );
 }

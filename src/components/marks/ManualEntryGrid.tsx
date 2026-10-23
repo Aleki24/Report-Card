@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, CheckCircle2, Cloud, CloudOff, Info, Loader2, Save, Search, X } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Cloud, CloudOff, Info, Loader2, Lock, Save, Search, Send, X } from 'lucide-react';
 import type { ExamSubjectComponent, ExamSubjectComponentScheme } from '@/types';
 import type { RosterMode } from '@/lib/subject-roster';
 import { calculateCompositeSubjectScore, isMultiPaper } from '@/lib/multi-paper';
@@ -19,6 +19,8 @@ import { cn } from '@/lib/utils';
 import { MarkSheetRow, type GradeOption, type MarkSheetLearner } from './entry/MarkSheetRow';
 import { examRosterUrl } from '@/lib/marks/roster-url';
 import { useConfirm } from '@/components/ui/ConfirmProvider';
+import { releasePapers } from '@/components/exams-marks/releasePapers';
+import { MarkHistoryPanel } from './MarkHistoryPanel';
 
 /* ── API shapes ─────────────────────────────────────────── */
 
@@ -74,6 +76,14 @@ interface Props {
     gradeStreamId?: string | null;
     /** The exam's subject — narrows the roster to learners who take it (electives). */
     subjectId?: string;
+    /** The subject's name, for the release prompt. */
+    subjectName?: string;
+    /** Results already released to learners and parents. */
+    released?: boolean;
+    /** Called once this sheet's results are released from here. */
+    onReleased?: () => void;
+    /** The term's marks are locked: the sheet can be read but not saved. */
+    locked?: boolean;
 }
 
 const UNSAVED: ReadonlySet<RowStatus> = new Set<RowStatus>(['changed', 'new', 'removing']);
@@ -112,8 +122,11 @@ function fromDraftRow(row: DraftRow): EntryValues {
     };
 }
 
-export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId, subjectId }: Props) {
+export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId, subjectId, subjectName = 'this subject', released = false, onReleased, locked = false }: Props) {
     const confirm = useConfirm();
+    const [releasing, setReleasing] = useState(false);
+    // Bumped on each save, so an open change history reloads.
+    const [savedVersion, setSavedVersion] = useState(0);
     const { profile } = useAuth();
     const isAdmin = profile?.role === 'ADMIN';
 
@@ -452,6 +465,26 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
         });
     }, [rows, query, filter, streamFilter]);
 
+    /* ── Release: offered once every learner on the sheet has a saved mark ── */
+    const readyToRelease = !released && !!onReleased && counts.total > 0 && counts.todo === 0 && counts.unsaved === 0;
+    const releaseResults = async () => {
+        const ok = await confirm({
+            title: `Release ${subjectName} results?`,
+            message: `Learners and parents will see these ${counts.total} marks on their portal and report cards. You can still correct a mark afterwards.`,
+            confirmText: 'Release results',
+        });
+        if (!ok) return;
+        setReleasing(true);
+        const { ok: releasedCount, failures } = await releasePapers([{ id: examId, subject_name: subjectName }]);
+        setReleasing(false);
+        if (releasedCount > 0 || failures.length === 0) {
+            setNotice({ tone: 'success', text: `${subjectName} results are released to learners and parents.` });
+            onReleased?.();
+        } else {
+            setNotice({ tone: 'error', text: failures.join('; ') });
+        }
+    };
+
     /* ── Keyboard: Enter / arrows move down the same score column ── */
     const handleScoreKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, column: string) => {
         if (e.key !== 'Enter' && e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
@@ -509,7 +542,7 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
     };
 
     const handleSave = async () => {
-        if (saving) return;
+        if (saving || locked) return;
         const pending = rows.filter(r => UNSAVED.has(r.status));
         if (pending.length === 0) {
             flash({ tone: 'info', text: 'Nothing to save — every mark on this sheet is already saved.' });
@@ -577,6 +610,7 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
 
             commit(upserted, ids, removed);
             setRestoredDraft(false);
+            setSavedVersion(v => v + 1);
             if (failedRemovals.length > 0) {
                 flash({ tone: 'error', text: `Saved, but could not remove the mark for ${failedRemovals.join(', ')}. Refresh and try again.` });
             } else {
@@ -816,6 +850,34 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
                 </div>
             )}
 
+            {locked && (
+                <div role="status" className="flex items-start gap-2 border-b border-slate-500/25 bg-slate-500/[0.07] px-4 py-2.5 text-sm text-foreground sm:px-5">
+                    <Lock size={16} className="mt-0.5 shrink-0 text-slate-600 dark:text-slate-300" aria-hidden />
+                    <span>This term&apos;s marks are locked, so changes here can&apos;t be saved. Ask the admin or DOS to unlock the term.</span>
+                </div>
+            )}
+            {readyToRelease && (
+                <div className="flex flex-col gap-3 border-b border-emerald-500/25 bg-emerald-500/[0.07] px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+                    <div className="flex items-start gap-2.5 text-sm">
+                        <CheckCircle2 size={18} className="mt-px shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />
+                        <p>
+                            <span className="font-semibold text-foreground">Every learner has a mark.</span>{' '}
+                            <span className="text-muted-foreground">Release them so learners and parents can see the results.</span>
+                        </p>
+                    </div>
+                    <button type="button" onClick={() => void releaseResults()} disabled={releasing} className="btn-primary inline-flex shrink-0 items-center justify-center gap-2 self-stretch sm:self-auto">
+                        {releasing ? <Loader2 size={15} className="animate-spin" aria-hidden /> : <Send size={15} aria-hidden />}
+                        {releasing ? 'Releasing…' : 'Release results'}
+                    </button>
+                </div>
+            )}
+            {released && (
+                <div className="flex items-center gap-2 border-b border-border/60 px-4 py-2 text-xs text-muted-foreground sm:px-5">
+                    <Send size={13} className="shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />
+                    Released to learners and parents. Corrections you save show to them straight away.
+                </div>
+            )}
+
             {/* ── The sheet ── */}
             {learners.length === 0 ? (
                 <div className="px-6 py-12 text-center text-sm text-muted-foreground">
@@ -874,6 +936,8 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
                 </div>
             )}
 
+            {learners.length > 0 && <MarkHistoryPanel examId={examId} query={query} version={savedVersion} />}
+
             {/* ── Save bar: sticks to the bottom (above the phone nav) while there is something to save ── */}
             {learners.length > 0 && (
                 <div
@@ -903,7 +967,7 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
                         <button
                             type="button"
                             onClick={() => void handleSave()}
-                            disabled={saving || counts.unsaved === 0}
+                            disabled={saving || counts.unsaved === 0 || locked}
                             className="btn-primary flex-1 justify-center gap-2 px-5 py-2 disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none"
                         >
                             {saving ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <Save size={16} aria-hidden />}

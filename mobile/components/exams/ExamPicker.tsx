@@ -7,6 +7,9 @@ import { errorMessage } from '@/lib/format';
 import { examTypeLabel, sortExamTypes } from '@/lib/academics';
 import { examClasses, examLabel, useExams, useOpenExams, useTerms } from '@/lib/useSchoolData';
 import type { ExamSlot, Term } from '@/lib/types';
+import { currentExamType, examTypeDates } from '@shared/exam-schedule';
+import { localToday } from '@shared/local-date';
+import { ExamWindowsCard } from './ExamWindowsCard';
 
 /**
  * The web's step-by-step picker (① term → ② exam → class → subject), laid out
@@ -21,6 +24,7 @@ export function ExamPicker({
     allClasses,
     fillGaps,
     followOpen = false,
+    manageOpen = false,
 }: {
     onSelect: (exam: ExamSlot, term: Term | null) => void;
     /** Shown when the term has no exams (the admin's "set up exams" button). */
@@ -41,6 +45,8 @@ export function ExamPicker({
      * class, skip choosing one (class → subject → the open exam), as on the web.
      */
     followOpen?: boolean;
+    /** Whoever opens exams sees the "Exam being marked" card (mark entry). */
+    manageOpen?: boolean;
 }) {
     const { colors } = useTheme();
     const filled = useRef(new Set<string>());
@@ -54,10 +60,21 @@ export function ExamPicker({
     const [gradeId, setGradeId] = useState<string | null>(null);
     // A teacher choosing an exam themselves: a CAT, a correction, another term.
     const [pickAny, setPickAny] = useState(false);
-    const open = useOpenExams(followOpen ? effectiveTermId : null);
+    // Also read for results: the exam a class is marking is the one to show first.
+    const open = useOpenExams(effectiveTermId);
     const follow = followOpen && !pickAny && open.windows.size > 0;
 
     const types = useMemo(() => sortExamTypes(exams.map((e) => e.exam_type)), [exams]);
+    // Before one is chosen, as on the web: the exam the school opened (when
+    // every open class is on the same one), else the one due by date.
+    const defaultType = useMemo(() => {
+        if (types.length <= 1) return types[0] ?? null;
+        const opened = new Set(open.windows.values());
+        const only = opened.size === 1 ? [...opened][0] : null;
+        if (only && types.includes(only)) return only;
+        const due = currentExamType(examTypeDates(exams), localToday());
+        return due && types.includes(due) ? due : null;
+    }, [types, open.windows, exams]);
     // Following the open exam, classes come first (every class the teacher has
     // exams in) and the exam follows from the class.
     const followClasses = useMemo(() => examClasses(exams), [exams]);
@@ -66,7 +83,7 @@ export function ExamPicker({
     const openType = followGrade ? open.windows.get(followGrade) ?? null : null;
     const effectiveType = follow
         ? openType ?? (examType && classTypes.includes(examType) ? examType : null)
-        : examType && types.includes(examType) ? examType : types.length === 1 ? types[0] : null;
+        : examType && types.includes(examType) ? examType : defaultType;
     const ofType = useMemo(() => exams.filter((e) => e.exam_type === effectiveType), [exams, effectiveType]);
     const classes = useMemo(() => {
         const withExams = examClasses(ofType);
@@ -134,6 +151,9 @@ export function ExamPicker({
                 onChange={setTermId}
             />
 
+            {manageOpen && open.data?.canOpen && open.data.termId === effectiveTermId && open.data.classes.length > 0 ? (
+                <ExamWindowsCard info={open.data} onSaved={() => { open.reload(); reload(); }} />
+            ) : null}
             {term && headerAction ? headerAction(term, reload) : null}
             {error ? <ErrorBanner message={error} onRetry={reload} /> : null}
             {loading ? (

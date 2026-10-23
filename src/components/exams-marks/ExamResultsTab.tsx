@@ -3,13 +3,12 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { ArrowRight, BarChart3, ClipboardList, LayoutGrid, PencilLine, Trophy, type LucideIcon } from 'lucide-react';
+import { ArrowRight, BarChart3, ClipboardList, LayoutGrid, Trophy, type LucideIcon } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { InlineLoadingSkeleton } from '@/components/dashboard/LoadingSkeleton';
 import { ExamResultsTable, type MarkRow } from '@/components/exam-results/ExamResultsTable';
 import type { ExamSubjectComponentScheme } from '@/types';
 import { ExamAnalysisPanel } from '@/components/exam-results/ExamAnalysisPanel';
-import { QuickMarkEntry } from '@/components/exam-results/QuickMarkEntry';
 import { AllSubjectsView } from '@/components/exam-results/AllSubjectsView';
 import { ExamStatusBar } from '@/components/exam-results/ExamStatusBar';
 import { FEATURE_ICONS } from '@/components/ui/featureIcons';
@@ -34,9 +33,9 @@ interface ExamOption {
     status?: 'DRAFT' | 'PENDING_APPROVAL' | 'APPROVED';
 }
 
-type Tab = 'allsubjects' | 'results' | 'analysis' | 'quickentry' | 'reports';
+type Tab = 'allsubjects' | 'results' | 'analysis' | 'reports';
 /** Views about one subject's paper: they share the Term → Exam → Subject picker. */
-const PAPER_TABS: ReadonlySet<Tab> = new Set<Tab>(['results', 'analysis', 'quickentry']);
+const PAPER_TABS: ReadonlySet<Tab> = new Set<Tab>(['results', 'analysis']);
 
 const STATUS_LABEL: Record<NonNullable<ExamOption['status']>, string> = { DRAFT: 'not released', PENDING_APPROVAL: 'awaiting approval', APPROVED: 'released' };
 
@@ -339,10 +338,8 @@ export function ExamResultsTab() {
                                         onMarkPatched={patched => setMarks(prev => prev.map(m => (m.id === patched.id ? patched : m)))}
                                         markEntryLink={markEntryHref(selectedExam.term_id, selectedExam.id)}
                                     />
-                                ) : activeTab === 'analysis' ? (
-                                    <ExamAnalysisPanel marks={marks} />
                                 ) : (
-                                    <QuickMarkEntry examId={selectedExam.id} gradeStreamId={streamId} subjectId={selectedExam.subject_id} onSaved={fetchMarks} />
+                                    <ExamAnalysisPanel marks={marks} />
                                 )}
                             </>
                         )
@@ -379,7 +376,6 @@ const RESULT_TABS: readonly { key: Tab; label: string; icon: LucideIcon }[] = [
     { key: 'allsubjects', label: 'All subjects', icon: LayoutGrid },
     { key: 'results', label: 'One subject', icon: ClipboardList },
     { key: 'analysis', label: 'Analysis', icon: BarChart3 },
-    { key: 'quickentry', label: 'Quick entry', icon: PencilLine },
     { key: 'reports', label: 'Report cards', icon: FEATURE_ICONS.reports },
 ];
 

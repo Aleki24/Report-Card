@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { AlertTriangle, ArrowLeft, ArrowRight, BellRing, CalendarClock, DoorOpen, Camera, Check, FileSpreadsheet, History, Keyboard, Layers, RefreshCw, Search } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ArrowRight, History, Lock, Search } from 'lucide-react';
 import { ManualEntryGrid } from '@/components/marks/ManualEntryGrid';
 import { BulkUpload } from '@/components/marks/BulkUpload';
 import { ScanSheet } from '@/components/marks/ScanSheet';
@@ -12,7 +12,7 @@ import { isMultiPaper } from '@/lib/multi-paper';
 import type { ExamSubjectComponentScheme } from '@/types';
 import { useAuth } from '@/components/AuthProvider';
 import { ALL_EXAM_TYPES, STANDARD_TERM_EXAMS, getExamTypeLabel, isAnytimeExamType } from '@/lib/exam-types';
-import type { ExamWindow, ExamWindowsResponse } from '@/lib/exam-windows';
+import type { ExamWindowsResponse } from '@/lib/exam-windows';
 import { findActiveTermId } from '@/lib/term-calendar';
 import { localToday } from '@/lib/assignments';
 import { currentExamType, examDay, examTypeDates, examTypeOrder } from '@/lib/exam-schedule';
@@ -21,103 +21,20 @@ import { cn } from '@/lib/utils';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { ExamSetupMenu } from './ExamSetupMenu';
 import { ExamWindowsPanel } from './ExamWindowsPanel';
-import { MODE_TONES, STEP_TONES, SUBJECT_CATEGORY_THEME, subjectCategory, type SubjectCategory } from './examTheme';
+import { MarkingProgressBoard } from './MarkingProgressBoard';
+import { TermLockCard } from './TermLockCard';
+import { SUBJECT_CATEGORY_THEME, subjectCategory, type SubjectCategory } from './examTheme';
+import {
+  COLUMN_CLASS, balanceColumns, fetchTermExams, loadSubjects, readLastExam, windowMap, writeLastExam,
+  type AcademicLevel, type EntryMode, type ExamSlot, type GradeItem, type LastExam, type MySubjectItem, type SubjectChoice, type Term,
+} from './mark-setup/model';
+import { ChoiceChip, ExamTiming, LoadError, RequestExamNotice, StepCard } from './mark-setup/parts';
+import { SheetHeader } from './mark-setup/SheetHeader';
+import { OutOfTurnNotice } from './mark-setup/OutOfTurnNotice';
+import { MarkingNowCard } from './mark-setup/MarkingNowCard';
 
-interface MySubjectItem { id: string; code: string; name: string; academic_level_id: string; category?: string; }
-interface Term { id: string; name: string; academic_year_id: string; academic_year_name?: string | null; is_current: boolean; }
-interface AcademicLevel { id: string; code: string; name: string; }
-interface GradeItem { id: string; code?: string | null; name_display: string; academic_level_id: string; }
-interface ExamSlot {
-  id: string; name: string; exam_type: string; max_score: number;
-  /** YYYY-MM-DD the paper is scheduled for. */
-  exam_date: string;
-  subject_id: string; subject_name: string; subject_code: string; subject_category: string;
-  grade_id: string; grade_name: string; term_id: string;
-  grade_stream_id?: string | null; grade_stream_name?: string | null;
-  /** APPROVED once results are released to learners and parents. */
-  status?: string;
-}
-/** A subject shown in the picker; `hasExam` is false for a teacher's subject with no exam slot yet. */
-interface SubjectChoice { subject_id: string; subject_name: string; subject_code: string; subject_category: string; hasExam: boolean; }
 
-type EntryMode = 'manual' | 'bulk' | 'scan';
 
-/** The last exam opened here, so a teacher can pick up where they left off. */
-interface LastExam { termId: string; examId: string; label: string; }
-const LAST_EXAM_KEY = 'skulbase:mark-entry:last:v1';
-
-function readLastExam(): LastExam | null {
-  try {
-    const raw = window.localStorage.getItem(LAST_EXAM_KEY);
-    const parsed = raw ? (JSON.parse(raw) as Partial<LastExam>) : null;
-    return parsed?.termId && parsed.examId && parsed.label ? { termId: parsed.termId, examId: parsed.examId, label: parsed.label } : null;
-  } catch {
-    return null;
-  }
-}
-
-function writeLastExam(value: LastExam): void {
-  try { window.localStorage.setItem(LAST_EXAM_KEY, JSON.stringify(value)); } catch { /* private mode: nothing to remember */ }
-}
-
-async function fetchTermExams(termId: string): Promise<ExamSlot[]> {
-  const res = await fetch(`/api/school/exams?term_id=${encodeURIComponent(termId)}`, { cache: 'no-store' });
-  const json = (await res.json().catch(() => null)) as { data?: ExamSlot[]; error?: string } | null;
-  // Throw rather than return []: an empty list reads as "no exams set up yet"
-  // and invites an admin to set the term up again.
-  if (!res.ok) throw new Error(json?.error || 'Could not load this term’s exams.');
-  return json?.data ?? [];
-}
-
-const MODES: { id: EntryMode; label: string; hint: string; icon: React.ReactNode }[] = [
-  { id: 'manual', label: 'Type marks', hint: 'Type or correct marks learner by learner', icon: <Keyboard size={15} aria-hidden /> },
-  { id: 'bulk', label: 'Upload file', hint: 'Import a spreadsheet of marks', icon: <FileSpreadsheet size={15} aria-hidden /> },
-  { id: 'scan', label: 'Scan sheet', hint: 'Photograph a paper marksheet and review what was read', icon: <Camera size={15} aria-hidden /> },
-];
-
-/* ── Small building blocks ─────────────────────────────── */
-
-function ChoiceChip({ active, onClick, children, title, disabled }: { active: boolean; onClick: () => void; children: React.ReactNode; title?: string; disabled?: boolean }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={title}
-      disabled={disabled}
-      aria-pressed={active}
-      className={cn(
-        'inline-flex min-h-10 items-center gap-1.5 rounded-xl border px-4 py-2 text-sm font-medium transition-all disabled:opacity-50',
-        active
-          ? 'border-primary bg-primary text-primary-foreground shadow-sm'
-          : 'border-border/70 bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground',
-      )}
-    >
-      {children}
-    </button>
-  );
-}
-
-function StepCard({ step, title, hint, done, children, aside }: { step: number; title: string; hint?: string; done?: boolean; children: React.ReactNode; aside?: React.ReactNode }) {
-  const tone = STEP_TONES[(step - 1) % STEP_TONES.length];
-  return (
-    <section className="relative h-full rounded-2xl border border-border/70 bg-card p-4 shadow-sm">
-      {/* A thin strip in the step's colour ties the card to its number. */}
-      <span aria-hidden className={cn('absolute inset-y-0 -left-px w-1 rounded-l-2xl', tone.dot, !done && 'opacity-40')} />
-      <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1">
-        <span
-          className={cn('flex size-8 shrink-0 items-center justify-center rounded-xl text-xs font-bold transition-colors', done ? tone.solid : tone.tile)}
-          aria-hidden
-        >
-          {done ? <Check className="size-4" strokeWidth={3} /> : step}
-        </span>
-        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
-        {hint && <span className="text-xs text-muted-foreground">{hint}</span>}
-        {aside && <div className="ml-auto">{aside}</div>}
-      </div>
-      {children}
-    </section>
-  );
-}
 
 /* ── Tab ───────────────────────────────────────────────── */
 
@@ -303,6 +220,7 @@ export function MarksSetupTab() {
   }, [selectedTermId, windowsVersion]);
   const windows = windowMap(windowInfo?.termId === selectedTermId ? windowInfo.data : []);
   const canOpenExams = windowInfo?.canOpen ?? false;
+  const termLock = windowInfo?.termId === selectedTermId ? windowInfo.lock : null;
   const myRequests = new Set(windowInfo?.myRequests ?? []);
 
   /** Ask whoever opens exams to open one for these classes. */
@@ -596,83 +514,21 @@ export function MarksSetupTab() {
     const examLabel = getExamTypeLabel(selectedExam.exam_type);
     return (
       <div className="w-full">
-        <div className="mb-4 rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/[0.07] to-transparent p-4 shadow-sm sm:p-5">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div className="flex min-w-0 items-start gap-3 sm:gap-4">
-            {(() => {
-              const theme = SUBJECT_CATEGORY_THEME[subjectCategory(selectedExam.subject_category)];
-              const Icon = theme.icon;
-              return <span className={cn('flex size-12 shrink-0 items-center justify-center rounded-2xl sm:size-14', theme.tone.tile)} aria-hidden><Icon className="size-6 sm:size-7" /></span>;
-            })()}
-          <div className="min-w-0">
-            <p className="flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">
-              Entering marks for
-              {/* The exam itself, big enough that nobody types Mid-Term marks into End-Term. */}
-              <span className="rounded-lg bg-primary px-2.5 py-1 text-xs font-bold tracking-wide text-primary-foreground normal-case">{examLabel}</span>
-            </p>
-            <h2 className="mt-1 truncate font-display text-xl font-bold tracking-tight sm:text-2xl">
-              {selectedExam.subject_name} <span className="text-muted-foreground">·</span> {selectedClassName}
-            </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {selectedTermName} · {examLabel} · {examIsMultiPaper ? <span className="font-medium text-primary">Papers {examPaperSummary}</span> : <>Out of {selectedExam.max_score}</>}
-            </p>
-          </div>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => setShowPaperModal(true)}
-              className={cn(
-                'inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold transition-colors',
-                examIsMultiPaper ? 'border-primary/40 bg-primary/10 text-primary' : 'border-dashed border-border text-muted-foreground hover:border-primary/40 hover:text-foreground',
-              )}
-              title="Some subjects are examined in several papers (e.g. Maths Paper 1 & 2, Sciences with a practical). Set that up here — the papers combine into one final subject score."
-            >
-              <Layers size={14} aria-hidden />
-              {examIsMultiPaper ? `Papers: ${(examScheme?.components ?? []).map(c => c.component_code).join(' + ')}` : 'Split into papers'}
-            </button>
-            <button type="button" onClick={() => setPickerOpen(true)} className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:border-primary/40">
-              <RefreshCw size={14} aria-hidden /> Change exam, class or subject
-            </button>
-          </div>
-        </div>
-          <div className="mt-4 grid grid-cols-3 gap-1 rounded-xl border border-border bg-card/70 p-1 sm:inline-grid sm:w-auto" role="tablist" aria-label="How to enter marks">
-            {MODES.map(m => (
-              <button
-                key={m.id}
-                type="button"
-                role="tab"
-                aria-selected={mode === m.id}
-                onClick={() => setMode(m.id)}
-                title={m.hint}
-                className={cn(
-                  'inline-flex flex-col items-center justify-center gap-1 rounded-lg px-2 py-2 text-xs font-semibold transition-colors sm:flex-row sm:gap-1.5 sm:px-4 sm:text-sm',
-                  mode === m.id ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
-                )}
-              >
-                <span className={cn('flex size-6 shrink-0 items-center justify-center rounded-md transition-colors', mode === m.id ? MODE_TONES[m.id].tile : '')}>{m.icon}</span><span className="max-w-full truncate">{m.label}</span>
-              </button>
-            ))}
-          </div>
-          {/* The same subject and class in another exam: a CAT, or correcting an earlier one. */}
-          {siblings.length > 0 && (
-            <div className="mt-3 flex flex-wrap items-center gap-1.5 text-xs">
-              <span className="text-muted-foreground">Other exams for this class:</span>
-              {siblings.map(e => (
-                <button
-                  key={e.id}
-                  type="button"
-                  // A teacher leaving the open exam gets the full picker behind the sheet.
-                  onClick={() => { if (!isAdmin && e.exam_type !== openType) setPickAnyExam(true); applyExam(e); }}
-                  className="inline-flex items-center gap-1 rounded-lg border border-border/70 bg-card px-2 py-1 font-medium text-foreground transition-colors hover:border-primary/40">
-                  {getExamTypeLabel(e.exam_type)}
-                  {e.exam_type === openType && <span className="rounded bg-primary/10 px-1 text-[9px] font-bold text-primary">NOW</span>}
-                  {isAnytimeExamType(e.exam_type) && <span className="text-[10px] font-normal text-muted-foreground">any time</span>}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        <SheetHeader
+          exam={selectedExam}
+          examLabel={examLabel}
+          classLabel={selectedClassName}
+          termName={selectedTermName}
+          paperCodes={examIsMultiPaper ? (examScheme?.components ?? []).map(c => c.component_code) : null}
+          paperSummary={examPaperSummary}
+          mode={mode}
+          onModeChange={setMode}
+          siblings={siblings}
+          openType={openType}
+          onSetUpPapers={() => setShowPaperModal(true)}
+          onChangeExam={() => setPickerOpen(true)}
+          onPickSibling={e => { if (!isAdmin && e.exam_type !== openType) setPickAnyExam(true); applyExam(e); }}
+        />
 
         {selectedExam.status === 'APPROVED' && (
           <div role="status" className="mb-4 flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-300">
@@ -689,35 +545,15 @@ export function MarksSetupTab() {
         {checking ? (
           <div className="h-40 animate-pulse rounded-2xl bg-muted/60" aria-busy aria-label="Checking this exam" />
         ) : outOfTurn ? (
-          <section role="alert" className="flex flex-col gap-4 rounded-2xl border border-amber-500/30 bg-amber-500/[0.08] p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
-            <div className="flex min-w-0 items-start gap-3">
-              <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-amber-500/15 text-amber-700 dark:text-amber-400" aria-hidden><CalendarClock className="size-5" /></span>
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-foreground">
-                  {openType
-                    ? <>{examLabel} isn&apos;t open for marking in {selectedClassName}</>
-                    : <>{examLabel} isn&apos;t until {examDay(selectedExam.exam_date)}</>}
-                </p>
-                <p className="mt-0.5 text-sm text-muted-foreground">
-                  {openType
-                    ? <>The school is marking <strong className="text-foreground">{getExamTypeLabel(openType)}</strong> for this class. Check which exam these marks are from before you start.</>
-                    : nowSlot
-                      ? <>The term is on <strong className="text-foreground">{getExamTypeLabel(nowSlot.exam_type)}</strong> now. Check which exam these marks are from before you start.</>
-                      : 'Check which exam these marks are from before you start.'}
-                </p>
-              </div>
-            </div>
-            <div className="flex flex-col gap-2 xs:flex-row sm:shrink-0">
-              {nowSlot && (
-                <button type="button" onClick={() => applyExam(nowSlot)} className="btn-primary px-4 py-2">
-                  Enter {getExamTypeLabel(nowSlot.exam_type)} marks
-                </button>
-              )}
-              <button type="button" onClick={() => setConfirmedEarly(prev => new Set(prev).add(selectedExam.id))} className="btn-secondary px-4 py-2">
-                Enter {examLabel} marks anyway
-              </button>
-            </div>
-          </section>
+          <OutOfTurnNotice
+            examLabel={examLabel}
+            examDate={selectedExam.exam_date}
+            classLabel={selectedClassName}
+            openType={openType}
+            nowSlot={nowSlot}
+            onOpenNow={applyExam}
+            onConfirm={() => setConfirmedEarly(prev => new Set(prev).add(selectedExam.id))}
+          />
         ) : <>
         {mode === 'manual' && (
           <ManualEntryGrid
@@ -727,6 +563,10 @@ export function MarksSetupTab() {
             gradeId={selectedExam.grade_id}
             gradeStreamId={selectedExam.grade_stream_id ?? null}
             subjectId={selectedExam.subject_id}
+            subjectName={selectedExam.subject_name}
+            released={selectedExam.status === 'APPROVED'}
+            locked={!!termLock}
+            onReleased={() => setExams(prev => prev.map(e => (e.id === selectedExam.id ? { ...e, status: 'APPROVED' } : e)))}
           />
         )}
         {mode === 'bulk' && <BulkUpload examId={effectiveSelectedExamId} subjectId={selectedExam.subject_id} gradeStreamId={selectedExam.grade_stream_id ?? null} gradeId={selectedExam.grade_id} />}
@@ -801,7 +641,42 @@ export function MarksSetupTab() {
               void reloadExams();
             }
           }}
+          onDateSaved={({ gradeIds, examType, date }) => {
+            setWindowInfo(prev => prev && {
+              ...prev,
+              classes: prev.classes.map(c => (gradeIds.includes(c.grade_id) ? { ...c, dates: { ...c.dates, [examType]: date } } : c)),
+            });
+            // Which exam is "due" follows the papers' dates.
+            void reloadExams();
+          }}
         />
+      )}
+
+      {/* Who is behind on the open exams, for whoever opens them. */}
+      {canOpenExams && windows.size > 0 && (
+        <MarkingProgressBoard
+          termId={selectedTermId}
+          termName={selectedTermName}
+          version={[...windows].map(([g, t]) => `${g}:${t}`).sort().join(',')}
+          onOpenExam={openExam}
+        />
+      )}
+
+      {/* Lock a finished term's marks; unlock it for a correction. */}
+      {canOpenExams && windowInfo?.termId === selectedTermId && (
+        <TermLockCard
+          key={`lock-${selectedTermId}`}
+          termId={selectedTermId}
+          termName={selectedTermName}
+          lock={termLock}
+          onChange={lock => setWindowInfo(prev => prev && { ...prev, lock })}
+        />
+      )}
+      {!canOpenExams && termLock && (
+        <p className="flex items-center gap-2 rounded-xl border border-slate-500/30 bg-slate-500/[0.06] px-4 py-3 text-sm text-foreground">
+          <Lock size={16} className="shrink-0 text-slate-600 dark:text-slate-300" aria-hidden />
+          {selectedTermName} marks are locked. You can view them; ask the admin or DOS to unlock the term to change one.
+        </p>
       )}
 
       {/* Nothing opened yet anywhere: a teacher can ask for it instead of guessing. */}
@@ -824,33 +699,12 @@ export function MarksSetupTab() {
       {followOpen ? (
         <>
         <div className="grid gap-3 lg:grid-cols-2">
-          <section className="flex flex-col gap-3 rounded-2xl border border-primary/25 bg-primary/[0.05] p-4 shadow-sm">
-            <div className="flex items-start gap-3">
-              <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary" aria-hidden><DoorOpen className="size-5" /></span>
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-foreground">Marking now · {selectedTermName}</p>
-                <p className="text-xs text-muted-foreground">Choose your class and subject; the mark sheet opens on the exam your school is marking.</p>
-              </div>
-            </div>
-            <ul className="flex flex-col divide-y divide-border/50 rounded-xl bg-card ring-1 ring-inset ring-border/70">
-              {myClasses.map(c => (
-                <li key={c.id} className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 px-3 py-2 text-xs">
-                  <span className="font-semibold text-foreground">{c.name}</span>
-                  {c.type ? (
-                    <span className="min-w-0 text-muted-foreground">
-                      <span className="font-semibold text-primary">{getExamTypeLabel(c.type)}</span>
-                      {c.subjectNames.length > 0 && <> · {c.subjectNames.join(', ')}</>}
-                    </span>
-                  ) : (
-                    <span className="font-medium text-amber-700 dark:text-amber-400">{myRequests.has(c.id) ? 'Asked · waiting for an exam' : 'No exam open yet'}</span>
-                  )}
-                </li>
-              ))}
-            </ul>
-            <button type="button" onClick={() => { setPickAnyExam(true); resetSelection(); }} className="self-start text-xs font-medium text-primary hover:underline">
-              Mark a CAT, correct an earlier exam or open another term
-            </button>
-          </section>
+          <MarkingNowCard
+            termName={selectedTermName}
+            classes={myClasses}
+            asked={myRequests}
+            onPickAny={() => { setPickAnyExam(true); resetSelection(); }}
+          />
 
           <StepCard step={1} title="Class" done={!!effectiveGradeId} hint="Classes you have exams for">
             {loadingExams ? <p className="text-xs text-muted-foreground">Loading…</p> : examsError ? (
@@ -1155,81 +1009,9 @@ export function MarksSetupTab() {
   );
 }
 
-function LoadError({ message, onRetry }: { message: string; onRetry: () => void }) {
-  return (
-    <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
-      <span className="min-w-0">{message}</span>
-      <button type="button" onClick={onRetry} className="btn-secondary h-9 shrink-0 px-3 text-xs">
-        <RefreshCw size={14} aria-hidden /> Try again
-      </button>
-    </div>
-  );
-}
-
-async function loadSubjects(url: string): Promise<MySubjectItem[]> {
-  try {
-    const res = await fetch(url, { cache: 'no-store' });
-    const json = (await res.json()) as { data?: MySubjectItem[] };
-    return json.data ?? [];
-  } catch (err) {
-    console.error('Failed to fetch subjects:', err);
-    return [];
-  }
-}
-
-/** "Now" on the exam the term is on, the date on one not yet sat. */
-function ExamTiming({ active, isNow, anytime, date, today }: { active: boolean; isNow: boolean; anytime: boolean; date?: string; today: string }) {
-  if (anytime) {
-    return <span className={cn('text-[10px] font-medium', active ? 'text-primary-foreground/80' : 'text-muted-foreground')}>any time</span>;
-  }
-  if (isNow) {
-    return <span className={cn('rounded px-1.5 py-0.5 text-[9px] font-bold', active ? 'bg-white/20' : 'bg-primary/10 text-primary')}>NOW</span>;
-  }
-  if (date && date > today) {
-    return <span className={cn('text-[10px] font-medium', active ? 'text-primary-foreground/80' : 'text-muted-foreground')}>from {examDay(date)}</span>;
-  }
-  return null;
-}
-
-function windowMap(rows: readonly ExamWindow[]): ReadonlyMap<string, string> {
-  return new Map(rows.map(w => [w.grade_id, w.exam_type]));
-}
 
 
-const COLUMN_CLASS: Record<number, string> = { 1: 'grid-cols-1', 2: 'grid-cols-2', 3: 'grid-cols-3' };
 
-/** Deals items into `count` columns, each to the shortest so far, keeping their order within a column. */
-function balanceColumns<T>(items: readonly T[], count: number, weight: (item: T) => number): T[][] {
-  const columns = Array.from({ length: Math.max(1, count) }, () => ({ items: [] as T[], height: 0 }));
-  for (const item of items) {
-    const shortest = columns.reduce((low, c) => (c.height < low.height ? c : low));
-    shortest.items.push(item);
-    shortest.height += weight(item);
-  }
-  return columns.map(c => c.items);
-}
 
-/** A teacher's "ask for an exam to be opened", and its answer once sent. */
-function RequestExamNotice({ title, asked, busy, error, onRequest }: { title: string; asked: boolean; busy: boolean; error: string; onRequest: () => void }) {
-  return (
-    <div className="flex flex-col gap-3 rounded-xl border border-amber-500/30 bg-amber-500/[0.08] p-3 sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex min-w-0 items-start gap-2.5">
-        <BellRing className="mt-0.5 size-4 shrink-0 text-amber-700 dark:text-amber-400" aria-hidden />
-        <div className="min-w-0 text-sm">
-          <p className="font-semibold text-foreground">{title}</p>
-          <p className="text-xs text-muted-foreground">
-            {asked
-              ? 'You’ve asked. Your admin, principal or DOS will see it and open the right exam.'
-              : 'Ask your admin, principal or DOS to open it, so your marks go into the right exam.'}
-          </p>
-          {error && <p role="alert" className="mt-1 text-xs text-destructive">{error}</p>}
-        </div>
-      </div>
-      {!asked && (
-        <button type="button" onClick={onRequest} disabled={busy} className="btn-secondary h-9 shrink-0 px-3 text-xs">
-          {busy ? 'Sending…' : 'Ask for the exam'}
-        </button>
-      )}
-    </div>
-  );
-}
+
+
