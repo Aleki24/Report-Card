@@ -17,6 +17,7 @@ import { findActiveTermId } from '@/lib/term-calendar';
 import { localToday } from '@/lib/assignments';
 import { isSubjectOfferedAtGrade } from '@/lib/curriculum-bands';
 import { cn } from '@/lib/utils';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { ExamSetupMenu } from './ExamSetupMenu';
 import { ExamWindowsPanel } from './ExamWindowsPanel';
 import { MODE_TONES, STEP_TONES, SUBJECT_CATEGORY_THEME, subjectCategory, type SubjectCategory } from './examTheme';
@@ -435,6 +436,16 @@ export function MarksSetupTab() {
     }
     return [...map.entries()].sort((a, b) => SUBJECT_CATEGORY_THEME[a[0]].order - SUBJECT_CATEGORY_THEME[b[0]].order);
   })();
+
+  // Subject categories in balanced columns (Tailwind's md and xl breakpoints).
+  const isMd = useMediaQuery('(min-width: 768px)');
+  const isXl = useMediaQuery('(min-width: 1280px)');
+  const subjectColumns = balanceColumns(
+    subjectGroups,
+    Math.min(subjectGroups.length, isXl ? 3 : isMd ? 2 : 1),
+    // A heading weighs about half a card.
+    ([, group]) => group.length + 0.5,
+  );
 
   const examsForSelectedSubject = exams
     .filter(e => e.exam_type === effectiveExamType && e.subject_id === selectedSubjectId)
@@ -968,10 +979,13 @@ export function MarksSetupTab() {
           ) : shownSubjects.length === 0 ? (
             <p className="text-sm text-muted-foreground">No subject matches &ldquo;{subjectQuery}&rdquo;.</p>
           ) : (
-            // Columns rather than a grid: categories differ a lot in size, and a
-            // grid row is as tall as its biggest group, leaving holes beside the rest.
-            <div className={cn(subjectGroups.length > 1 && 'gap-x-4 md:columns-2 xl:columns-3 -mb-5 *:mb-5 *:break-inside-avoid')}>
-              {subjectGroups.map(([category, groupSubjects]) => {
+            // Categories differ a lot in size. A grid row is as tall as its
+            // biggest group, and CSS columns can't split a group, so each
+            // category goes to whichever column is shortest so far.
+            <div className={cn('grid gap-x-4 gap-y-5', COLUMN_CLASS[subjectColumns.length])}>
+              {subjectColumns.map((column, columnIndex) => (
+              <div key={columnIndex} className="flex min-w-0 flex-col gap-5">
+              {column.map(([category, groupSubjects]) => {
                 const theme = SUBJECT_CATEGORY_THEME[category];
                 const CategoryIcon = theme.icon;
                 return (
@@ -1026,6 +1040,8 @@ export function MarksSetupTab() {
                 </div>
                 );
               })}
+              </div>
+              ))}
             </div>
           )}
         </StepCard>
@@ -1111,4 +1127,17 @@ function windowMap(rows: readonly ExamWindow[]): ReadonlyMap<string, string> {
 /** Built-in exams in their running order; a school's own types after them. */
 function examTypeOrder(code: string): number {
   return ALL_EXAM_TYPES.find(t => t.code === code)?.order ?? 999;
+}
+
+const COLUMN_CLASS: Record<number, string> = { 1: 'grid-cols-1', 2: 'grid-cols-2', 3: 'grid-cols-3' };
+
+/** Deals items into `count` columns, each to the shortest so far, keeping their order within a column. */
+function balanceColumns<T>(items: readonly T[], count: number, weight: (item: T) => number): T[][] {
+  const columns = Array.from({ length: Math.max(1, count) }, () => ({ items: [] as T[], height: 0 }));
+  for (const item of items) {
+    const shortest = columns.reduce((low, c) => (c.height < low.height ? c : low));
+    shortest.items.push(item);
+    shortest.height += weight(item);
+  }
+  return columns.map(c => c.items);
 }
