@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, CheckCircle2, Cloud, CloudOff, Info, Loader2, Save, Search, Send, X } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Cloud, CloudOff, Info, Loader2, Lock, Save, Search, Send, X } from 'lucide-react';
 import type { ExamSubjectComponent, ExamSubjectComponentScheme } from '@/types';
 import type { RosterMode } from '@/lib/subject-roster';
 import { calculateCompositeSubjectScore, isMultiPaper } from '@/lib/multi-paper';
@@ -82,6 +82,8 @@ interface Props {
     released?: boolean;
     /** Called once this sheet's results are released from here. */
     onReleased?: () => void;
+    /** The term's marks are locked: the sheet can be read but not saved. */
+    locked?: boolean;
 }
 
 const UNSAVED: ReadonlySet<RowStatus> = new Set<RowStatus>(['changed', 'new', 'removing']);
@@ -120,7 +122,7 @@ function fromDraftRow(row: DraftRow): EntryValues {
     };
 }
 
-export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId, subjectId, subjectName = 'this subject', released = false, onReleased }: Props) {
+export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId, subjectId, subjectName = 'this subject', released = false, onReleased, locked = false }: Props) {
     const confirm = useConfirm();
     const [releasing, setReleasing] = useState(false);
     // Bumped on each save, so an open change history reloads.
@@ -540,7 +542,7 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
     };
 
     const handleSave = async () => {
-        if (saving) return;
+        if (saving || locked) return;
         const pending = rows.filter(r => UNSAVED.has(r.status));
         if (pending.length === 0) {
             flash({ tone: 'info', text: 'Nothing to save — every mark on this sheet is already saved.' });
@@ -848,6 +850,12 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
                 </div>
             )}
 
+            {locked && (
+                <div role="status" className="flex items-start gap-2 border-b border-slate-500/25 bg-slate-500/[0.07] px-4 py-2.5 text-sm text-foreground sm:px-5">
+                    <Lock size={16} className="mt-0.5 shrink-0 text-slate-600 dark:text-slate-300" aria-hidden />
+                    <span>This term&apos;s marks are locked, so changes here can&apos;t be saved. Ask the admin or DOS to unlock the term.</span>
+                </div>
+            )}
             {readyToRelease && (
                 <div className="flex flex-col gap-3 border-b border-emerald-500/25 bg-emerald-500/[0.07] px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
                     <div className="flex items-start gap-2.5 text-sm">
@@ -959,7 +967,7 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
                         <button
                             type="button"
                             onClick={() => void handleSave()}
-                            disabled={saving || counts.unsaved === 0}
+                            disabled={saving || counts.unsaved === 0 || locked}
                             className="btn-primary flex-1 justify-center gap-2 px-5 py-2 disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none"
                         >
                             {saving ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <Save size={16} aria-hidden />}

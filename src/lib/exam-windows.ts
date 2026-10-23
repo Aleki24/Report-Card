@@ -44,6 +44,14 @@ export interface ExamWindowsResponse {
     requests: ExamRequest[];
     /** Classes the caller has asked about and is still waiting on. */
     myRequests: string[];
+    /** Set when the term's marks are locked: nobody can change them until it is unlocked. */
+    lock: TermLock | null;
+}
+
+export interface TermLock {
+    /** ISO time. */
+    lockedAt: string;
+    lockedBy: string | null;
 }
 
 /** A level's key for grouping classes; classes we can't place share one group. */

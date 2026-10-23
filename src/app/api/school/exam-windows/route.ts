@@ -6,6 +6,7 @@ import { findActiveTermId } from '@/lib/term-calendar';
 import { seedExamSlots } from '@/lib/seed-exam-slots';
 import { ALL_EXAM_TYPES, isAnytimeExamType, isValidExamType } from '@/lib/exam-types';
 import { EXAM_REQUESTS_TABLE, EXAM_WINDOWS_TABLE, readExamRequests, readExamWindows } from '@/lib/exam-windows-server';
+import { readTermLock } from '@/lib/term-lock-server';
 import type { ExamClass, ExamDateUpdate, ExamRequest, ExamWindowsResponse } from '@/lib/exam-windows';
 
 /**
@@ -131,13 +132,14 @@ export async function GET(request: NextRequest) {
     const term = await schoolTerm(supabase, access.schoolId, requested);
     const canOpen = access.can('marking.open');
     if (!term) {
-      return NextResponse.json({ termId: null, termName: null, data: [], canOpen, classes: [], requests: [], myRequests: [] } satisfies ExamWindowsResponse);
+      return NextResponse.json({ termId: null, termName: null, data: [], canOpen, classes: [], requests: [], myRequests: [], lock: null } satisfies ExamWindowsResponse);
     }
     // Side by side: each is a round trip to the database.
-    const [windows, requestRows, classes] = await Promise.all([
+    const [windows, requestRows, classes, lock] = await Promise.all([
       readExamWindows(supabase, access.schoolId, term.id),
       readExamRequests(supabase, access.schoolId, term.id),
       canOpen ? termClasses(supabase, access.schoolId, term.id) : Promise.resolve([]),
+      readTermLock(supabase, access.schoolId, term.id),
     ]);
     const opened = new Set(windows.map(w => w.grade_id));
     // A request is answered once its class has an exam open.
@@ -150,6 +152,7 @@ export async function GET(request: NextRequest) {
       classes,
       requests: canOpen ? await requestSummaries(supabase, waiting) : [],
       myRequests: [...new Set(waiting.filter(r => r.requested_by === access.userId).map(r => r.grade_id))],
+      lock,
     };
     return NextResponse.json(body);
   } catch (err) {

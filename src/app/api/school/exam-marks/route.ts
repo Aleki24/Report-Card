@@ -10,6 +10,7 @@ import { internalError } from '@/lib/api-errors';
 import { fetchAllRows } from '@/lib/postgrest';
 import { STAFF_TEACHING_ROLES, isRoleIn } from '@/lib/roles';
 import { stamped, writeWithAuthor } from '@/lib/mark-history-server';
+import { isExamTermLocked, isTermLockedError, termLockedResponse } from '@/lib/term-lock-server';
 
 /**
  * Resolve a { [componentId]: score } payload against the exam's
@@ -242,6 +243,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
     if (marks.length === 0) return NextResponse.json({ error: 'No marks to save' }, { status: 400 });
+    if (await isExamTermLocked(supabase, exam_id)) return termLockedResponse();
     if (marks.length > 2000) return NextResponse.json({ error: 'Too many marks in one request' }, { status: 400 });
     const submittedIds = [...new Set(marks.map((m: { student_id?: unknown }) => String(m.student_id ?? '')))];
     // One upsert cannot touch the same (student, exam) row twice.
@@ -388,6 +390,7 @@ export async function POST(request: NextRequest) {
       .upsert(stamped(processedMarks, userId, stamp), { onConflict: 'student_id,exam_id' })
       .select());
 
+    if (isTermLockedError(error)) return termLockedResponse();
     if (error) return internalError('exam-marks save', error);
 
     if (componentRows.length > 0) {
@@ -450,6 +453,7 @@ export async function PATCH(request: NextRequest) {
     if (!markCheck || (markCheck as any).students?.users?.school_id !== schoolId) {
        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
+    if (await isExamTermLocked(supabase, markCheck.exam_id as string)) return termLockedResponse();
 
     if (userProfile.role === 'CLASS_TEACHER' || userProfile.role === 'SUBJECT_TEACHER') {
       const { data: exam } = await supabase.from('exams').select('*').eq('id', markCheck.exam_id).maybeSingle();
@@ -530,6 +534,7 @@ export async function PATCH(request: NextRequest) {
       .select()
       .single());
 
+    if (isTermLockedError(error)) return termLockedResponse();
     if (error) return internalError('exam-marks update', error);
     return NextResponse.json({ success: true, data });
   } catch (err: unknown) {
@@ -570,6 +575,7 @@ export async function DELETE(request: NextRequest) {
     if (!markCheck || (markCheck as any).students?.users?.school_id !== schoolId) {
        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
+    if (await isExamTermLocked(supabase, markCheck.exam_id as string)) return termLockedResponse();
 
     if (userProfile.role === 'CLASS_TEACHER' || userProfile.role === 'SUBJECT_TEACHER') {
       const { data: exam } = await supabase.from('exams').select('*').eq('id', markCheck.exam_id).maybeSingle();
@@ -591,6 +597,7 @@ export async function DELETE(request: NextRequest) {
     await supabase.from('exam_marks').update({ updated_by: userId }).eq('id', id);
     const { error } = await supabase.from('exam_marks').delete().eq('id', id);
 
+    if (isTermLockedError(error)) return termLockedResponse();
     if (error) return internalError('exam-marks delete', error);
 
     // Also remove the student's per-paper scores for this exam (if any)

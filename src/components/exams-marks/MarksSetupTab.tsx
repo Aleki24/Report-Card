@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { AlertTriangle, ArrowLeft, ArrowRight, BellRing, CalendarClock, DoorOpen, Camera, Check, FileSpreadsheet, History, Keyboard, Layers, RefreshCw, Search } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ArrowRight, BellRing, CalendarClock, DoorOpen, Camera, Check, FileSpreadsheet, History, Keyboard, Layers, Lock, RefreshCw, Search } from 'lucide-react';
 import { ManualEntryGrid } from '@/components/marks/ManualEntryGrid';
 import { BulkUpload } from '@/components/marks/BulkUpload';
 import { ScanSheet } from '@/components/marks/ScanSheet';
@@ -22,6 +22,7 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { ExamSetupMenu } from './ExamSetupMenu';
 import { ExamWindowsPanel } from './ExamWindowsPanel';
 import { MarkingProgressBoard } from './MarkingProgressBoard';
+import { TermLockCard } from './TermLockCard';
 import { MODE_TONES, STEP_TONES, SUBJECT_CATEGORY_THEME, subjectCategory, type SubjectCategory } from './examTheme';
 
 interface MySubjectItem { id: string; code: string; name: string; academic_level_id: string; category?: string; }
@@ -304,6 +305,7 @@ export function MarksSetupTab() {
   }, [selectedTermId, windowsVersion]);
   const windows = windowMap(windowInfo?.termId === selectedTermId ? windowInfo.data : []);
   const canOpenExams = windowInfo?.canOpen ?? false;
+  const termLock = windowInfo?.termId === selectedTermId ? windowInfo.lock : null;
   const myRequests = new Set(windowInfo?.myRequests ?? []);
 
   /** Ask whoever opens exams to open one for these classes. */
@@ -730,6 +732,7 @@ export function MarksSetupTab() {
             subjectId={selectedExam.subject_id}
             subjectName={selectedExam.subject_name}
             released={selectedExam.status === 'APPROVED'}
+            locked={!!termLock}
             onReleased={() => setExams(prev => prev.map(e => (e.id === selectedExam.id ? { ...e, status: 'APPROVED' } : e)))}
           />
         )}
@@ -824,6 +827,23 @@ export function MarksSetupTab() {
           version={[...windows].map(([g, t]) => `${g}:${t}`).sort().join(',')}
           onOpenExam={openExam}
         />
+      )}
+
+      {/* Lock a finished term's marks; unlock it for a correction. */}
+      {canOpenExams && windowInfo?.termId === selectedTermId && (
+        <TermLockCard
+          key={`lock-${selectedTermId}`}
+          termId={selectedTermId}
+          termName={selectedTermName}
+          lock={termLock}
+          onChange={lock => setWindowInfo(prev => prev && { ...prev, lock })}
+        />
+      )}
+      {!canOpenExams && termLock && (
+        <p className="flex items-center gap-2 rounded-xl border border-slate-500/30 bg-slate-500/[0.06] px-4 py-3 text-sm text-foreground">
+          <Lock size={16} className="shrink-0 text-slate-600 dark:text-slate-300" aria-hidden />
+          {selectedTermName} marks are locked. You can view them; ask the admin or DOS to unlock the term to change one.
+        </p>
       )}
 
       {/* Nothing opened yet anywhere: a teacher can ask for it instead of guessing. */}
