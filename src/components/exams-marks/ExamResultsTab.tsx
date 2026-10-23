@@ -1,7 +1,9 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
+import { ArrowRight, BarChart3, ClipboardList, LayoutGrid, PencilLine, Trophy, type LucideIcon } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { InlineLoadingSkeleton } from '@/components/dashboard/LoadingSkeleton';
 import { ExamResultsTable, type MarkRow } from '@/components/exam-results/ExamResultsTable';
@@ -10,188 +12,179 @@ import { ExamAnalysisPanel } from '@/components/exam-results/ExamAnalysisPanel';
 import { QuickMarkEntry } from '@/components/exam-results/QuickMarkEntry';
 import { AllSubjectsView } from '@/components/exam-results/AllSubjectsView';
 import { ExamStatusBar } from '@/components/exam-results/ExamStatusBar';
+import { FEATURE_ICONS } from '@/components/ui/featureIcons';
 import { markEntryHref } from '@/lib/marking-progress';
-import { BarChart3, ClipboardList, Download, FileText, LayoutGrid, Package, PencilLine, Settings2, Trophy, type LucideIcon } from 'lucide-react';
-import { InitialsAvatar } from '@/components/ui/InitialsAvatar';
+import { findActiveTermId } from '@/lib/term-calendar';
+import { localToday } from '@/lib/assignments';
+import { getExamTypeLabel } from '@/lib/exam-types';
+import { currentExamType, examTypeDates, examTypeOrder } from '@/lib/exam-schedule';
+import type { ExamWindowsResponse } from '@/lib/exam-windows';
 import { cn } from '@/lib/utils';
 import { STEP_TONES } from './examTheme';
-import { examRosterUrl } from '@/lib/marks/roster-url';
 
-interface GradeStreamOption { id: string; full_name: string; grade_id: string; }
-interface ExamOption {
-    id: string; name: string; exam_type: string; max_score: number; subject_name: string; subject_id?: string; term_id?: string;
-    status?: 'DRAFT' | 'PENDING_APPROVAL' | 'APPROVED'; published_by?: string | null; approved_by?: string | null; created_by_teacher_id?: string | null;
+interface GradeStreamOption { id: string; full_name: string; grade_id: string }
+interface TermOption {
+    id: string; name: string; academic_year_id: string; academic_year_name?: string | null;
+    start_date?: string; end_date?: string; is_current?: boolean;
 }
-interface AcademicYear { id: string; name: string; }
-interface Term { id: string; name: string; academic_year_id: string; }
+/** One subject's paper in the chosen class, term and exam. */
+interface ExamOption {
+    id: string; name: string; exam_type: string; max_score: number; exam_date?: string | null;
+    subject_name: string; subject_id?: string; term_id?: string;
+    status?: 'DRAFT' | 'PENDING_APPROVAL' | 'APPROVED';
+}
 
 type Tab = 'allsubjects' | 'results' | 'analysis' | 'quickentry' | 'reports';
+/** Views about one subject's paper: they share the Term → Exam → Subject picker. */
+const PAPER_TABS: ReadonlySet<Tab> = new Set<Tab>(['results', 'analysis', 'quickentry']);
 
-const EXAM_TYPE_LABELS: Record<string, string> = {
-    CAT: 'CAT', TOPICAL: 'Topical', MIDTERM: 'Midterm', ENDTERM: 'End Term',
-    OPENER: 'Opener', MOCK: 'Mock', PRE_MOCK: 'Pre-Mock', POST_MOCK: 'Post-Mock',
-    ZONE: 'Zone', SUB_COUNTY: 'Sub-County', COUNTY: 'County', REGIONAL: 'Regional', NATIONAL: 'National',
-};
+const STATUS_LABEL: Record<NonNullable<ExamOption['status']>, string> = { DRAFT: 'not released', PENDING_APPROVAL: 'awaiting approval', APPROVED: 'released' };
 
+/**
+ * Results for one class. "All subjects" is the class broadsheet; the paper
+ * views (one subject, its analysis, quick entry) pick a paper by term, exam
+ * and subject. The exam dropdown used to list every paper the class had ever
+ * had, across every term, and opened on whichever came first (often an old,
+ * empty CAT); now it only lists the chosen term's, and opens on the exam
+ * the school has open for the class, else the latest one already due.
+ */
 export function ExamResultsTab() {
-    const { user, profile } = useAuth();
+    const { role } = useAuth();
+    // Report cards have their own page, for those it lets in.
+    const canOpenReports = role === 'ADMIN' || role === 'CLASS_TEACHER';
 
-    // Deep link from the Publish screen's "Review marks" action:
-    // ?stream=<grade_stream_id>&exam=<exam_id> opens straight onto that exam's
-    // marks so an admin can look at the results before approving them.
+    // ?stream=<grade_stream_id>&exam=<exam_id> (the Publish tab's "Review
+    // marks") opens straight onto that paper.
     const searchParams = useSearchParams();
     const linkedStreamId = searchParams.get('stream') || '';
     const linkedExamId = searchParams.get('exam') || '';
 
-    // ----- Cascading filters -----
     const [gradeStreams, setGradeStreams] = useState<GradeStreamOption[]>([]);
-    const [selectedStreamId, setSelectedStreamId] = useState(linkedStreamId);
-    const [exams, setExams] = useState<ExamOption[]>([]);
-    const [selectedExamId, setSelectedExamId] = useState('');
     const [loadingStreams, setLoadingStreams] = useState(true);
-    const [loadingExams, setLoadingExams] = useState(false);
-
-    // The exam the URL asked for, consumed once the exam list arrives. Kept in
-    // a ref so a manual pick afterwards is never overridden by a refetch.
-    const wantedExamIdRef = useRef(linkedExamId);
-
-    // ----- Tab + Data -----
+    const [terms, setTerms] = useState<TermOption[]>([]);
+    const [streamId, setStreamId] = useState(linkedStreamId);
     const [activeTab, setActiveTab] = useState<Tab>(linkedExamId ? 'results' : 'allsubjects');
+
+    // The paper picker. Empty picks fall back to sensible defaults below.
+    const [pickedTermId, setPickedTermId] = useState('');
+    const [pickedType, setPickedType] = useState('');
+    const [pickedExamId, setPickedExamId] = useState('');
+
+    const [exams, setExams] = useState<ExamOption[]>([]);
+    const [loadingExams, setLoadingExams] = useState(false);
+    const [openTypeByGrade, setOpenTypeByGrade] = useState<ReadonlyMap<string, string>>(new Map());
+
     const [marks, setMarks] = useState<MarkRow[]>([]);
     const [markScheme, setMarkScheme] = useState<ExamSubjectComponentScheme | null>(null);
     const [loadingMarks, setLoadingMarks] = useState(false);
 
-    // A later click on another pending exam re-uses this mounted component, so
-    // follow the URL when it changes rather than only reading it on mount.
+    // ── Classes and terms ──
     useEffect(() => {
-        if (!linkedStreamId && !linkedExamId) return;
-        wantedExamIdRef.current = linkedExamId;
-        if (linkedStreamId) setSelectedStreamId(linkedStreamId);
-        if (linkedExamId) {
-            setActiveTab('results');
-            setSelectedExamId(linkedExamId);
-        }
-    }, [linkedStreamId, linkedExamId]);
-
-    // ----- Reports tab -----
-    const [academicYears, setAcademicYears] = useState<AcademicYear[]>([]);
-    const [allTerms, setAllTerms] = useState<Term[]>([]);
-    const [selectedYearId, setSelectedYearId] = useState('');
-    const [selectedTermId, setSelectedTermId] = useState('');
-    const [reportGenerating, setReportGenerating] = useState(false);
-    const [reportMsg, setReportMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-    const [customReportTitle, setCustomReportTitle] = useState('');
-    const [classStudents, setClassStudents] = useState<{ id: string; name: string; admission_number: string }[]>([]);
-    // Which round of exams (CAT, Midterm, End Term, Mock, ...) to base the
-    // report card on — a term can have several per subject.
-    const [availableExamTypes, setAvailableExamTypes] = useState<string[]>([]);
-    const [selectedReportExamType, setSelectedReportExamType] = useState('');
-
-    // ═══════════════════ Data fetching (all via server APIs) ═══════════════════
-
-    // 1. Fetch all grade streams (server-scoped)
-    useEffect(() => {
-        const fetchStreams = async () => {
+        (async () => {
             try {
-                const res = await fetch('/api/school/data?type=grade_streams');
-                if (res.ok) {
-                    const json = await res.json();
-                    setGradeStreams(json.data || []);
-                } else {
-                    setGradeStreams([]);
-                }
+                const [streamsRes, termsRes] = await Promise.all([
+                    fetch('/api/school/data?type=grade_streams'),
+                    fetch('/api/school/data?type=terms'),
+                ]);
+                const streamsJson = (await streamsRes.json().catch(() => null)) as { data?: GradeStreamOption[] } | null;
+                const termsJson = (await termsRes.json().catch(() => null)) as { data?: TermOption[] } | null;
+                setGradeStreams(streamsRes.ok ? streamsJson?.data ?? [] : []);
+                setTerms(termsRes.ok ? termsJson?.data ?? [] : []);
             } catch (err) {
-                console.error('Failed to fetch streams:', err);
-                setGradeStreams([]);
+                console.error('Failed to load classes and terms:', err);
             } finally {
                 setLoadingStreams(false);
             }
-        };
-        fetchStreams();
+        })();
     }, []);
 
-    // 2. Fetch exams for selected stream (via server API instead of browser Supabase)
-    const fetchExams = useCallback(async (opts?: { keepSelection?: boolean }) => {
-        if (!selectedStreamId) { setExams([]); setSelectedExamId(''); return; }
-        setLoadingExams(true);
-        const stream = gradeStreams.find(s => s.id === selectedStreamId);
-        if (!stream) { setLoadingExams(false); return; }
+    const stream = gradeStreams.find(s => s.id === streamId) ?? null;
+    const activeTermId = useMemo(() => findActiveTermId(terms), [terms]);
+    const termId = pickedTermId || activeTermId || terms[0]?.id || '';
+    // Newest year first; "Term 1" repeats every year, so later years are named.
+    const termGroups = useMemo(() => {
+        const groups = new Map<string, { name: string; terms: TermOption[] }>();
+        for (const t of terms) {
+            const g = groups.get(t.academic_year_id) ?? { name: t.academic_year_name || 'Other', terms: [] };
+            g.terms.push(t);
+            groups.set(t.academic_year_id, g);
+        }
+        return [...groups.values()].reverse();
+    }, [terms]);
 
+    // ── A "Review marks" link: find its paper's term and exam ──
+    const handledLinkRef = useRef('');
+    useEffect(() => {
+        if (!linkedStreamId || !linkedExamId || !stream || stream.id !== linkedStreamId) return;
+        const key = `${linkedStreamId}:${linkedExamId}`;
+        if (handledLinkRef.current === key) return;
+        handledLinkRef.current = key;
+        (async () => {
+            const params = new URLSearchParams({ stream_id: stream.id, grade_id: stream.grade_id });
+            const res = await fetch(`/api/school/exams?${params}`).catch(() => null);
+            const json = res?.ok ? ((await res.json()) as { data?: ExamOption[] }) : null;
+            const exam = json?.data?.find(e => e.id === linkedExamId);
+            if (!exam) return;
+            setActiveTab('results');
+            setPickedTermId(exam.term_id ?? '');
+            setPickedType(exam.exam_type);
+            setPickedExamId(exam.id);
+        })();
+    }, [linkedStreamId, linkedExamId, stream]);
+
+    // A later link while this tab is open re-uses the mounted component.
+    useEffect(() => {
+        if (linkedStreamId) setStreamId(linkedStreamId);
+    }, [linkedStreamId]);
+
+    // ── The chosen term's papers for the class, and the exam open for it ──
+    const loadExams = useCallback(async () => {
+        if (!stream || !termId) { setExams([]); return; }
+        setLoadingExams(true);
         try {
-            const params = new URLSearchParams({
-                stream_id: selectedStreamId,
-                grade_id: stream.grade_id,
-            });
-            const res = await fetch(`/api/school/exams?${params.toString()}`);
-            if (res.ok) {
-                const json = await res.json();
-                const mapped = (json.data || []).map((e: any) => ({
-                    id: e.id,
-                    name: e.name,
-                    exam_type: e.exam_type,
-                    max_score: e.max_score,
-                    subject_name: e.subject_name || 'N/A',
-                    subject_id: e.subject_id,
-                    term_id: e.term_id,
-                    status: e.status || 'DRAFT',
-                    published_by: e.published_by,
-                    approved_by: e.approved_by,
-                    created_by_teacher_id: e.created_by_teacher_id,
-                }));
-                setExams(mapped);
-                if (!opts?.keepSelection) {
-                    // Prefer the exam a "Review marks" link asked for; fall
-                    // back to the first one in the class.
-                    const wanted = wantedExamIdRef.current;
-                    wantedExamIdRef.current = '';
-                    setSelectedExamId(
-                        wanted && mapped.some((e: ExamOption) => e.id === wanted) ? wanted : (mapped[0]?.id || '')
-                    );
-                }
-            } else {
-                setExams([]);
-                if (!opts?.keepSelection) setSelectedExamId('');
-            }
+            const params = new URLSearchParams({ stream_id: stream.id, grade_id: stream.grade_id, term_id: termId });
+            const [examsRes, windowsRes] = await Promise.all([
+                fetch(`/api/school/exams?${params}`),
+                fetch(`/api/school/exam-windows?term_id=${encodeURIComponent(termId)}`),
+            ]);
+            const examsJson = (await examsRes.json().catch(() => null)) as { data?: ExamOption[] } | null;
+            const windowsJson = (await windowsRes.json().catch(() => null)) as ExamWindowsResponse | null;
+            setExams(examsRes.ok ? examsJson?.data ?? [] : []);
+            setOpenTypeByGrade(new Map(windowsRes.ok ? (windowsJson?.data ?? []).map(w => [w.grade_id, w.exam_type]) : []));
         } catch (err) {
             console.error('Failed to fetch exams:', err);
             setExams([]);
-            if (!opts?.keepSelection) setSelectedExamId('');
         } finally {
             setLoadingExams(false);
         }
-    }, [selectedStreamId, gradeStreams]);
+    }, [stream, termId]);
 
-    // gradeStreams is a dependency because the request needs the stream's
-    // grade_id — with a ?stream= deep link the id is set before they load.
-    useEffect(() => { fetchExams(); }, [fetchExams]);
+    useEffect(() => { void loadExams(); }, [loadExams]);
 
-    // 3. Fetch marks for selected exam (via server API instead of browser Supabase)
+    const types = useMemo(() => [...new Set(exams.map(e => e.exam_type))].sort((a, b) => examTypeOrder(a) - examTypeOrder(b)), [exams]);
+    const openType = stream ? openTypeByGrade.get(stream.grade_id) ?? '' : '';
+    const dueType = useMemo(() => currentExamType(examTypeDates(exams), localToday()), [exams]);
+    const examType = types.includes(pickedType) ? pickedType
+        : types.includes(openType) ? openType
+        : dueType && types.includes(dueType) ? dueType
+        : types[0] ?? '';
+    const papers = useMemo(
+        () => exams.filter(e => e.exam_type === examType).sort((a, b) => a.subject_name.localeCompare(b.subject_name)),
+        [exams, examType],
+    );
+    const selectedExam = papers.find(e => e.id === pickedExamId) ?? papers[0] ?? null;
+    const selectedExamId = selectedExam?.id ?? '';
+    const showsPaper = PAPER_TABS.has(activeTab);
+
+    // ── Marks for the chosen paper, only while a paper view is open ──
     const fetchMarks = useCallback(async () => {
-        if (!selectedExamId) { setMarks([]); return; }
+        if (!selectedExamId) { setMarks([]); setMarkScheme(null); return; }
         setLoadingMarks(true);
-
         try {
-            const res = await fetch(`/api/school/exam-marks?exam_id=${selectedExamId}`);
-            if (res.ok) {
-                const json = await res.json();
-                const mapped: MarkRow[] = (json.data || []).map((m: any) => ({
-                    id: m.id,
-                    student_id: m.student_id,
-                    student_name: m.student_name || '',
-                    admission_number: m.admission_number || '',
-                    raw_score: Number(m.raw_score),
-                    percentage: Number(m.percentage || 0),
-                    grade_symbol: m.grade_symbol || '-',
-                    rubric: m.rubric,
-                    remarks: m.remarks,
-                    components: m.components,
-                }));
-                setMarks(mapped);
-                setMarkScheme(json.scheme || null);
-            } else {
-                setMarks([]);
-                setMarkScheme(null);
-            }
+            const res = await fetch(`/api/school/exam-marks?exam_id=${encodeURIComponent(selectedExamId)}`);
+            const json = (await res.json().catch(() => null)) as { data?: MarkRowSource[]; scheme?: ExamSubjectComponentScheme | null } | null;
+            setMarks(res.ok ? (json?.data ?? []).map(toMarkRow) : []);
+            setMarkScheme(res.ok ? json?.scheme ?? null : null);
         } catch (err) {
             console.error('Failed to fetch marks:', err);
             setMarks([]);
@@ -201,217 +194,82 @@ export function ExamResultsTab() {
         }
     }, [selectedExamId]);
 
-    useEffect(() => { fetchMarks(); }, [fetchMarks]);
-
-    // 3.5. Fetch all students in the selected class (for reports tab)
-    const fetchClassStudents = useCallback(async () => {
-        if (!selectedStreamId) { setClassStudents([]); return; }
-        
-        try {
-            const res = await fetch(examRosterUrl({ gradeStreamId: selectedStreamId }));
-            const json = await res.json();
-            const allStudents = (json.data || []) as any[];
-            
-            const filtered = allStudents.filter((s: any) => 
-                s.current_grade_stream_id === selectedStreamId
-            ).map((s: any) => ({
-                id: s.id,
-                name: `${s.users?.first_name || ''} ${s.users?.last_name || ''}`.trim(),
-                admission_number: s.admission_number || '',
-            })).sort((a: any, b: any) => a.name.localeCompare(b.name));
-            
-            setClassStudents(filtered);
-        } catch (err) {
-            console.error('Failed to fetch class students:', err);
-            setClassStudents([]);
-        }
-    }, [selectedStreamId]);
-
     useEffect(() => {
-        if (selectedStreamId) fetchClassStudents();
-    }, [selectedStreamId, fetchClassStudents]);
+        if (showsPaper) void fetchMarks();
+    }, [fetchMarks, showsPaper]);
 
-    // 3.6. Fetch which exam rounds (CAT, Midterm, End Term, Mock, ...) exist
-    // for this class + term, so the admin/teacher can pick which one the
-    // report card should be based on — a term can hold several per subject.
-    useEffect(() => {
-        setSelectedReportExamType('');
-        if (!selectedStreamId || !selectedTermId) { setAvailableExamTypes([]); return; }
-        const stream = gradeStreams.find(s => s.id === selectedStreamId);
-        if (!stream) { setAvailableExamTypes([]); return; }
-
-        (async () => {
-            try {
-                const params = new URLSearchParams({ stream_id: selectedStreamId, grade_id: stream.grade_id, term_id: selectedTermId });
-                const res = await fetch(`/api/school/exams?${params.toString()}`);
-                if (!res.ok) { setAvailableExamTypes([]); return; }
-                const json = await res.json();
-                const types = Array.from(new Set((json.data || []).map((e: any) => e.exam_type).filter(Boolean))) as string[];
-                setAvailableExamTypes(types);
-            } catch (err) {
-                console.error('Failed to fetch exam types:', err);
-                setAvailableExamTypes([]);
-            }
-        })();
-    }, [selectedStreamId, selectedTermId, gradeStreams]);
-
-    // 4. Fetch academic years + terms (for reports tab)
-    useEffect(() => {
-        const fetchYearsTerms = async () => {
-            try {
-                const [yearsRes, termsRes] = await Promise.all([
-                    fetch('/api/school/data?type=academic_years'),
-                    fetch('/api/school/data?type=terms'),
-                ]);
-                const [yearsJson, termsJson] = await Promise.all([
-                    yearsRes.json(),
-                    termsRes.json(),
-                ]);
-                setAcademicYears(yearsJson.data || []);
-                setAllTerms(termsJson.data || []);
-                if (yearsJson.data && yearsJson.data.length > 0) setSelectedYearId(yearsJson.data[0].id);
-            } catch (err) {
-                console.error('Failed to fetch years/terms:', err);
-            }
-        };
-        fetchYearsTerms();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
-    useEffect(() => { setSelectedTermId(''); }, [selectedYearId]);
-
-    const filteredTerms = allTerms.filter(t => t.academic_year_id === selectedYearId);
-
-    // ═══════════════════ Report handlers ═══════════════════
-
-    const handleDownloadReport = (studentId: string) => {
-        const params = new URLSearchParams();
-        if (selectedTermId) params.set('term', selectedTermId);
-        if (selectedYearId) params.set('year', selectedYearId);
-        if (customReportTitle) params.set('customTitle', customReportTitle);
-        if (selectedReportExamType) params.set('examType', selectedReportExamType);
-        window.open(`/api/reports/student/${studentId}?${params.toString()}`, '_blank');
+    const chooseStream = (id: string) => {
+        setStreamId(id);
+        // A new class starts on its own defaults; the view stays where it was.
+        setPickedType('');
+        setPickedExamId('');
     };
 
-    // Bulk reports now use server API instead of browser-side supabase.rpc()
-    const handleBulkReports = async () => {
-        if (!selectedTermId || !selectedStreamId) {
-            setReportMsg({ type: 'error', text: 'Select a term and class to generate bulk reports.' });
-            return;
-        }
-        setReportGenerating(true);
-        setReportMsg(null);
+    const tabs = RESULT_TABS.filter(t => t.key !== 'reports' || canOpenReports);
 
-        try {
-            const res = await fetch('/api/school/generate-reports', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    term_id: selectedTermId,
-                    grade_stream_id: selectedStreamId,
-                }),
-            });
-
-            const json = await res.json();
-            if (!res.ok || json.error) {
-                setReportMsg({ type: 'error', text: `Failed: ${json.error || 'Unknown error'}` });
-            } else {
-                setReportMsg({ type: 'success', text: 'Bulk reports generated successfully!' });
-            }
-        } catch (err) {
-            setReportMsg({ type: 'error', text: `Failed: ${err instanceof Error ? err.message : 'Network error'}` });
-        } finally {
-            setReportGenerating(false);
-        }
-    };
-
-    // ═══════════════════ Current exam info ═══════════════════
-    const selectedExam = exams.find(e => e.id === selectedExamId);
-
-    // ═══════════════════ Render ═══════════════════
     return (
-        <div className="w-full max-w-7xl mx-auto">
-            {/* Header removed as it is now a tab */}
-
-            {/* ── Cascading Filters ── */}
-            <div
-                className="card flex flex-col md:flex-row md:items-end gap-4 mb-6 p-5"
-            >
-                {/* Class / Stream */}
-                <div className="flex-1">
-                    <label className="block text-xs text-muted-foreground mb-2">Class / Stream</label>
-                    <select
-                        className="input-field w-full"
-                        value={selectedStreamId}
-                        onChange={e => { setSelectedStreamId(e.target.value); setActiveTab('results'); }}
-                        disabled={loadingStreams}
-                    >
-                        <option value="">-- Select Class --</option>
-                        {gradeStreams.map(s => (
-                            <option key={s.id} value={s.id}>{s.full_name}</option>
-                        ))}
+        <div className="mx-auto w-full max-w-7xl">
+            {/* ── Class, and for paper views the term → exam → subject ── */}
+            <div className="card mb-6 grid gap-4 p-5 sm:grid-cols-2 lg:grid-cols-4">
+                <Field label="Class">
+                    <select className="input-field w-full" value={streamId} onChange={e => chooseStream(e.target.value)} disabled={loadingStreams}>
+                        <option value="">{loadingStreams ? 'Loading classes…' : 'Choose a class'}</option>
+                        {gradeStreams.map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}
                     </select>
-                </div>
+                </Field>
 
-                {/* Exam */}
-                <div className="flex-1">
-                    <label className="block text-xs text-muted-foreground mb-2">Exam</label>
-                    <select
-                        className="input-field w-full"
-                        value={selectedExamId}
-                        onChange={e => { setSelectedExamId(e.target.value); setActiveTab('results'); }}
-                        disabled={!selectedStreamId || loadingExams}
-                    >
-                        {!selectedStreamId ? (
-                            <option value="">Select a class first</option>
-                        ) : loadingExams ? (
-                            <option value="">Loading…</option>
-                        ) : exams.length === 0 ? (
-                            <option value="">No exams found</option>
-                        ) : (
-                            exams.map(e => (
-                                <option key={e.id} value={e.id}>
-                                    {e.name} — {e.subject_name} ({e.exam_type})
-                                </option>
-                            ))
-                        )}
-                    </select>
-                </div>
+                {streamId && showsPaper && (
+                    <>
+                        <Field label="Term">
+                            <select
+                                className="input-field w-full"
+                                value={termId}
+                                onChange={e => { setPickedTermId(e.target.value); setPickedType(''); setPickedExamId(''); }}
+                            >
+                                {termGroups.map(g => (
+                                    <optgroup key={g.name} label={g.name}>
+                                        {g.terms.map(t => <option key={t.id} value={t.id}>{t.name}{t.id === activeTermId ? ' (current)' : ''}</option>)}
+                                    </optgroup>
+                                ))}
+                            </select>
+                        </Field>
+                        <Field label="Exam">
+                            <select
+                                className="input-field w-full"
+                                value={examType}
+                                onChange={e => { setPickedType(e.target.value); setPickedExamId(''); }}
+                                disabled={loadingExams || types.length === 0}
+                            >
+                                {loadingExams ? <option value="">Loading…</option>
+                                    : types.length === 0 ? <option value="">No exams this term</option>
+                                    : types.map(t => <option key={t} value={t}>{getExamTypeLabel(t)}{t === openType ? ' · being marked' : ''}</option>)}
+                            </select>
+                        </Field>
+                        <Field label="Subject">
+                            <select
+                                className="input-field w-full"
+                                value={selectedExamId}
+                                onChange={e => setPickedExamId(e.target.value)}
+                                disabled={loadingExams || papers.length === 0}
+                            >
+                                {papers.length === 0 ? <option value="">{loadingExams ? 'Loading…' : 'No subjects'}</option>
+                                    : papers.map(e => <option key={e.id} value={e.id}>{e.subject_name} · {STATUS_LABEL[e.status ?? 'DRAFT']}</option>)}
+                            </select>
+                        </Field>
+                    </>
+                )}
             </div>
 
-            {!selectedStreamId && (
+            {!streamId ? (
                 <div className="flex flex-col items-center rounded-2xl border border-dashed border-border bg-card px-6 py-14 text-center">
                     <span className="mb-3 flex size-12 items-center justify-center rounded-2xl bg-amber-500/12 text-amber-600 dark:text-amber-400" aria-hidden><Trophy className="size-6" /></span>
                     <p className="text-sm font-semibold text-foreground">Choose a class to see its results</p>
-                    <p className="mt-1 max-w-sm text-sm text-muted-foreground">Compare every subject, check one exam, see the analysis or download report cards.</p>
+                    <p className="mt-1 max-w-sm text-sm text-muted-foreground">Compare every subject, look at one subject&apos;s paper, or see its analysis.</p>
                 </div>
-            )}
-
-            {/* Show content when stream is selected */}
-            {selectedStreamId && (
+            ) : (
                 <>
-                    {/* Selected Exam Info (only if a specific exam is selected) */}
-                    {selectedExamId && selectedExam && (
-                        <div className="mb-4 flex items-center gap-3 rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/[0.07] to-transparent p-3 sm:p-4">
-                            <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-violet-500/12 text-violet-600 dark:text-violet-400" aria-hidden><ClipboardList className="size-5" /></span>
-                            <div className="min-w-0 text-sm">
-                                <p className="truncate font-semibold text-foreground">{selectedExam.subject_name} · {selectedExam.name}</p>
-                                <p className="text-xs text-muted-foreground">Out of {selectedExam.max_score}</p>
-                            </div>
-                        </div>
-                    )}
-
-                    {selectedExamId && selectedExam && (
-                        <ExamStatusBar
-                            examId={selectedExam.id}
-                            status={selectedExam.status || 'DRAFT'}
-                            onChanged={() => fetchExams({ keepSelection: true })}
-                        />
-                    )}
-
-                    {/* ── Tabs ── */}
                     <div role="tablist" aria-label="Results views" className="mb-6 flex gap-1 overflow-x-auto rounded-2xl border border-border/70 bg-muted/50 p-1 [scrollbar-width:none]">
-                        {RESULT_TABS.map((tab, i) => {
+                        {tabs.map((tab, i) => {
                             const active = activeTab === tab.key;
                             const Icon = tab.icon;
                             return (
@@ -433,149 +291,61 @@ export function ExamResultsTab() {
                         })}
                     </div>
 
-                    {/* ── Tab Content ── */}
-                    {loadingMarks ? (
-                        <div className="card p-5">
-                            <InlineLoadingSkeleton rows={6} />
+                    {activeTab === 'allsubjects' && <AllSubjectsView gradeStreamId={streamId} terms={terms} />}
+
+                    {activeTab === 'reports' && canOpenReports && (
+                        <div className="card flex flex-col items-start gap-4 p-6 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="flex items-start gap-3">
+                                <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-violet-500/12 text-violet-600 dark:text-violet-400" aria-hidden><FEATURE_ICONS.reports className="size-5" /></span>
+                                <div>
+                                    <p className="font-semibold text-foreground">Report cards have their own page</p>
+                                    <p className="text-sm text-muted-foreground">Download the whole class or one learner, choose the card design, send results by SMS and compare terms.</p>
+                                </div>
+                            </div>
+                            <Link href="/dashboard/reports" className="btn-primary shrink-0 no-underline">
+                                Open Report Cards <ArrowRight className="size-4" aria-hidden />
+                            </Link>
                         </div>
-                    ) : (
-                        <>
-                            {activeTab === 'allsubjects' && (
-                                <AllSubjectsView gradeStreamId={selectedStreamId} terms={allTerms} />
-                            )}
+                    )}
 
-                            {activeTab === 'results' && selectedExamId && (
-                                <ExamResultsTable
-                                    marks={marks}
-                                    maxScore={selectedExam?.max_score || 100}
-                                    examId={selectedExamId}
-                                    gradeStreamId={selectedStreamId}
-                                    scheme={markScheme}
-                                    onRefresh={fetchMarks}
-                                    onMarkPatched={(patched) => setMarks(prev => prev.map(m => m.id === patched.id ? patched : m))}
-                                    markEntryLink={markEntryHref(selectedExam?.term_id, selectedExamId)}
-                                />
-                            )}
-                            {activeTab === 'results' && !selectedExamId && (
-                                <div className="card text-center py-16">
-                                    <p style={{ color: 'var(--color-text-muted)', fontSize: 14 }}>Select an exam above to view individual results.</p>
-                                </div>
-                            )}
-
-                            {activeTab === 'analysis' && selectedExamId && (
-                                <ExamAnalysisPanel marks={marks} />
-                            )}
-
-                            {activeTab === 'quickentry' && selectedExamId && (
-                                <QuickMarkEntry
-                                    examId={selectedExamId}
-                                    gradeStreamId={selectedStreamId}
-                                    subjectId={selectedExam?.subject_id}
-                                    onSaved={fetchMarks}
-                                />
-                            )}
-
-                            {activeTab === 'reports' && (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
-                                    {/* Year/Term Filters */}
-                                    <div className="card p-5">
-                                        <SectionTitle icon={Settings2} tone={0} title="Report settings" />
-                                        <div className="flex flex-col md:flex-row" style={{ gap: 'var(--space-4)' }}>
-                                            <div className="flex-1">
-                                                <label className="block text-xs text-muted-foreground mb-2">Academic Year</label>
-                                                <select className="input-field w-full" value={selectedYearId} onChange={e => setSelectedYearId(e.target.value)}>
-                                                    <option value="">-- Select Year --</option>
-                                                    {academicYears.map(y => <option key={y.id} value={y.id}>{y.name}</option>)}
-                                                </select>
-                                            </div>
-                                            <div className="flex-1">
-                                                <label className="block text-xs text-muted-foreground mb-2">Term</label>
-                                                <select className="input-field w-full" value={selectedTermId} onChange={e => setSelectedTermId(e.target.value)} disabled={!selectedYearId}>
-                                                    <option value="">-- Select Term --</option>
-                                                    {filteredTerms.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                                                </select>
-                                            </div>
-                                            <div className="flex-1">
-                                                <label className="block text-xs text-muted-foreground mb-2">Exam</label>
-                                                <select
-                                                    className="input-field w-full"
-                                                    value={selectedReportExamType}
-                                                    onChange={e => setSelectedReportExamType(e.target.value)}
-                                                    disabled={availableExamTypes.length === 0}
-                                                >
-                                                    <option value="">{availableExamTypes.length === 0 ? 'No exams for this term yet' : 'Most recent exam'}</option>
-                                                    {availableExamTypes.map(t => <option key={t} value={t}>{EXAM_TYPE_LABELS[t] || t}</option>)}
-                                                </select>
-                                            </div>
-                                        </div>
-                                        <div className="mt-4">
-                                            <label className="block text-xs text-muted-foreground mb-2">Custom Report Title (Optional)</label>
-                                            <input 
-                                                className="input-field w-full" 
-                                                placeholder="e.g. Mid Term 1 Report (Leave blank to use Term Name)"
-                                                value={customReportTitle}
-                                                onChange={e => setCustomReportTitle(e.target.value)}
-                                            />
-                                        </div>
-                                    </div>
-
-                                    {/* Individual Reports */}
-                                    <div className="card p-5">
-                                        <SectionTitle icon={Download} tone={1} title="Individual report cards (PDF)" />
-                                        <p className="text-sm text-muted-foreground" style={{ marginBottom: 'var(--space-4)' }}>
-                                            Click a student to download their PDF report card.
-                                        </p>
-                                        {classStudents.length === 0 ? (
-                                            <p style={{ color: 'var(--color-text-muted)', fontSize: 13 }}>No students found in this class.</p>
-                                        ) : (
-                                            <div className="student-reports-grid">
-                                                {classStudents.map(s => (
-                                                    <button
-                                                        key={s.id}
-                                                        type="button"
-                                                        className="group flex items-center gap-3 rounded-xl border border-border/70 bg-card px-3 py-2.5 text-left text-sm transition-all hover:-translate-y-px hover:border-primary/40 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                                                        onClick={() => handleDownloadReport(s.id)}
-                                                        aria-label={`Download ${s.name}'s report card`}
-                                                    >
-                                                        <InitialsAvatar name={s.name} seed={s.id} />
-                                                        <span className="min-w-0 flex-1">
-                                                            <span className="block truncate font-semibold">{s.name}</span>
-                                                            <span className="block truncate text-[11px] text-muted-foreground">{s.admission_number}</span>
-                                                        </span>
-                                                        <FileText className="size-4 shrink-0 text-muted-foreground transition-colors group-hover:text-primary" aria-hidden />
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {/* Bulk Reports */}
-                                    <div className="card p-5">
-                                        <SectionTitle icon={Package} tone={2} title="Generate the whole class" />
-                                        <p className="text-sm text-muted-foreground" style={{ marginBottom: 'var(--space-4)' }}>
-                                            Generate report cards for all students in the selected class and term.
-                                        </p>
-                                        <button
-                                            className="btn-primary disabled:opacity-50"
-                                            onClick={handleBulkReports}
-                                            disabled={reportGenerating || !selectedTermId}
-                                        >
-                                            {reportGenerating ? 'Generating…' : 'Generate All Reports'}
-                                        </button>
-                                        {reportMsg && (
-                                            <div
-                                                className={`mt-3 p-3 rounded-md text-sm ${reportMsg.type === 'success'
-                                                    ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30'
-                                                    : 'bg-red-500/10 text-red-700 dark:text-red-400 border border-red-500/30'
-                                                    }`}
-                                            >
-                                                {reportMsg.text}
-                                            </div>
-                                        )}
+                    {showsPaper && (
+                        loadingExams ? (
+                            <div className="card p-5"><InlineLoadingSkeleton rows={6} /></div>
+                        ) : !selectedExam ? (
+                            <div className="card py-16 text-center text-sm text-muted-foreground">
+                                {types.length === 0 ? 'No exams are set up for this class this term.' : 'No subjects have this exam in this class.'}
+                            </div>
+                        ) : (
+                            <>
+                                <div className="mb-4 flex items-center gap-3 rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/[0.07] to-transparent p-3 sm:p-4">
+                                    <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-violet-500/12 text-violet-600 dark:text-violet-400" aria-hidden><ClipboardList className="size-5" /></span>
+                                    <div className="min-w-0 text-sm">
+                                        <p className="truncate font-semibold text-foreground">{selectedExam.subject_name} · {getExamTypeLabel(selectedExam.exam_type)}</p>
+                                        <p className="text-xs text-muted-foreground">{stream?.full_name} · {terms.find(t => t.id === termId)?.name} · Out of {selectedExam.max_score}</p>
                                     </div>
                                 </div>
-                            )}
-                        </>
+                                <ExamStatusBar examId={selectedExam.id} status={selectedExam.status || 'DRAFT'} onChanged={() => void loadExams()} />
+
+                                {loadingMarks ? (
+                                    <div className="card p-5"><InlineLoadingSkeleton rows={6} /></div>
+                                ) : activeTab === 'results' ? (
+                                    <ExamResultsTable
+                                        marks={marks}
+                                        maxScore={selectedExam.max_score || 100}
+                                        examId={selectedExam.id}
+                                        gradeStreamId={streamId}
+                                        scheme={markScheme}
+                                        onRefresh={fetchMarks}
+                                        onMarkPatched={patched => setMarks(prev => prev.map(m => (m.id === patched.id ? patched : m)))}
+                                        markEntryLink={markEntryHref(selectedExam.term_id, selectedExam.id)}
+                                    />
+                                ) : activeTab === 'analysis' ? (
+                                    <ExamAnalysisPanel marks={marks} />
+                                ) : (
+                                    <QuickMarkEntry examId={selectedExam.id} gradeStreamId={streamId} subjectId={selectedExam.subject_id} onSaved={fetchMarks} />
+                                )}
+                            </>
+                        )
                     )}
                 </>
             )}
@@ -583,19 +353,41 @@ export function ExamResultsTab() {
     );
 }
 
+/** A mark as /api/school/exam-marks returns it. */
+interface MarkRowSource {
+    id: string; student_id: string; student_name?: string; admission_number?: string;
+    raw_score: number | string; percentage?: number | string | null; grade_symbol?: string | null;
+    rubric?: MarkRow['rubric']; remarks?: MarkRow['remarks']; components?: MarkRow['components'];
+}
+
+function toMarkRow(m: MarkRowSource): MarkRow {
+    return {
+        id: m.id,
+        student_id: m.student_id,
+        student_name: m.student_name || '',
+        admission_number: m.admission_number || '',
+        raw_score: Number(m.raw_score),
+        percentage: Number(m.percentage || 0),
+        grade_symbol: m.grade_symbol || '-',
+        rubric: m.rubric ?? null,
+        remarks: m.remarks ?? null,
+        components: m.components,
+    };
+}
+
 const RESULT_TABS: readonly { key: Tab; label: string; icon: LucideIcon }[] = [
     { key: 'allsubjects', label: 'All subjects', icon: LayoutGrid },
-    { key: 'results', label: 'Single exam', icon: ClipboardList },
+    { key: 'results', label: 'One subject', icon: ClipboardList },
     { key: 'analysis', label: 'Analysis', icon: BarChart3 },
     { key: 'quickentry', label: 'Quick entry', icon: PencilLine },
-    { key: 'reports', label: 'Reports', icon: FileText },
+    { key: 'reports', label: 'Report cards', icon: FEATURE_ICONS.reports },
 ];
 
-function SectionTitle({ icon: Icon, tone, title }: { icon: LucideIcon; tone: number; title: string }) {
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
     return (
-        <h3 className="mb-3 flex items-center gap-2.5 text-sm font-semibold">
-            <span className={cn('flex size-8 items-center justify-center rounded-lg', STEP_TONES[tone % STEP_TONES.length].tile)} aria-hidden><Icon className="size-4" /></span>
-            {title}
-        </h3>
+        <label className="block min-w-0 text-xs font-semibold text-muted-foreground">
+            <span className="mb-2 block">{label}</span>
+            {children}
+        </label>
     );
 }

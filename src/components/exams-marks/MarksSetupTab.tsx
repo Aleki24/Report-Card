@@ -15,6 +15,7 @@ import { ALL_EXAM_TYPES, STANDARD_TERM_EXAMS, getExamTypeLabel, isAnytimeExamTyp
 import type { ExamWindow, ExamWindowsResponse } from '@/lib/exam-windows';
 import { findActiveTermId } from '@/lib/term-calendar';
 import { localToday } from '@/lib/assignments';
+import { currentExamType, examDay, examTypeDates, examTypeOrder } from '@/lib/exam-schedule';
 import { isSubjectOfferedAtGrade } from '@/lib/curriculum-bands';
 import { cn } from '@/lib/utils';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
@@ -57,25 +58,6 @@ function readLastExam(): LastExam | null {
 
 function writeLastExam(value: LastExam): void {
   try { window.localStorage.setItem(LAST_EXAM_KEY, JSON.stringify(value)); } catch { /* private mode: nothing to remember */ }
-}
-
-const examDay = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-
-/** When each exam type in a term is scheduled: its earliest paper. */
-function examTypeDates(exams: readonly ExamSlot[]): Map<string, string> {
-  const dates = new Map<string, string>();
-  for (const e of exams) {
-    const d = dates.get(e.exam_type);
-    if (e.exam_date && (!d || e.exam_date < d)) dates.set(e.exam_type, e.exam_date);
-  }
-  return dates;
-}
-
-/** The exam the term is on now: the latest one already scheduled to have been sat. */
-function currentExamType(dates: ReadonlyMap<string, string>, today: string): string | null {
-  let current: [string, string] | null = null;
-  for (const [type, date] of dates) if (date <= today && (!current || date > current[1])) current = [type, date];
-  return current?.[0] ?? null;
 }
 
 async function fetchTermExams(termId: string): Promise<ExamSlot[]> {
@@ -1213,10 +1195,6 @@ function windowMap(rows: readonly ExamWindow[]): ReadonlyMap<string, string> {
   return new Map(rows.map(w => [w.grade_id, w.exam_type]));
 }
 
-/** Built-in exams in their running order; a school's own types after them. */
-function examTypeOrder(code: string): number {
-  return ALL_EXAM_TYPES.find(t => t.code === code)?.order ?? 999;
-}
 
 const COLUMN_CLASS: Record<number, string> = { 1: 'grid-cols-1', 2: 'grid-cols-2', 3: 'grid-cols-3' };
 

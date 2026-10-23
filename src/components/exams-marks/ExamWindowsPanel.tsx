@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from 'react';
-import { BellRing, Check, CheckCircle2, ChevronDown, DoorOpen, Loader2 } from 'lucide-react';
+import { ArrowRight, BellRing, Check, CheckCircle2, ChevronDown, DoorOpen, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { SCHEDULED_EXAM_TYPES, getExamType } from '@/lib/exam-types';
 import { LEVEL_ORDER, levelLabel, levelOf, type ExamClass, type ExamRequest, type ExamWindow, type LevelKey } from '@/lib/exam-windows';
@@ -175,6 +175,9 @@ export function ExamWindowsPanel({ termId, termName, classes, windows, requests,
               const busy = state?.status === 'saving';
               const showClasses = perClass.has(level.key) || value === 'mixed' || level.waiting > 0;
               const others = SCHEDULED_EXAM_TYPES.filter(t => !level.types.includes(t));
+              // When an exam is done, the one after it in this level's running order.
+              const at = value && value !== 'mixed' ? level.types.indexOf(value) : -1;
+              const next = at >= 0 ? level.types[at + 1] : undefined;
               return (
                 <li
                   key={level.key}
@@ -193,6 +196,18 @@ export function ExamWindowsPanel({ termId, termName, classes, windows, requests,
                     </div>
                     <LevelStatus value={value} state={state} />
                   </div>
+
+                  {next && (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => setLevel(level, next)}
+                      className="inline-flex items-center justify-between gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-left text-xs font-semibold text-primary transition-colors hover:bg-primary/10 disabled:opacity-60"
+                    >
+                      <span>{examName(value)} done? Move on to {examName(next)}</span>
+                      <ArrowRight className="size-3.5 shrink-0" aria-hidden />
+                    </button>
+                  )}
 
                   {/* The exams this level has, as buttons */}
                   <div className="flex flex-wrap gap-1.5" role="group" aria-label={`Exam for ${levelLabel(level.key)}`}>
