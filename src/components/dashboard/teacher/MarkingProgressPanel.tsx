@@ -13,6 +13,7 @@ interface MarkingProgressPanelProps {
     loading: boolean;
     /** Rows before "Show all". */
     limit?: number;
+    className?: string;
 }
 
 const STATE_ORDER: Record<MarkingState, number> = { 'in-progress': 0, 'not-started': 1, complete: 2, 'no-learners': 3 };
@@ -31,7 +32,7 @@ const typeOrder = (code: string) => ALL_EXAM_TYPES.find(t => t.code === code)?.o
  * Every exam this teacher marks this term, with how far each has got —
  * unfinished work first — and a one-tap link straight to its mark sheet.
  */
-export default function MarkingProgressPanel({ items, termName, loading, limit = 6 }: MarkingProgressPanelProps) {
+export default function MarkingProgressPanel({ items, termName, loading, limit = 6, className }: MarkingProgressPanelProps) {
     const types = useMemo(() => [...new Set(items.map(i => i.examType))].sort((a, b) => typeOrder(a) - typeOrder(b)), [items]);
     // Open on the round that has work in it: the first one with marks begun but
     // not finished, else the first with anything left, else the first.
@@ -54,7 +55,7 @@ export default function MarkingProgressPanel({ items, termName, loading, limit =
     const pct = totals.expected > 0 ? Math.round((totals.entered / totals.expected) * 100) : 0;
 
     return (
-        <section className="rounded-2xl border border-border/60 bg-card p-4 shadow-sm sm:p-5">
+        <section className={cn('rounded-2xl border border-border/60 bg-card p-4 shadow-sm sm:p-5', className)}>
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                     <h2 className="font-display text-base font-bold tracking-tight">My marking</h2>
