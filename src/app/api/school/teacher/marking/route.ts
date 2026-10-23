@@ -4,7 +4,7 @@ import { getCaller } from '@/lib/auth-server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { TEACHER_ROLES, isRoleIn } from '@/lib/roles';
 import { findActiveTermId } from '@/lib/term-calendar';
-import { readExamWindows } from '@/lib/exam-windows';
+import { readExamWindows } from '@/lib/exam-windows-server';
 import { canTeacherMarkStudent, getTeacherPermissions, isExamVisibleToTeacher } from '@/lib/teacher-utils';
 import { subjectTakers } from '@/lib/subject-roster';
 import type { ExamWorkflowStatus, MarkingProgressItem, MarkingProgressResponse } from '@/lib/marking-progress';

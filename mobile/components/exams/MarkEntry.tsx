@@ -4,7 +4,9 @@ import { useApi } from '@/lib/api';
 import { examRosterUrl } from '@shared/marks/roster-url';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { clearDraft, loadDraft, saveDraft } from '@/lib/drafts';
-import { compositePercentage, gradeFromPercentage, isMultiPaper, scalesForSubject } from '@/lib/academics';
+import { compositePercentage, examTypeName, gradeFromPercentage, isMultiPaper, scalesForSubject } from '@/lib/academics';
+import { isAnytimeExamType } from '@shared/exam-types';
+import { useOpenExams } from '@/lib/useSchoolData';
 import { errorMessage, formatDate, fullName, pluralize, scoreColor } from '@/lib/format';
 import { radius, spacing, fonts, makeStyles, useTheme } from '@/lib/theme';
 import {
@@ -67,6 +69,13 @@ export function MarkEntry({ exam, structure }: { exam: ExamSlot; structure: Acad
     const [message, setMessage] = useState<{ tone: 'success' | 'danger' | 'info'; text: string } | null>(null);
     const [editingPapers, setEditingPapers] = useState(false);
     const inputs = useRef<Record<string, TextInput | null>>({});
+
+    // An empty sheet for an exam that isn't the one the school opened for this
+    // class asks first, so Mid-Term marks don't land in End-Term. CATs and
+    // topical tests, and sheets that already have marks (corrections), open as usual.
+    const openExams = useOpenExams(exam.term_id);
+    const openType = openExams.windows.get(exam.grade_id) ?? null;
+    const [confirmedOutOfTurn, setConfirmedOutOfTurn] = useState(false);
 
     // ── Grading: the subject's own system, else the level's subject systems ──
     const scales = useMemo(() => {
@@ -281,11 +290,34 @@ export function MarkEntry({ exam, structure }: { exam: ExamSlot; structure: Acad
 
     if (students.loading || marks.loading || schemeQuery.loading) return <LoadingView />;
     const loadError = students.error ?? marks.error ?? schemeQuery.error;
+    const outOfTurn = !!openType
+        && openType !== exam.exam_type
+        && !isAnytimeExamType(exam.exam_type)
+        && (marks.data?.length ?? 0) === 0
+        && !confirmedOutOfTurn;
+
+    if (outOfTurn && openType) {
+        return (
+            <Card>
+                <Text style={styles.title}>{examTypeName(exam.exam_type)} isn&apos;t open for marking</Text>
+                <Text style={styles.sub}>
+                    The school is marking {examTypeName(openType)} for {exam.grade_name}. Check which exam these {exam.subject_name} marks are from before you start.
+                </Text>
+                <ButtonRow>
+                    <Button size="sm" variant="secondary" label={`Enter ${examTypeName(exam.exam_type)} marks anyway`} onPress={() => setConfirmedOutOfTurn(true)} />
+                </ButtonRow>
+            </Card>
+        );
+    }
 
     return (
         <View>
             <Card style={{ marginBottom: spacing.md }}>
                 <Text style={styles.title}>{exam.subject_name}</Text>
+                {/* The exam itself, so nobody types Mid-Term marks into End-Term. */}
+                <View style={{ alignSelf: 'flex-start', marginTop: 4 }}>
+                    <Badge label={`${examTypeName(exam.exam_type)}${exam.exam_type === openType ? ' · open now' : ''}`} variant="info" />
+                </View>
                 <Text style={styles.sub}>
                     {exam.name} · {exam.grade_stream_name ?? exam.grade_name} · out of {scheme ? `${papers.map((p) => `${p.component_code}/${p.max_score}`).join(' + ')}` : exam.max_score}
                 </Text>

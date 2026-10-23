@@ -3,6 +3,7 @@ import { useApiQuery } from './useApiQuery';
 import { withQuery } from './api';
 import { findActiveTermId } from './academics';
 import { MANAGED_STREAMS_URL, type ManagedStream } from '@shared/managed-streams';
+import type { ExamWindowsResponse } from '@shared/exam-windows';
 import type { AcademicStructure, AcademicYear, ExamSlot, GradeStream, Term } from './types';
 
 /**
@@ -66,6 +67,21 @@ export function useExams(filters: ExamFilters | null) {
     const path = filters && filters.term_id !== '' ? withQuery('/api/school/exams', { ...filters }) : null;
     const query = useApiQuery<ExamSlot[]>(path);
     return { ...query, exams: query.data ?? [] };
+}
+
+/**
+ * Which exam each class is marking now, as the school opened it
+ * (/api/school/exam-windows): grade id → exam type, and the classes the
+ * caller has asked about.
+ */
+export function useOpenExams(termId: string | null) {
+    const query = useApiQuery<ExamWindowsResponse>(termId ? withQuery('/api/school/exam-windows', { term_id: termId }) : null, { raw: true });
+    const windows = useMemo(
+        () => new Map<string, string>((query.data?.termId === termId ? query.data.data : []).map((w) => [w.grade_id, w.exam_type])),
+        [query.data, termId],
+    );
+    const myRequests = useMemo(() => new Set(query.data?.myRequests ?? []), [query.data]);
+    return { ...query, windows, myRequests };
 }
 
 /** Distinct classes (grade + optional stream) the given exams cover, sorted by name. */
