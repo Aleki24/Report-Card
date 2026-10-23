@@ -8,7 +8,7 @@ import { useAuth } from '@/components/AuthProvider';
 import {
   Users, GraduationCap, FileText, ArrowRight, BarChart3, ClipboardList, Wallet,
   BookOpen, Search, CheckCircle2, Send, Bell, Award, CalendarCheck, UserPlus, Megaphone, Briefcase,
-  AlertTriangle, type LucideIcon,
+  AlertTriangle, DoorOpen, type LucideIcon,
 } from 'lucide-react';
 import { buildTodos, totalAttendanceCount, type DashboardData, type TodoKey } from '@/lib/dashboard';
 
@@ -202,7 +202,7 @@ function AdminDashboard({ userName }: { userName: string }) {
 }
 
 
-const TODO_ICONS: Record<TodoKey, LucideIcon> = { release: Send, marks: ClipboardList, grading: Award, attendance: CalendarCheck, fees: Wallet };
+const TODO_ICONS: Record<TodoKey, LucideIcon> = { 'open-exam': DoorOpen, release: Send, marks: ClipboardList, grading: Award, attendance: CalendarCheck, fees: Wallet };
 
 function TodoList({ data }: { data: DashboardData | null }) {
   const todos = buildTodos(data);

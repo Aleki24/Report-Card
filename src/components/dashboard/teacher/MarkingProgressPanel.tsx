@@ -34,12 +34,16 @@ const typeOrder = (code: string) => ALL_EXAM_TYPES.find(t => t.code === code)?.o
  */
 export default function MarkingProgressPanel({ items, termName, loading, limit = 6, className }: MarkingProgressPanelProps) {
     const types = useMemo(() => [...new Set(items.map(i => i.examType))].sort((a, b) => typeOrder(a) - typeOrder(b)), [items]);
-    // Open on the round that has work in it: the first one with marks begun but
-    // not finished, else the first with anything left, else the first.
+    // The exams the school has opened for marking, if it has chosen any.
+    const openTypes = useMemo(() => new Set(items.filter(i => i.isOpen).map(i => i.examType)), [items]);
+    // Open on the round that has work in it — among the open exams when the
+    // school has opened some: marks begun but not finished, else anything
+    // left, else the first.
     const defaultType = useMemo(() => {
-        const unfinished = (state: MarkingState) => types.find(t => items.some(i => i.examType === t && markingState(i) === state));
-        return unfinished('in-progress') ?? unfinished('not-started') ?? types[0] ?? '';
-    }, [items, types]);
+        const candidates = openTypes.size > 0 ? types.filter(t => openTypes.has(t)) : types;
+        const unfinished = (state: MarkingState) => candidates.find(t => items.some(i => i.examType === t && markingState(i) === state));
+        return unfinished('in-progress') ?? unfinished('not-started') ?? candidates[0] ?? '';
+    }, [items, types, openTypes]);
     const [picked, setPicked] = useState('');
     const [showAll, setShowAll] = useState(false);
     const activeType = types.includes(picked) ? picked : defaultType;
@@ -76,6 +80,7 @@ export default function MarkingProgressPanel({ items, termName, loading, limit =
                                 )}
                             >
                                 {typeName(t)}
+                                {openTypes.has(t) && <span className={cn('ml-1.5 rounded px-1 text-[9px] font-bold', t === activeType ? 'bg-background/20' : 'bg-primary/10 text-primary')}>NOW</span>}
                             </button>
                         ))}
                     </div>

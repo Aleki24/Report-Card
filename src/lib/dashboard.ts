@@ -75,13 +75,15 @@ export interface DashboardData {
   upcomingRounds?: UpcomingRound[];
   /** Exams this term with marks entered but not yet released. */
   unreleasedResults?: number;
+  /** Classes with exams this term but no exam opened for marking (admins only). */
+  classesWithoutOpenExam?: number;
 }
 
 export function totalAttendanceCount(a: AttendanceToday): number {
   return a.present + a.absent + a.late + a.excused;
 }
 
-export type TodoKey = 'release' | 'marks' | 'grading' | 'attendance' | 'fees';
+export type TodoKey = 'open-exam' | 'release' | 'marks' | 'grading' | 'attendance' | 'fees';
 
 /** One thing only the school can move forward. `href` is the web route; the app maps it to its own. */
 export interface DashboardTodo { key: TodoKey; hue: DashboardHue; title: string; detail: string; cta: string; href: string }
@@ -92,6 +94,9 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n.toLocaleString
 export function buildTodos(data: DashboardData | null, now: Date = new Date()): DashboardTodo[] {
   if (!data) return [];
   const todos: DashboardTodo[] = [];
+  if ((data.classesWithoutOpenExam ?? 0) > 0) {
+    todos.push({ key: 'open-exam', hue: 'sky', title: `Choose the exam being marked for ${plural(data.classesWithoutOpenExam ?? 0, 'class', 'classes')}`, detail: 'Teachers go straight to the exam you open, so marks don’t land in the wrong one.', cta: 'Open an exam', href: '/dashboard/exams-marks?tab=setup' });
+  }
   if ((data.unreleasedResults ?? 0) > 0) {
     todos.push({ key: 'release', hue: 'violet', title: `${plural(data.unreleasedResults ?? 0, 'paper')} ready to release`, detail: 'Marks are in, but report cards and parents can’t see them until released.', cta: 'Release results', href: '/dashboard/exams-marks?tab=publish' });
   }

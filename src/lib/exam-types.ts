@@ -258,3 +258,16 @@ export function isBuiltInExamType(code: string): boolean {
 export function isValidExamType(code: string): boolean {
   return isBuiltInExamType(code) || CUSTOM_EXAM_TYPE.test(code);
 }
+
+// ── When an exam is sat ──────────────────────────────────
+/**
+ * Exams a teacher can give whenever the class reaches that point — CATs,
+ * topical tests and a school's own types. They are always open for marking;
+ * the scheduled ones (Opener, Mid-Term, End-Term, Mocks, joint exams) are
+ * opened by the school, one at a time per class.
+ */
+const ANYTIME_EXAM_TYPES: ReadonlySet<string> = new Set(['CAT', 'TOPICAL']);
+
+export function isAnytimeExamType(code: string): boolean {
+  return ANYTIME_EXAM_TYPES.has(code) || !isBuiltInExamType(code);
+}

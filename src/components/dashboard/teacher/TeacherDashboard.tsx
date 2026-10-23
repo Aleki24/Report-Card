@@ -20,7 +20,7 @@ import { QuickActions, type QuickActionItem } from '@/components/dashboard/Quick
 import { AUTO_FIT_GRID } from '@/components/dashboard/grid';
 import type { TermSummary, UpcomingRound } from '@/lib/dashboard';
 import MarkingProgressPanel from './MarkingProgressPanel';
-import { markEntryHref, markingState, type MarkingProgressResponse } from '@/lib/marking-progress';
+import { markEntryHref, summarizeMarking, type MarkingProgressResponse } from '@/lib/marking-progress';
 
 type Variant = 'class' | 'subject';
 
@@ -94,13 +94,8 @@ export default function TeacherDashboard({ variant }: { variant: Variant }) {
 
   const items = useMemo(() => marking?.items ?? [], [marking]);
   const progress = useMemo(() => {
-    let left = 0, complete = 0;
-    for (const i of items) {
-      left += Math.max(0, i.expected - i.entered);
-      if (markingState(i) === 'complete') complete++;
-    }
-    const next = items.find(i => markingState(i) === 'in-progress') ?? items.find(i => markingState(i) === 'not-started') ?? null;
-    return { left, complete, next };
+    const summary = summarizeMarking(items);
+    return { ...summary, total: summary.current.length };
   }, [items]);
 
   if (loading) return <DashboardSkeleton />;
@@ -153,11 +148,11 @@ export default function TeacherDashboard({ variant }: { variant: Variant }) {
           />
           <KpiTile
             title="Exams fully marked"
-            value={markingLoading ? '…' : `${progress.complete}/${items.length}`}
+            value={markingLoading ? '…' : `${progress.complete}/${progress.total}`}
             icon={<CheckCircle2 size={17} />}
             hue="emerald"
             href="/dashboard/exams-marks"
-            tone={!markingLoading && items.length > 0 && progress.complete === items.length ? 'green' : undefined}
+            tone={!markingLoading && progress.total > 0 && progress.complete === progress.total ? 'green' : undefined}
           />
           {variant === 'class' ? (
             <>
