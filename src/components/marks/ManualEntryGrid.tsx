@@ -20,6 +20,7 @@ import { MarkSheetRow, type GradeOption, type MarkSheetLearner } from './entry/M
 import { examRosterUrl } from '@/lib/marks/roster-url';
 import { useConfirm } from '@/components/ui/ConfirmProvider';
 import { releasePapers } from '@/components/exams-marks/releasePapers';
+import { MarkHistoryPanel } from './MarkHistoryPanel';
 
 /* ── API shapes ─────────────────────────────────────────── */
 
@@ -122,6 +123,8 @@ function fromDraftRow(row: DraftRow): EntryValues {
 export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId, subjectId, subjectName = 'this subject', released = false, onReleased }: Props) {
     const confirm = useConfirm();
     const [releasing, setReleasing] = useState(false);
+    // Bumped on each save, so an open change history reloads.
+    const [savedVersion, setSavedVersion] = useState(0);
     const { profile } = useAuth();
     const isAdmin = profile?.role === 'ADMIN';
 
@@ -605,6 +608,7 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
 
             commit(upserted, ids, removed);
             setRestoredDraft(false);
+            setSavedVersion(v => v + 1);
             if (failedRemovals.length > 0) {
                 flash({ tone: 'error', text: `Saved, but could not remove the mark for ${failedRemovals.join(', ')}. Refresh and try again.` });
             } else {
@@ -923,6 +927,8 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
                 </div>
                 </div>
             )}
+
+            {learners.length > 0 && <MarkHistoryPanel examId={examId} query={query} version={savedVersion} />}
 
             {/* ── Save bar: sticks to the bottom (above the phone nav) while there is something to save ── */}
             {learners.length > 0 && (

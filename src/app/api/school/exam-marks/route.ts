@@ -9,6 +9,7 @@ import type { ExamSubjectComponentScheme } from '@/types';
 import { internalError } from '@/lib/api-errors';
 import { fetchAllRows } from '@/lib/postgrest';
 import { STAFF_TEACHING_ROLES, isRoleIn } from '@/lib/roles';
+import { stamped, writeWithAuthor } from '@/lib/mark-history-server';
 
 /**
  * Resolve a { [componentId]: score } payload against the exam's
@@ -382,10 +383,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Upsert marks using admin client
-    const { data, error } = await supabase
+    const { data, error } = await writeWithAuthor(stamp => supabase
       .from('exam_marks')
-      .upsert(processedMarks, { onConflict: 'student_id,exam_id' })
-      .select();
+      .upsert(stamped(processedMarks, userId, stamp), { onConflict: 'student_id,exam_id' })
+      .select());
 
     if (error) return internalError('exam-marks save', error);
 
@@ -522,12 +523,12 @@ export async function PATCH(request: NextRequest) {
       updateData.percentage = validated.percentage;
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await writeWithAuthor(stamp => supabase
       .from('exam_marks')
-      .update(updateData)
+      .update(stamp ? { ...updateData, updated_by: userId } : updateData)
       .eq('id', id)
       .select()
-      .single();
+      .single());
 
     if (error) return internalError('exam-marks update', error);
     return NextResponse.json({ success: true, data });
@@ -585,6 +586,9 @@ export async function DELETE(request: NextRequest) {
       if (denial) return denial;
     }
 
+    // Named first, so the history says who removed it.
+    // (Before the migration the column is missing and this does nothing.)
+    await supabase.from('exam_marks').update({ updated_by: userId }).eq('id', id);
     const { error } = await supabase.from('exam_marks').delete().eq('id', id);
 
     if (error) return internalError('exam-marks delete', error);
