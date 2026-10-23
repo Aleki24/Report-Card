@@ -69,6 +69,8 @@ function termContext(terms: readonly (TermRow & { is_current?: boolean | null })
   return { currentTerm, currentYear, term: describeTerm(terms, currentTerm, currentYear?.name ?? null, today) };
 }
 
+const NO_TERM_TODOS = { unreleasedResults: 0, classesWithoutOpenExam: 0, teachersWaitingForExam: 0 } as const;
+
 export async function GET(_request: NextRequest) {
   try {
     const { userId } = await auth();
@@ -291,40 +293,34 @@ export async function GET(_request: NextRequest) {
       }
     }
 
-    // Results entered this term but not yet released to parents and the
-    // report cards: the one step only the school can take.
-    let unreleasedResults = 0;
-    if (currentTerm && role === 'ADMIN') {
-      const { data: drafts } = await supabase
-        .from('exams')
-        .select('id, exam_marks(count)')
-        .eq('school_id', schoolId)
-        .eq('term_id', currentTerm.id)
-        .neq('status', 'APPROVED')
-        .limit(1000);
-      unreleasedResults = ((drafts ?? []) as { exam_marks: { count: number }[] | null }[])
-        .filter(d => (d.exam_marks?.[0]?.count ?? 0) > 0).length;
-    }
-
-    // Classes with scheduled exams this term but none opened for marking:
-    // their teachers are left to pick an exam themselves.
-    let classesWithoutOpenExam = 0;
-    let teachersWaitingForExam = 0;
-    if (currentTerm && role === 'ADMIN') {
-      const [{ rows: termExams }, windows, requests] = await Promise.all([
-        fetchAllRows<{ grade_id: string; exam_type: string }>(() => supabase
-          .from('exams')
-          .select('grade_id, exam_type')
-          .eq('school_id', schoolId)
-          .eq('term_id', currentTerm.id)
-          .order('id')),
-        readExamWindows(supabase, schoolId, currentTerm.id),
-        readExamRequests(supabase, schoolId, currentTerm.id),
-      ]);
-      const opened = new Set(windows.map(w => w.grade_id));
-      classesWithoutOpenExam = new Set(termExams.filter(e => !isAnytimeExamType(e.exam_type) && !opened.has(e.grade_id)).map(e => e.grade_id)).size;
-      teachersWaitingForExam = new Set(requests.filter(r => !opened.has(r.grade_id)).map(r => r.requested_by)).size;
-    }
+    // The admin's term to-dos, from one read of the term's exams, started
+    // now and awaited at the end so it overlaps the queries below:
+    //  - results entered but not yet released (the one step only the school can take);
+    //  - classes with scheduled exams but none opened for marking, and the
+    //    teachers who asked for one.
+    const termTodos = currentTerm && role === 'ADMIN'
+      ? (async () => {
+          const [{ rows: termExams }, windows, requests] = await Promise.all([
+            fetchAllRows<{ grade_id: string; exam_type: string; status: string | null; exam_marks: { count: number }[] | null }>(() => supabase
+              .from('exams')
+              .select('grade_id, exam_type, status, exam_marks(count)')
+              .eq('school_id', schoolId)
+              .eq('term_id', currentTerm.id)
+              .order('id')),
+            readExamWindows(supabase, schoolId, currentTerm.id),
+            readExamRequests(supabase, schoolId, currentTerm.id),
+          ]);
+          const opened = new Set(windows.map(w => w.grade_id));
+          return {
+            // As before: status null isn't "not approved" (SQL's neq skipped it).
+            unreleasedResults: termExams.filter(e => e.status !== null && e.status !== 'APPROVED' && (e.exam_marks?.[0]?.count ?? 0) > 0).length,
+            classesWithoutOpenExam: new Set(termExams.filter(e => !isAnytimeExamType(e.exam_type) && !opened.has(e.grade_id)).map(e => e.grade_id)).size,
+            teachersWaitingForExam: new Set(requests.filter(r => !opened.has(r.grade_id)).map(r => r.requested_by)).size,
+          };
+        })()
+          // A failed read leaves the to-dos out rather than the whole dashboard.
+          .catch(() => NO_TERM_TODOS)
+      : Promise.resolve(NO_TERM_TODOS);
 
     const activities: {
       type: string;
@@ -444,6 +440,8 @@ export async function GET(_request: NextRequest) {
     const passRate = markCount > 0
       ? Math.round((Number(summary?.pass_count ?? 0) / markCount) * 100)
       : null;
+
+    const { unreleasedResults, classesWithoutOpenExam, teachersWaitingForExam } = await termTodos;
 
     // Fee figures are the admin's; teachers get the rest of the summary.
     const seesFees = role === 'ADMIN';

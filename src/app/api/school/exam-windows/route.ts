@@ -98,9 +98,11 @@ export async function GET(request: NextRequest) {
     if (!term) {
       return NextResponse.json({ termId: null, termName: null, data: [], canOpen, classes: [], requests: [], myRequests: [] } satisfies ExamWindowsResponse);
     }
-    const [windows, requestRows] = await Promise.all([
+    // Side by side: each is a round trip to the database.
+    const [windows, requestRows, classes] = await Promise.all([
       readExamWindows(supabase, access.schoolId, term.id),
       readExamRequests(supabase, access.schoolId, term.id),
+      canOpen ? termClasses(supabase, access.schoolId, term.id) : Promise.resolve([]),
     ]);
     const opened = new Set(windows.map(w => w.grade_id));
     // A request is answered once its class has an exam open.
@@ -110,7 +112,7 @@ export async function GET(request: NextRequest) {
       termName: term.name,
       data: windows,
       canOpen,
-      classes: canOpen ? await termClasses(supabase, access.schoolId, term.id) : [],
+      classes,
       requests: canOpen ? await requestSummaries(supabase, waiting) : [],
       myRequests: [...new Set(waiting.filter(r => r.requested_by === access.userId).map(r => r.grade_id))],
     };

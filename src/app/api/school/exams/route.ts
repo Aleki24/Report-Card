@@ -78,8 +78,7 @@ export async function GET(request: NextRequest) {
         .from('exams')
         .select(`
           id, name, exam_type, max_score, exam_date, grade_stream_id, grade_id, subject_id, term_id, created_by_teacher_id,
-          status, published_by, published_at, approved_by,
-          exam_marks ( count ),
+          status, published_by, published_at, approved_by,${ready ? '\n          exam_marks ( count ),' : ''}
           subjects:subject_id ( name, code, category, subject_type ),
           grades:grade_id ( name_display, code ),
           grade_streams:grade_stream_id ( full_name ),
@@ -120,25 +119,37 @@ export async function GET(request: NextRequest) {
     const { rows: data, error } = await fetchAllRows(buildQuery);
     if (error) return NextResponse.json({ error: (error as { message?: string }).message ?? 'Could not load exams' }, { status: 400 });
 
-    /** Marks entered for an exam. */
+    /** Marks entered for an exam; only counted (as an aggregate) with ?ready=1. */
     const markCount = (e: object): number => (e as { exam_marks?: { count: number }[] | null }).exam_marks?.[0]?.count ?? 0;
-    let filteredExams = ready ? (data || []).filter(e => markCount(e) > 0) : data || [];
-    if (auth.role !== 'ADMIN') {
-      const { getTeacherPermissions, isExamVisibleToTeacher } = await import('@/lib/teacher-utils');
-      const perms = await getTeacherPermissions(auth.userId);
-      filteredExams = filteredExams.filter((exam: any) => isExamVisibleToTeacher(exam, perms, auth.userId));
-    }
+    const rows = ready ? (data || []).filter(e => markCount(e) > 0) : data || [];
+
+    // The teacher's own exams, and which Senior School electives each class
+    // takes, side by side: each is a round trip to the database.
+    const seniorGrades = new Map((rows as unknown as PlacedExam[]).map(e => [e.grade_id, { id: e.grade_id, code: embedOne(e.grades)?.code ?? null, name_display: embedOne(e.grades)?.name_display ?? null }]));
+    const [visible, taught] = await Promise.all([
+      (async () => {
+        if (auth.role === 'ADMIN') return rows;
+        const { getTeacherPermissions, isExamVisibleToTeacher } = await import('@/lib/teacher-utils');
+        const perms = await getTeacherPermissions(auth.userId);
+        return rows.filter((exam: any) => isExamVisibleToTeacher(exam, perms, auth.userId));
+      })(),
+      seniorSubjectsTaught(supabase, schoolId, [...seniorGrades.values()]),
+    ]);
 
     // Senior School papers for electives a class doesn't take, seeded before
-    // that was checked. Hidden until someone enters a mark in one.
-    const placed = filteredExams as unknown as PlacedExam[];
-    const seniorGrades = new Map(placed.map(e => [e.grade_id, { id: e.grade_id, code: embedOne(e.grades)?.code ?? null, name_display: embedOne(e.grades)?.name_display ?? null }]));
-    const taught = await seniorSubjectsTaught(supabase, schoolId, [...seniorGrades.values()]);
-    filteredExams = filteredExams.filter((_, i) => {
-      const e = placed[i];
+    // that was checked. Hidden unless someone has entered a mark in one —
+    // looked up for those few papers only, not counted for every exam.
+    const untaught = (visible as unknown as (PlacedExam & { id: string })[]).filter(e => {
       const subject = embedOne(e.subjects);
-      return markCount(e) > 0 || isTaughtInGrade(taught, e.grade_id, { id: e.subject_id, code: subject?.code ?? '', subject_type: subject?.subject_type });
-    });
+      return !isTaughtInGrade(taught, e.grade_id, { id: e.subject_id, code: subject?.code ?? '', subject_type: subject?.subject_type });
+    }).map(e => e.id);
+    const hidden = new Set(untaught);
+    for (let i = 0; i < untaught.length; i += 200) {
+      const { data: marked, error: markedError } = await supabase.from('exam_marks').select('exam_id').in('exam_id', untaught.slice(i, i + 200));
+      if (markedError) return NextResponse.json({ error: 'Could not load exams' }, { status: 400 });
+      for (const m of marked ?? []) hidden.delete(m.exam_id as string);
+    }
+    const filteredExams = hidden.size > 0 ? visible.filter(e => !hidden.has((e as unknown as { id: string }).id)) : visible;
 
     const mapped = (filteredExams).map((e: any) => ({
       id: e.id,
@@ -146,7 +157,6 @@ export async function GET(request: NextRequest) {
       exam_type: e.exam_type,
       max_score: e.max_score,
       exam_date: e.exam_date,
-      mark_count: markCount(e),
       subject_id: e.subject_id,
       subject_name: e.subjects?.name || 'N/A',
       subject_code: e.subjects?.code || '',
@@ -163,6 +173,7 @@ export async function GET(request: NextRequest) {
       published_at: e.published_at,
       approved_by: e.approved_by,
       created_by_teacher_id: e.created_by_teacher_id,
+      ...(ready ? { mark_count: markCount(e) } : {}),
     }));
 
     return NextResponse.json({ data: mapped });

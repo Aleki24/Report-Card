@@ -30,8 +30,6 @@ interface ExamSlot {
   id: string; name: string; exam_type: string; max_score: number;
   /** YYYY-MM-DD the paper is scheduled for. */
   exam_date: string;
-  /** Marks entered so far. */
-  mark_count: number;
   subject_id: string; subject_name: string; subject_code: string; subject_category: string;
   grade_id: string; grade_name: string; term_id: string;
   grade_stream_id?: string | null; grade_stream_name?: string | null;
@@ -565,6 +563,29 @@ export function MarksSetupTab() {
     setSeeding(false);
   };
 
+  // Every exam of the term exists from day one, so an End-Term sheet is open
+  // in week 5 and Mid-Term marks were landing in it. An exam that isn't the
+  // one open for its class (or, before the school has chosen, isn't due yet)
+  // is checked for marks before its sheet opens: an empty one asks first, one
+  // with marks is a correction. Exams given any time skip this, and so does
+  // the open exam — the usual path makes no extra request.
+  const checkExam = (() => {
+    if (!selectedExam || pickerOpen || isAnytimeExamType(selectedExam.exam_type) || confirmedEarly.has(selectedExam.id)) return '';
+    const open = openTypeFor(selectedExam.grade_id);
+    return (open ? selectedExam.exam_type !== open : selectedExam.exam_date > today) ? selectedExam.id : '';
+  })();
+  const [examHasMarks, setExamHasMarks] = useState<Readonly<Record<string, boolean>>>({});
+  useEffect(() => {
+    if (!checkExam || checkExam in examHasMarks) return;
+    let live = true;
+    fetch(`/api/school/exam-marks?exam_id=${encodeURIComponent(checkExam)}`, { cache: 'no-store' })
+      .then(res => (res.ok ? (res.json() as Promise<{ data?: unknown[] }>) : null))
+      // If the check fails, don't stand in the way of the sheet.
+      .then(json => { if (live) setExamHasMarks(prev => ({ ...prev, [checkExam]: json ? (json.data?.length ?? 0) > 0 : true })); })
+      .catch(() => { if (live) setExamHasMarks(prev => ({ ...prev, [checkExam]: true })); });
+    return () => { live = false; };
+  }, [checkExam, examHasMarks]);
+
   // A teacher's classes this term, each with their own subjects in the exam open there.
   const myClasses = allGrades
     .filter(g => exams.some(e => e.grade_id === g.id))
@@ -582,16 +603,9 @@ export function MarksSetupTab() {
 
   /* ── Folded view: the chosen exam and its mark sheet ── */
   if (showSheet && selectedExam) {
-    // Every exam of the term exists from day one, so an End-Term sheet is open
-    // in week 5 and Mid-Term marks were landing in it. An empty sheet for an
-    // exam that isn't the one open for this class (or, before the school has
-    // chosen, isn't due yet) asks first and offers the right one. Exams given
-    // any time, and sheets that already have marks (corrections), open as usual.
     const openType = openTypeFor(selectedExam.grade_id);
-    const outOfTurn = !isAnytimeExamType(selectedExam.exam_type)
-      && selectedExam.mark_count === 0
-      && !confirmedEarly.has(selectedExam.id)
-      && (openType ? selectedExam.exam_type !== openType : selectedExam.exam_date > today);
+    const checking = checkExam === selectedExam.id && !(selectedExam.id in examHasMarks);
+    const outOfTurn = checkExam === selectedExam.id && examHasMarks[selectedExam.id] === false;
     const siblings = exams
       .filter(e => e.id !== selectedExam.id && e.subject_id === selectedExam.subject_id && e.grade_id === selectedExam.grade_id && (e.grade_stream_id ?? null) === (selectedExam.grade_stream_id ?? null))
       .sort((a, b) => examTypeOrder(a.exam_type) - examTypeOrder(b.exam_type));
@@ -690,7 +704,9 @@ export function MarksSetupTab() {
         )}
 
 
-        {outOfTurn ? (
+        {checking ? (
+          <div className="h-40 animate-pulse rounded-2xl bg-muted/60" aria-busy aria-label="Checking this exam" />
+        ) : outOfTurn ? (
           <section role="alert" className="flex flex-col gap-4 rounded-2xl border border-amber-500/30 bg-amber-500/[0.08] p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
             <div className="flex min-w-0 items-start gap-3">
               <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-amber-500/15 text-amber-700 dark:text-amber-400" aria-hidden><CalendarClock className="size-5" /></span>
