@@ -4,10 +4,11 @@ import type { SetupStatus } from '@/lib/setup-status';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { findActiveTermId } from '@/lib/term-calendar';
+import { readExamRequests, readExamWindows } from '@/lib/exam-windows';
 import { PASS_MARK, passMarkOrDefault } from '@/lib/pass-mark';
 import { STAFF_TEACHING_ROLES, isRoleIn } from '@/lib/roles';
 import { schoolToday } from '@/lib/dates';
-import { getExamType } from '@/lib/exam-types';
+import { getExamType, isAnytimeExamType } from '@/lib/exam-types';
 import type { StaffDashboardData, TermSummary, UpcomingRound } from '@/lib/dashboard';
 
 /** One row of the `school_mark_summary` function; numerics arrive as strings. */
@@ -305,6 +306,26 @@ export async function GET(_request: NextRequest) {
         .filter(d => (d.exam_marks?.[0]?.count ?? 0) > 0).length;
     }
 
+    // Classes with scheduled exams this term but none opened for marking:
+    // their teachers are left to pick an exam themselves.
+    let classesWithoutOpenExam = 0;
+    let teachersWaitingForExam = 0;
+    if (currentTerm && role === 'ADMIN') {
+      const [{ rows: termExams }, windows, requests] = await Promise.all([
+        fetchAllRows<{ grade_id: string; exam_type: string }>(() => supabase
+          .from('exams')
+          .select('grade_id, exam_type')
+          .eq('school_id', schoolId)
+          .eq('term_id', currentTerm.id)
+          .order('id')),
+        readExamWindows(supabase, schoolId, currentTerm.id),
+        readExamRequests(supabase, schoolId, currentTerm.id),
+      ]);
+      const opened = new Set(windows.map(w => w.grade_id));
+      classesWithoutOpenExam = new Set(termExams.filter(e => !isAnytimeExamType(e.exam_type) && !opened.has(e.grade_id)).map(e => e.grade_id)).size;
+      teachersWaitingForExam = new Set(requests.filter(r => !opened.has(r.grade_id)).map(r => r.requested_by)).size;
+    }
+
     const activities: {
       type: string;
       message: string;
@@ -450,6 +471,8 @@ export async function GET(_request: NextRequest) {
       term,
       upcomingRounds,
       unreleasedResults,
+      classesWithoutOpenExam,
+      teachersWaitingForExam,
       hasAttendanceData,
       takesRegisters,
       hasLogo,

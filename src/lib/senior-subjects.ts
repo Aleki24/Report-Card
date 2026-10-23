@@ -12,15 +12,15 @@ import { embedOne, fetchAllRows } from '@/lib/postgrest';
  * every Grade 10 class, most of which nobody teaches there.
  *
  * An elective counts as taught in a class when any of these say so:
- *  - a learner in the class is enrolled in it (`student_subjects`),
- *  - it is in one of the school's active subject combinations,
+ *  - a learner in the class is enrolled in it (`student_subjects`; giving a
+ *    learner a subject combination enrols them in its subjects),
  *  - a teacher is assigned to teach it in that class,
  *  - it already has marks there (never hide work that was entered).
- * Core subjects and mathematics are always taught.
+ * Core subjects and mathematics are always taught. A combination nobody in
+ * the class has chosen doesn't count: the class lists what its learners take.
  *
- * A class with no enrolment, combination or assignment at all has not been
- * set up for pathways yet; it keeps every offered subject rather than
- * showing none.
+ * A class with no enrolment or assignment at all has not been set up for
+ * pathways yet; it keeps every offered subject rather than showing none.
  */
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -56,7 +56,7 @@ export async function seniorSubjectsTaught(supabase: Db, schoolId: string, grade
     if (streamError) throw new Error(`Failed to load classes: ${streamError.message}`);
     const gradeOfStream = new Map((streams ?? []).map(s => [s.id, s.grade_id]));
 
-    const [enrolled, combos, assigned, marked] = await Promise.all([
+    const [enrolled, assigned, marked] = await Promise.all([
         gradeOfStream.size === 0
             ? Promise.resolve([] as EnrolmentRow[])
             : fetchAllRows<EnrolmentRow>(() => supabase
@@ -64,13 +64,6 @@ export async function seniorSubjectsTaught(supabase: Db, schoolId: string, grade
                 .select('subject_id, students!inner(current_grade_stream_id)')
                 .in('students.current_grade_stream_id', [...gradeOfStream.keys()])
                 .order('id')).then(throwOr('subject enrolments')),
-        supabase
-            .from('subject_combination_subjects')
-            .select('subject_id, subject_combinations!inner(school_id, is_active)')
-            .eq('subject_combinations.school_id', schoolId)
-            .eq('subject_combinations.is_active', true)
-            .returns<{ subject_id: string }[]>()
-            .then(({ data, error }) => { if (error) throw new Error(`Failed to load subject combinations: ${error.message}`); return data ?? []; }),
         fetchAllRows<{ subject_id: string; grade_id: string }>(() => supabase
             .from('subject_teacher_assignments')
             // grades are shared between schools, so scope through the school's academic years
@@ -87,7 +80,6 @@ export async function seniorSubjectsTaught(supabase: Db, schoolId: string, grade
             .order('id')).then(throwOr('marked exams')),
     ]);
 
-    const comboSubjects = combos.map(c => c.subject_id);
     const signalled = new Map<string, Set<string>>();
     const add = (gradeId: string | undefined, subjectId: string) => {
         if (!gradeId) return;
@@ -100,7 +92,6 @@ export async function seniorSubjectsTaught(supabase: Db, schoolId: string, grade
         if (streamId) add(gradeOfStream.get(streamId), e.subject_id);
     }
     for (const a of assigned) add(a.grade_id, a.subject_id);
-    for (const gradeId of gradeIds) for (const id of comboSubjects) add(gradeId, id);
 
     // Marks only widen a grade that is already restricted; on their own they
     // would hide every unmarked subject of a school that hasn't set up pathways.

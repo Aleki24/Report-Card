@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { PenLine } from 'lucide-react-native';
-import { markingState, type MarkingProgressItem, type MarkingProgressResponse } from '@shared/marking-progress';
+import { markingState, summarizeMarking, type MarkingProgressItem, type MarkingProgressResponse } from '@shared/marking-progress';
 import { examTypeLabel } from '@/lib/academics';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { pluralize } from '@/lib/format';
@@ -16,7 +16,7 @@ export interface MarkingSummary {
     loading: boolean;
     items: MarkingProgressItem[];
     termName: string | null;
-    /** Marks still to enter across every exam. */
+    /** Marks still to enter across the exams open now. */
     left: number;
     complete: number;
     /** Where to carry on: the exam started but unfinished, else the first not started. */
@@ -28,13 +28,7 @@ export function useMarking(): MarkingSummary {
     const query = useApiQuery<MarkingProgressResponse>('/api/school/teacher/marking', { raw: true });
     return useMemo(() => {
         const items = query.data?.items ?? [];
-        let left = 0;
-        let complete = 0;
-        for (const i of items) {
-            left += Math.max(0, i.expected - i.entered);
-            if (markingState(i) === 'complete') complete++;
-        }
-        const next = items.find((i) => markingState(i) === 'in-progress') ?? items.find((i) => markingState(i) === 'not-started') ?? null;
+        const { left, complete, next } = summarizeMarking(items);
         return { loading: query.loading, items, termName: query.data?.term?.name ?? null, left, complete, next };
     }, [query.data, query.loading]);
 }

@@ -4,6 +4,7 @@ import { getCaller } from '@/lib/auth-server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { TEACHER_ROLES, isRoleIn } from '@/lib/roles';
 import { findActiveTermId } from '@/lib/term-calendar';
+import { readExamWindows } from '@/lib/exam-windows';
 import { canTeacherMarkStudent, getTeacherPermissions, isExamVisibleToTeacher } from '@/lib/teacher-utils';
 import { subjectTakers } from '@/lib/subject-roster';
 import type { ExamWorkflowStatus, MarkingProgressItem, MarkingProgressResponse } from '@/lib/marking-progress';
@@ -84,6 +85,8 @@ export async function GET() {
         const exams = ((examRows ?? []) as unknown as ExamRow[]).filter(e => isExamVisibleToTeacher(e, perms, userId));
         if (exams.length === 0) return NextResponse.json(empty);
 
+        const openByGrade = new Map((await readExamWindows(supabase, schoolId, term.id)).map(w => [w.grade_id, w.exam_type]));
+
         // Learners in every stream of this school these exams reach (grades
         // are shared by every school; streams are each school's own).
         const gradeIds = [...new Set(exams.map(e => e.grade_id))];
@@ -143,6 +146,7 @@ export async function GET() {
                 status: exam.status ?? 'DRAFT',
                 entered: roster.filter(id => marked.has(id)).length,
                 expected: roster.length,
+                isOpen: openByGrade.get(exam.grade_id) === exam.exam_type,
             });
         }
 

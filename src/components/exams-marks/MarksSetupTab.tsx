@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { AlertTriangle, ArrowRight, CalendarClock, Camera, Check, FileSpreadsheet, History, Keyboard, Layers, RefreshCw, Search } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ArrowRight, BellRing, CalendarClock, DoorOpen, Camera, Check, FileSpreadsheet, History, Keyboard, Layers, RefreshCw, Search } from 'lucide-react';
 import { ManualEntryGrid } from '@/components/marks/ManualEntryGrid';
 import { BulkUpload } from '@/components/marks/BulkUpload';
 import { ScanSheet } from '@/components/marks/ScanSheet';
@@ -11,18 +11,21 @@ import { PaperSchemeModal } from '@/components/marks/PaperSchemeModal';
 import { isMultiPaper } from '@/lib/multi-paper';
 import type { ExamSubjectComponentScheme } from '@/types';
 import { useAuth } from '@/components/AuthProvider';
-import { ALL_EXAM_TYPES, STANDARD_TERM_EXAMS, getExamTypeLabel } from '@/lib/exam-types';
+import { ALL_EXAM_TYPES, STANDARD_TERM_EXAMS, getExamTypeLabel, isAnytimeExamType } from '@/lib/exam-types';
+import type { ExamWindow, ExamWindowsResponse } from '@/lib/exam-windows';
 import { findActiveTermId } from '@/lib/term-calendar';
 import { localToday } from '@/lib/assignments';
 import { isSubjectOfferedAtGrade } from '@/lib/curriculum-bands';
 import { cn } from '@/lib/utils';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { ExamSetupMenu } from './ExamSetupMenu';
+import { ExamWindowsPanel } from './ExamWindowsPanel';
 import { MODE_TONES, STEP_TONES, SUBJECT_CATEGORY_THEME, subjectCategory, type SubjectCategory } from './examTheme';
 
 interface MySubjectItem { id: string; code: string; name: string; academic_level_id: string; category?: string; }
 interface Term { id: string; name: string; academic_year_id: string; academic_year_name?: string | null; is_current: boolean; }
 interface AcademicLevel { id: string; code: string; name: string; }
-interface GradeItem { id: string; name_display: string; academic_level_id: string; }
+interface GradeItem { id: string; code?: string | null; name_display: string; academic_level_id: string; }
 interface ExamSlot {
   id: string; name: string; exam_type: string; max_score: number;
   /** YYYY-MM-DD the paper is scheduled for. */
@@ -161,8 +164,16 @@ export function MarksSetupTab() {
   // mark sheet gets the screen; "Change" opens them again.
   const [pickerOpen, setPickerOpen] = useState(true);
   const [lastExam, setLastExam] = useState<LastExam | null>(null);
-  // Exams not yet sat that the teacher has confirmed they mean to mark.
+  // Exams outside the open one that the teacher has confirmed they mean to mark.
   const [confirmedEarly, setConfirmedEarly] = useState<ReadonlySet<string>>(new Set());
+  // The exam each class is marking now (grade id → exam type), and for those
+  // who can open exams, every class and who is waiting.
+  const [windowInfo, setWindowInfo] = useState<ExamWindowsResponse | null>(null);
+  const [windowsVersion, setWindowsVersion] = useState(0);
+  const [requesting, setRequesting] = useState(false);
+  const [requestError, setRequestError] = useState('');
+  // A teacher choosing an exam themselves: corrections, CATs, another term.
+  const [pickAnyExam, setPickAnyExam] = useState(false);
 
   const [academicLevels, setAcademicLevels] = useState<AcademicLevel[]>([]);
   const [allGrades, setAllGrades] = useState<GradeItem[]>([]);
@@ -295,6 +306,45 @@ export function MarksSetupTab() {
     return () => { cancelled = true; };
   }, [selectedTermId, applyExam, resetSelection, examsReloadToken]);
 
+  // ── The open exam per class for the selected term ──
+  useEffect(() => {
+    if (!selectedTermId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/school/exam-windows?term_id=${encodeURIComponent(selectedTermId)}`, { cache: 'no-store' });
+        const json = (await res.json().catch(() => null)) as ExamWindowsResponse | null;
+        if (!cancelled) setWindowInfo(res.ok ? json : null);
+      } catch {
+        if (!cancelled) setWindowInfo(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [selectedTermId, windowsVersion]);
+  const windows = windowMap(windowInfo?.termId === selectedTermId ? windowInfo.data : []);
+  const canOpenExams = windowInfo?.canOpen ?? false;
+  const myRequests = new Set(windowInfo?.myRequests ?? []);
+
+  /** Ask whoever opens exams to open one for these classes. */
+  const requestExam = async (gradeIds: string[]) => {
+    if (!selectedTermId || gradeIds.length === 0) return;
+    setRequesting(true);
+    setRequestError('');
+    try {
+      const res = await fetch('/api/school/exam-windows', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ termId: selectedTermId, gradeIds }),
+      });
+      const json = (await res.json().catch(() => null)) as { error?: string } | null;
+      if (!res.ok) throw new Error(json?.error || 'Could not send your request.');
+      setWindowsVersion(v => v + 1);
+    } catch (err) {
+      setRequestError(err instanceof Error ? err.message : 'Could not send your request.');
+    }
+    setRequesting(false);
+  };
+
   const reloadExams = async () => {
     if (!selectedTermId) return;
     try { setExams(await fetchTermExams(selectedTermId)); setExamsError(''); } catch (err) { setExamsError(err instanceof Error ? err.message : 'Could not load this term’s exams.'); }
@@ -323,13 +373,19 @@ export function MarksSetupTab() {
   const existingTypes = new Set(exams.map(e => e.exam_type));
   const availableExamTypes = ALL_EXAM_TYPES.filter(et => existingTypes.has(et.code));
   const today = localToday();
-  const typeDates = examTypeDates(exams);
-  const nowExamType = currentExamType(typeDates, today);
+  const typeDates = examTypeDates(exams.filter(e => !isAnytimeExamType(e.exam_type)));
+  const openTypes = new Set(windows.values());
+  // Until the school chooses, the exam the term is on is read from exam dates.
+  const nowExamType = windows.size > 0 ? null : currentExamType(typeDates, today);
+  const openTypeFor = (gradeId: string): string => windows.get(gradeId) ?? '';
+  // Once the school has opened an exam, teachers skip choosing one: class →
+  // subject → the open exam's sheet. "Another exam" brings the full picker back.
+  const followOpen = !isAdmin && !pickAnyExam && windows.size > 0;
   const examsByType = exams.filter(e => e.exam_type === selectedExamType);
 
   // Teachers only see the classes they have exams in; an admin sees every
   // class, since they can create an exam for one that has none yet.
-  const gradesWithExams = new Set(examsByType.map(e => e.grade_id));
+  const gradesWithExams = new Set((followOpen ? exams : examsByType).map(e => e.grade_id));
   const availableGrades = allGrades
     .filter(g => !selectedLevelId || g.academic_level_id === selectedLevelId)
     .filter(g => isAdmin || gradesWithExams.has(g.id))
@@ -347,7 +403,14 @@ export function MarksSetupTab() {
     return () => { cancelled = true; };
   }, [isAdmin, effectiveGradeId]);
 
-  const filteredExamsByType = examsByType
+  // An exam opened on purpose (a link, "Other exams") wins; choosing a class
+  // clears it, so the class's open exam takes over again.
+  const effectiveExamType = followOpen ? selectedExamType || openTypeFor(effectiveGradeId) : selectedExamType;
+  // A class the school hasn't opened an exam for: its teacher picks from that class's exams.
+  const classExamTypes = availableExamTypes.filter(et => exams.some(e => e.grade_id === effectiveGradeId && e.exam_type === et.code));
+
+  const filteredExamsByType = exams
+    .filter(e => e.exam_type === effectiveExamType)
     .filter(e => !selectedLevelId || gradeLevelMap.get(e.grade_id) === selectedLevelId)
     .filter(e => !effectiveGradeId || e.grade_id === effectiveGradeId);
   // Keeps subjects from other bands of the same curriculum out of the picker —
@@ -373,7 +436,7 @@ export function MarksSetupTab() {
   // admin, give it the term's exam types (seeding only fills gaps) instead of
   // making them create each one by hand; once per term, type and class.
   const autoFilledRef = useRef(new Set<string>());
-  const missingExamSubjects = isAdmin && selectedExamType && effectiveGradeId ? subjects.filter(s => !s.hasExam).length : 0;
+  const missingExamSubjects = isAdmin && effectiveExamType && effectiveGradeId ? subjects.filter(s => !s.hasExam).length : 0;
   useEffect(() => {
     if (!missingExamSubjects || !selectedTermId) return;
     const key = `${selectedTermId}|${selectedExamType}|${effectiveGradeId}`;
@@ -401,8 +464,18 @@ export function MarksSetupTab() {
     return [...map.entries()].sort((a, b) => SUBJECT_CATEGORY_THEME[a[0]].order - SUBJECT_CATEGORY_THEME[b[0]].order);
   })();
 
+  // Subject categories in balanced columns (Tailwind's md and xl breakpoints).
+  const isMd = useMediaQuery('(min-width: 768px)');
+  const isXl = useMediaQuery('(min-width: 1280px)');
+  const subjectColumns = balanceColumns(
+    subjectGroups,
+    Math.min(subjectGroups.length, isXl ? 3 : isMd ? 2 : 1),
+    // A heading weighs about half a card.
+    ([, group]) => group.length + 0.5,
+  );
+
   const examsForSelectedSubject = exams
-    .filter(e => e.exam_type === selectedExamType && e.subject_id === selectedSubjectId)
+    .filter(e => e.exam_type === effectiveExamType && e.subject_id === selectedSubjectId)
     .filter(e => !effectiveGradeId || e.grade_id === effectiveGradeId)
     .sort((a, b) => (a.grade_stream_name ?? a.grade_name).localeCompare(b.grade_stream_name ?? b.grade_name));
 
@@ -465,7 +538,7 @@ export function MarksSetupTab() {
   const chooseSubject = (subjectId: string) => {
     setSelectedSubjectId(subjectId);
     setSelectedExamId('');
-    const slots = exams.filter(e => e.exam_type === selectedExamType && e.subject_id === subjectId && (!effectiveGradeId || e.grade_id === effectiveGradeId));
+    const slots = exams.filter(e => e.exam_type === effectiveExamType && e.subject_id === subjectId && (!effectiveGradeId || e.grade_id === effectiveGradeId));
     if (slots.length === 1) setPickerOpen(false);
   };
 
@@ -492,17 +565,38 @@ export function MarksSetupTab() {
     setSeeding(false);
   };
 
+  // A teacher's classes this term, each with their own subjects in the exam open there.
+  const myClasses = allGrades
+    .filter(g => exams.some(e => e.grade_id === g.id))
+    .sort((a, b) => a.name_display.localeCompare(b.name_display, undefined, { numeric: true }))
+    .map(g => {
+      const type = openTypeFor(g.id);
+      const subjectNames = [...new Set(exams.filter(e => e.grade_id === g.id && e.exam_type === type).map(e => e.subject_name))].sort();
+      return { id: g.id, name: g.name_display, type, subjectNames };
+    });
+  // Classes with nothing open that this teacher hasn't asked about yet.
+  const unaskedClasses = myClasses.filter(c => !c.type && !myRequests.has(c.id)).map(c => c.id);
+  const subjectStep = followOpen ? (openTypeFor(effectiveGradeId) ? 2 : 3) : 4;
+
   const lastExamAvailable = !!lastExam && terms.some(t => t.id === lastExam.termId) && lastExam.examId !== selectedExam?.id;
 
   /* ── Folded view: the chosen exam and its mark sheet ── */
   if (showSheet && selectedExam) {
     // Every exam of the term exists from day one, so an End-Term sheet is open
-    // in week 5 and Mid-Term marks were landing in it. A paper not yet sat
-    // with no marks asks first, and offers the exam the term is on.
-    const notYetSat = selectedExam.exam_date > today && selectedExam.mark_count === 0 && !confirmedEarly.has(selectedExam.id);
-    const nowSlot = nowExamType && nowExamType !== selectedExam.exam_type
-      ? exams.find(e => e.exam_type === nowExamType && e.subject_id === selectedExam.subject_id && e.grade_id === selectedExam.grade_id && (e.grade_stream_id ?? null) === (selectedExam.grade_stream_id ?? null))
-      : undefined;
+    // in week 5 and Mid-Term marks were landing in it. An empty sheet for an
+    // exam that isn't the one open for this class (or, before the school has
+    // chosen, isn't due yet) asks first and offers the right one. Exams given
+    // any time, and sheets that already have marks (corrections), open as usual.
+    const openType = openTypeFor(selectedExam.grade_id);
+    const outOfTurn = !isAnytimeExamType(selectedExam.exam_type)
+      && selectedExam.mark_count === 0
+      && !confirmedEarly.has(selectedExam.id)
+      && (openType ? selectedExam.exam_type !== openType : selectedExam.exam_date > today);
+    const siblings = exams
+      .filter(e => e.id !== selectedExam.id && e.subject_id === selectedExam.subject_id && e.grade_id === selectedExam.grade_id && (e.grade_stream_id ?? null) === (selectedExam.grade_stream_id ?? null))
+      .sort((a, b) => examTypeOrder(a.exam_type) - examTypeOrder(b.exam_type));
+    const suggestedType = openType || nowExamType;
+    const nowSlot = suggestedType ? siblings.find(e => e.exam_type === suggestedType) : undefined;
     const examLabel = getExamTypeLabel(selectedExam.exam_type);
     return (
       <div className="w-full">
@@ -564,6 +658,24 @@ export function MarksSetupTab() {
               </button>
             ))}
           </div>
+          {/* The same subject and class in another exam: a CAT, or correcting an earlier one. */}
+          {siblings.length > 0 && (
+            <div className="mt-3 flex flex-wrap items-center gap-1.5 text-xs">
+              <span className="text-muted-foreground">Other exams for this class:</span>
+              {siblings.map(e => (
+                <button
+                  key={e.id}
+                  type="button"
+                  // A teacher leaving the open exam gets the full picker behind the sheet.
+                  onClick={() => { if (!isAdmin && e.exam_type !== openType) setPickAnyExam(true); applyExam(e); }}
+                  className="inline-flex items-center gap-1 rounded-lg border border-border/70 bg-card px-2 py-1 font-medium text-foreground transition-colors hover:border-primary/40">
+                  {getExamTypeLabel(e.exam_type)}
+                  {e.exam_type === openType && <span className="rounded bg-primary/10 px-1 text-[9px] font-bold text-primary">NOW</span>}
+                  {isAnytimeExamType(e.exam_type) && <span className="text-[10px] font-normal text-muted-foreground">any time</span>}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {selectedExam.status === 'APPROVED' && (
@@ -578,16 +690,22 @@ export function MarksSetupTab() {
         )}
 
 
-        {notYetSat ? (
+        {outOfTurn ? (
           <section role="alert" className="flex flex-col gap-4 rounded-2xl border border-amber-500/30 bg-amber-500/[0.08] p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
             <div className="flex min-w-0 items-start gap-3">
               <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-amber-500/15 text-amber-700 dark:text-amber-400" aria-hidden><CalendarClock className="size-5" /></span>
               <div className="min-w-0">
-                <p className="text-sm font-semibold text-foreground">{examLabel} isn&apos;t until {examDay(selectedExam.exam_date)}</p>
+                <p className="text-sm font-semibold text-foreground">
+                  {openType
+                    ? <>{examLabel} isn&apos;t open for marking in {selectedClassName}</>
+                    : <>{examLabel} isn&apos;t until {examDay(selectedExam.exam_date)}</>}
+                </p>
                 <p className="mt-0.5 text-sm text-muted-foreground">
-                  {nowSlot
-                    ? <>The term is on <strong className="text-foreground">{getExamTypeLabel(nowSlot.exam_type)}</strong> now. Check which exam these marks are from before you start.</>
-                    : 'Check which exam these marks are from before you start.'}
+                  {openType
+                    ? <>The school is marking <strong className="text-foreground">{getExamTypeLabel(openType)}</strong> for this class. Check which exam these marks are from before you start.</>
+                    : nowSlot
+                      ? <>The term is on <strong className="text-foreground">{getExamTypeLabel(nowSlot.exam_type)}</strong> now. Check which exam these marks are from before you start.</>
+                      : 'Check which exam these marks are from before you start.'}
                 </p>
               </div>
             </div>
@@ -663,7 +781,112 @@ export function MarksSetupTab() {
         </button>
       )}
 
-      {/* ①–③ side by side from lg: each holds only a few controls. */}
+      {/* Admins, the principal, deputy, DOS and exams officer (marking.open). */}
+      {canOpenExams && windowInfo && windowInfo.termId === selectedTermId && windowInfo.classes.length > 0 && (
+        <ExamWindowsPanel
+          key={selectedTermId}
+          termId={selectedTermId}
+          termName={selectedTermName}
+          classes={windowInfo.classes}
+          windows={windows}
+          requests={windowInfo.requests}
+          onSaved={() => setWindowsVersion(v => v + 1)}
+        />
+      )}
+
+      {/* Nothing opened yet anywhere: a teacher can ask for it instead of guessing. */}
+      {!isAdmin && !canOpenExams && windows.size === 0 && myClasses.length > 0 && selectedTermId === activeTermId && (
+        <RequestExamNotice
+          title="Your school hasn’t chosen which exam is being marked"
+          asked={unaskedClasses.length === 0}
+          busy={requesting}
+          error={requestError}
+          onRequest={() => void requestExam(unaskedClasses)}
+        />
+      )}
+
+      {!isAdmin && pickAnyExam && windows.size > 0 && (
+        <button type="button" onClick={() => { setPickAnyExam(false); resetSelection(); }} className="inline-flex items-center gap-1.5 self-start text-sm font-medium text-primary hover:underline">
+          <ArrowLeft size={15} aria-hidden /> Back to the exam open for marking
+        </button>
+      )}
+
+      {followOpen ? (
+        <>
+        <div className="grid gap-3 lg:grid-cols-2">
+          <section className="flex flex-col gap-3 rounded-2xl border border-primary/25 bg-primary/[0.05] p-4 shadow-sm">
+            <div className="flex items-start gap-3">
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary" aria-hidden><DoorOpen className="size-5" /></span>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-foreground">Marking now · {selectedTermName}</p>
+                <p className="text-xs text-muted-foreground">Choose your class and subject; the mark sheet opens on the exam your school is marking.</p>
+              </div>
+            </div>
+            <ul className="flex flex-col divide-y divide-border/50 rounded-xl bg-card ring-1 ring-inset ring-border/70">
+              {myClasses.map(c => (
+                <li key={c.id} className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 px-3 py-2 text-xs">
+                  <span className="font-semibold text-foreground">{c.name}</span>
+                  {c.type ? (
+                    <span className="min-w-0 text-muted-foreground">
+                      <span className="font-semibold text-primary">{getExamTypeLabel(c.type)}</span>
+                      {c.subjectNames.length > 0 && <> · {c.subjectNames.join(', ')}</>}
+                    </span>
+                  ) : (
+                    <span className="font-medium text-amber-700 dark:text-amber-400">{myRequests.has(c.id) ? 'Asked · waiting for an exam' : 'No exam open yet'}</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+            <button type="button" onClick={() => { setPickAnyExam(true); resetSelection(); }} className="self-start text-xs font-medium text-primary hover:underline">
+              Mark a CAT, correct an earlier exam or open another term
+            </button>
+          </section>
+
+          <StepCard step={1} title="Class" done={!!effectiveGradeId} hint="Classes you have exams for">
+            {loadingExams ? <p className="text-xs text-muted-foreground">Loading…</p> : examsError ? (
+              <LoadError message={examsError} onRetry={() => setExamsReloadToken(t => t + 1)} />
+            ) : availableGrades.length === 0 ? (
+              <p className="text-sm text-muted-foreground">You have no exams this term. Ask your admin if that looks wrong.</p>
+            ) : (
+              <select
+                className="input-field h-10 w-full text-sm"
+                value={effectiveGradeId}
+                onChange={e => { setFilterGradeId(e.target.value); setSelectedExamType(''); setSelectedSubjectId(''); setSelectedExamId(''); }}
+                aria-label="Class"
+              >
+                <option value="">Choose a class…</option>
+                {availableGrades.map(g => {
+                  const type = openTypeFor(g.id);
+                  return <option key={g.id} value={g.id}>{g.name_display} — {type ? getExamTypeLabel(type) : 'choose the exam'}</option>;
+                })}
+              </select>
+            )}
+          </StepCard>
+        </div>
+
+        {effectiveGradeId && !openTypeFor(effectiveGradeId) && (
+          <StepCard step={2} title="Exam" hint="Your school hasn’t opened an exam for this class yet" done={!!selectedExamType}>
+            <RequestExamNotice
+              title="Not sure which exam this is?"
+              asked={myRequests.has(effectiveGradeId)}
+              busy={requesting}
+              error={requestError}
+              onRequest={() => void requestExam([effectiveGradeId])}
+            />
+            <p className="mb-2 mt-3 text-xs text-muted-foreground">Or choose it yourself:</p>
+            <div className="flex flex-wrap gap-2">
+              {classExamTypes.map(et => (
+                <ChoiceChip key={et.code} active={selectedExamType === et.code} onClick={() => { setSelectedExamType(et.code); setSelectedSubjectId(''); setSelectedExamId(''); }} title={et.description}>
+                  <span aria-hidden>{et.icon}</span> {et.shortName}
+                  <ExamTiming active={selectedExamType === et.code} isNow={false} anytime={isAnytimeExamType(et.code)} date={typeDates.get(et.code)} today={today} />
+                </ChoiceChip>
+              ))}
+            </div>
+          </StepCard>
+        )}
+        </>
+      ) : (
+      /* ①–③ side by side from lg: each holds only a few controls. */
       <div className="grid gap-3 lg:grid-cols-3">
       {/* ① Term */}
       <StepCard step={1} title="Term" done={!!selectedTermId}>
@@ -728,7 +951,7 @@ export function MarksSetupTab() {
                   title={`${et.description}${typeDates.get(et.code) ? ` · scheduled ${examDay(typeDates.get(et.code)!)}` : ''}`}
                 >
                   <span aria-hidden>{et.icon}</span> {et.shortName}
-                  <ExamTiming active={selectedExamType === et.code} isNow={et.code === nowExamType} date={typeDates.get(et.code)} today={today} />
+                  <ExamTiming active={selectedExamType === et.code} isNow={openTypes.has(et.code) || et.code === nowExamType} anytime={isAnytimeExamType(et.code)} date={typeDates.get(et.code)} today={today} />
                 </ChoiceChip>
               ))}
 
@@ -783,11 +1006,12 @@ export function MarksSetupTab() {
           )}
         </StepCard>
       </div>
+      )}
 
       {/* ④ Subject */}
-      {selectedExamType && effectiveGradeId && (
+      {effectiveExamType && effectiveGradeId && (
         <StepCard
-          step={4}
+          step={subjectStep}
           title="Subject"
           done={!!selectedSubjectId}
           hint={`${subjects.length} subject${subjects.length !== 1 ? 's' : ''}`}
@@ -810,10 +1034,13 @@ export function MarksSetupTab() {
           ) : shownSubjects.length === 0 ? (
             <p className="text-sm text-muted-foreground">No subject matches &ldquo;{subjectQuery}&rdquo;.</p>
           ) : (
-            // Columns rather than a grid: categories differ a lot in size, and a
-            // grid row is as tall as its biggest group, leaving holes beside the rest.
-            <div className={cn(subjectGroups.length > 1 && 'gap-x-4 md:columns-2 xl:columns-3 -mb-5 *:mb-5 *:break-inside-avoid')}>
-              {subjectGroups.map(([category, groupSubjects]) => {
+            // Categories differ a lot in size. A grid row is as tall as its
+            // biggest group, and CSS columns can't split a group, so each
+            // category goes to whichever column is shortest so far.
+            <div className={cn('grid gap-x-4 gap-y-5', COLUMN_CLASS[subjectColumns.length])}>
+              {subjectColumns.map((column, columnIndex) => (
+              <div key={columnIndex} className="flex min-w-0 flex-col gap-5">
+              {column.map(([category, groupSubjects]) => {
                 const theme = SUBJECT_CATEGORY_THEME[category];
                 const CategoryIcon = theme.icon;
                 return (
@@ -868,6 +1095,8 @@ export function MarksSetupTab() {
                 </div>
                 );
               })}
+              </div>
+              ))}
             </div>
           )}
         </StepCard>
@@ -875,7 +1104,7 @@ export function MarksSetupTab() {
 
       {/* ⑤ Only when the subject has several exam slots in this class (e.g. one per stream) */}
       {selectedSubjectId && examsForSelectedSubject.length > 1 && (
-        <StepCard step={5} title="Which one?" hint={`This subject has ${examsForSelectedSubject.length} exams in this class`} done={!!selectedExamId}>
+        <StepCard step={subjectStep + 1} title="Which one?" hint={`This subject has ${examsForSelectedSubject.length} exams in this class`} done={!!selectedExamId}>
           <div className="flex flex-wrap gap-2">
             {examsForSelectedSubject.map(exam => (
               <ChoiceChip key={exam.id} active={effectiveSelectedExamId === exam.id} onClick={() => { setSelectedExamId(exam.id); setPickerOpen(false); }}>
@@ -933,7 +1162,10 @@ async function loadSubjects(url: string): Promise<MySubjectItem[]> {
 }
 
 /** "Now" on the exam the term is on, the date on one not yet sat. */
-function ExamTiming({ active, isNow, date, today }: { active: boolean; isNow: boolean; date?: string; today: string }) {
+function ExamTiming({ active, isNow, anytime, date, today }: { active: boolean; isNow: boolean; anytime: boolean; date?: string; today: string }) {
+  if (anytime) {
+    return <span className={cn('text-[10px] font-medium', active ? 'text-primary-foreground/80' : 'text-muted-foreground')}>any time</span>;
+  }
   if (isNow) {
     return <span className={cn('rounded px-1.5 py-0.5 text-[9px] font-bold', active ? 'bg-white/20' : 'bg-primary/10 text-primary')}>NOW</span>;
   }
@@ -941,4 +1173,51 @@ function ExamTiming({ active, isNow, date, today }: { active: boolean; isNow: bo
     return <span className={cn('text-[10px] font-medium', active ? 'text-primary-foreground/80' : 'text-muted-foreground')}>from {examDay(date)}</span>;
   }
   return null;
+}
+
+function windowMap(rows: readonly ExamWindow[]): ReadonlyMap<string, string> {
+  return new Map(rows.map(w => [w.grade_id, w.exam_type]));
+}
+
+/** Built-in exams in their running order; a school's own types after them. */
+function examTypeOrder(code: string): number {
+  return ALL_EXAM_TYPES.find(t => t.code === code)?.order ?? 999;
+}
+
+const COLUMN_CLASS: Record<number, string> = { 1: 'grid-cols-1', 2: 'grid-cols-2', 3: 'grid-cols-3' };
+
+/** Deals items into `count` columns, each to the shortest so far, keeping their order within a column. */
+function balanceColumns<T>(items: readonly T[], count: number, weight: (item: T) => number): T[][] {
+  const columns = Array.from({ length: Math.max(1, count) }, () => ({ items: [] as T[], height: 0 }));
+  for (const item of items) {
+    const shortest = columns.reduce((low, c) => (c.height < low.height ? c : low));
+    shortest.items.push(item);
+    shortest.height += weight(item);
+  }
+  return columns.map(c => c.items);
+}
+
+/** A teacher's "ask for an exam to be opened", and its answer once sent. */
+function RequestExamNotice({ title, asked, busy, error, onRequest }: { title: string; asked: boolean; busy: boolean; error: string; onRequest: () => void }) {
+  return (
+    <div className="flex flex-col gap-3 rounded-xl border border-amber-500/30 bg-amber-500/[0.08] p-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex min-w-0 items-start gap-2.5">
+        <BellRing className="mt-0.5 size-4 shrink-0 text-amber-700 dark:text-amber-400" aria-hidden />
+        <div className="min-w-0 text-sm">
+          <p className="font-semibold text-foreground">{title}</p>
+          <p className="text-xs text-muted-foreground">
+            {asked
+              ? 'You’ve asked. Your admin, principal or DOS will see it and open the right exam.'
+              : 'Ask your admin, principal or DOS to open it, so your marks go into the right exam.'}
+          </p>
+          {error && <p role="alert" className="mt-1 text-xs text-destructive">{error}</p>}
+        </div>
+      </div>
+      {!asked && (
+        <button type="button" onClick={onRequest} disabled={busy} className="btn-secondary h-9 shrink-0 px-3 text-xs">
+          {busy ? 'Sending…' : 'Ask for the exam'}
+        </button>
+      )}
+    </div>
+  );
 }

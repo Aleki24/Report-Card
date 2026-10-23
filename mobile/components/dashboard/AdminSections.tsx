@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
-import { Award, CalendarCheck, Check, CircleCheckBig, ClipboardList, Send, Trophy, Wallet, X, type LucideIcon } from 'lucide-react-native';
+import { Award, CalendarCheck, Check, CircleCheckBig, ClipboardList, DoorOpen, Send, Trophy, Wallet, X, type LucideIcon } from 'lucide-react-native';
 import {
     buildSetupSteps, buildTodos, totalAttendanceCount,
     type AttendanceToday, type ClassPerformance, type DashboardData, type TodoKey, type UpcomingRound,
@@ -13,7 +13,7 @@ import { fonts, makeStyles, radius, spacing, useTheme, shadowFor } from '@/lib/t
 import { CountUp, LegendItem, Meter, PressScale, appHref } from './kit';
 import { Ring } from './charts';
 
-const TODO_ICONS: Record<TodoKey, LucideIcon> = { release: Send, marks: ClipboardList, grading: Award, attendance: CalendarCheck, fees: Wallet };
+const TODO_ICONS: Record<TodoKey, LucideIcon> = { 'open-exam': DoorOpen, release: Send, marks: ClipboardList, grading: Award, attendance: CalendarCheck, fees: Wallet };
 
 /** "Needs your attention": each item with its own next step, or a clear all caught up. */
 export function TodoList({ data }: { data: DashboardData }) {
