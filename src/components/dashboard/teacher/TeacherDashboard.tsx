@@ -1,14 +1,12 @@
 "use client";
 
-import { cn } from '@/lib/utils';
-import { hueForHref } from '@/components/ui/pageHues';
-import { TONES } from '@/components/ui/tones';
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
   ArrowRight, BarChart3, CalendarCheck, CheckCircle2, ClipboardList, FileText,
   GraduationCap, Hash, Megaphone, NotebookPen, PenLine, Send, Users,
 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { useAuth } from '@/components/AuthProvider';
 import { InfoGuide } from '@/components/ui/InfoGuide';
 import { DashboardSkeleton } from '@/components/dashboard/LoadingSkeleton';
@@ -17,6 +15,9 @@ import SectionTitle from '@/components/dashboard/SectionTitle';
 import InsightCard from '@/components/dashboard/InsightCard';
 import UpcomingRounds from '@/components/dashboard/UpcomingRounds';
 import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
+import { OperationsOverview } from '@/components/dashboard/OperationsOverview';
+import { QuickActions, type QuickActionItem } from '@/components/dashboard/QuickActions';
+import { AUTO_FIT_GRID } from '@/components/dashboard/grid';
 import type { TermSummary, UpcomingRound } from '@/lib/dashboard';
 import MarkingProgressPanel from './MarkingProgressPanel';
 import { markEntryHref, markingState, type MarkingProgressResponse } from '@/lib/marking-progress';
@@ -27,22 +28,20 @@ interface ClassStats { streamName: string; studentCount: number; streamAvg: stri
 interface SubjectStats { examCount: number; avg: string; markCount: number }
 interface DashboardSummary { term?: TermSummary; upcomingRounds?: UpcomingRound[] }
 
-interface QuickLink { label: string; desc: string; href: string; icon: React.ReactNode }
-
-const QUICK_LINKS: Record<Variant, QuickLink[]> = {
+const QUICK_LINKS: Record<Variant, readonly QuickActionItem[]> = {
   class: [
-    { label: 'Enter or correct marks', desc: 'Type, fix or remove marks', href: '/dashboard/exams-marks', icon: <PenLine size={16} /> },
-    { label: 'Class results', desc: 'Broadsheet and rankings', href: '/dashboard/exams-marks?tab=results', icon: <BarChart3 size={16} /> },
-    { label: 'Report cards', desc: 'Generate and send to parents', href: '/dashboard/reports', icon: <FileText size={16} /> },
-    { label: 'Attendance', desc: 'Mark today’s register', href: '/dashboard/attendance', icon: <CalendarCheck size={16} /> },
-    { label: 'My students', desc: 'Your class roster', href: '/dashboard/people', icon: <Users size={16} /> },
+    { label: 'Enter or correct marks', desc: 'Type, fix or remove marks', href: '/dashboard/exams-marks', icon: PenLine },
+    { label: 'Class results', desc: 'Broadsheet and rankings', href: '/dashboard/exams-marks?tab=results', icon: BarChart3 },
+    { label: 'Report cards', desc: 'Generate and send to parents', href: '/dashboard/reports', icon: FileText },
+    { label: 'Attendance', desc: 'Mark today’s register', href: '/dashboard/attendance', icon: CalendarCheck },
+    { label: 'My students', desc: 'Your class roster', href: '/dashboard/people', icon: Users },
   ],
   subject: [
-    { label: 'Enter or correct marks', desc: 'Type, fix or remove marks', href: '/dashboard/exams-marks', icon: <PenLine size={16} /> },
-    { label: 'Results', desc: 'Broadsheet and subject averages', href: '/dashboard/exams-marks?tab=results', icon: <BarChart3 size={16} /> },
-    { label: 'Release results', desc: 'Let learners see their marks', href: '/dashboard/exams-marks?tab=publish', icon: <Send size={16} /> },
-    { label: 'Assignments', desc: 'Set work for your classes', href: '/dashboard/assignments', icon: <NotebookPen size={16} /> },
-    { label: 'Announcements', desc: 'Post to your classes', href: '/dashboard/announcements', icon: <Megaphone size={16} /> },
+    { label: 'Enter or correct marks', desc: 'Type, fix or remove marks', href: '/dashboard/exams-marks', icon: PenLine },
+    { label: 'Results', desc: 'Broadsheet and subject averages', href: '/dashboard/exams-marks?tab=results', icon: BarChart3 },
+    { label: 'Release results', desc: 'Let learners see their marks', href: '/dashboard/exams-marks?tab=publish', icon: Send },
+    { label: 'Assignments', desc: 'Set work for your classes', href: '/dashboard/assignments', icon: NotebookPen },
+    { label: 'Announcements', desc: 'Post to your classes', href: '/dashboard/announcements', icon: Megaphone },
   ],
 };
 
@@ -119,7 +118,7 @@ export default function TeacherDashboard({ variant }: { variant: Variant }) {
         : 'No exams to mark yet this term.';
 
   return (
-    <div className="flex flex-col gap-5 px-1 pb-6 sm:px-2 lg:px-3">
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-2 pb-8 sm:px-3 lg:px-4">
       <DashboardHeader name={firstName} term={summary?.term ?? null} canEditTerms={false} summary={markingSummary}>
         <div className="flex flex-col gap-2 sm:flex-row lg:flex-col xl:flex-row">
           {progress.next ? (
@@ -138,10 +137,12 @@ export default function TeacherDashboard({ variant }: { variant: Variant }) {
         </div>
       </DashboardHeader>
 
+      <OperationsOverview />
+
       {/* At a glance */}
       <section>
         <SectionTitle>At a glance</SectionTitle>
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div className={cn(AUTO_FIT_GRID.tile, 'gap-3')}>
           <KpiTile
             title="Marks to enter"
             value={markingLoading ? '…' : progress.left.toLocaleString()}
@@ -172,31 +173,20 @@ export default function TeacherDashboard({ variant }: { variant: Variant }) {
         </div>
       </section>
 
+      <section aria-labelledby="teacher-actions-heading">
+        <SectionTitle><span id="teacher-actions-heading">Quick actions</span></SectionTitle>
+        <QuickActions items={QUICK_LINKS[variant]} />
+      </section>
+
+      {/* Quick actions sit in their own row above, so the side column is short
+          and the marking list can fill its height. */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
-        <div className="lg:col-span-2">
-          <MarkingProgressPanel items={items} termName={marking?.term?.name ?? null} loading={markingLoading} />
+        <div className="flex min-w-0 flex-col lg:col-span-2">
+          <MarkingProgressPanel className="flex-1" items={items} termName={marking?.term?.name ?? null} loading={markingLoading} />
         </div>
 
         <div className="flex flex-col gap-5">
-          <section className="rounded-2xl border border-border/60 bg-card p-4 shadow-sm sm:p-5">
-            <h2 className="mb-3 font-display text-base font-bold tracking-tight">Quick actions</h2>
-            <ul className="flex flex-col gap-1">
-              {QUICK_LINKS[variant].map(link => (
-                <li key={link.href + link.label}>
-                  <Link href={link.href} className="group flex items-center gap-3 rounded-xl px-2 py-2 no-underline transition-colors hover:bg-muted/60">
-                    <span className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-lg', TONES[hueForHref(link.href)].tile)}>{link.icon}</span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-semibold text-foreground group-hover:text-primary">{link.label}</span>
-                      <span className="block truncate text-xs text-muted-foreground">{link.desc}</span>
-                    </span>
-                    <ArrowRight size={14} className="shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden />
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </section>
-
-          <InsightCard title="Coming up" meta="Next three weeks" action={{ label: 'Exams', href: '/dashboard/exams-marks' }}>
+          <InsightCard title="Coming up" meta="Next three weeks" action={{ label: 'Exams', href: '/dashboard/exams-marks' }} className="lg:flex-1">
             <UpcomingRounds rounds={summary?.upcomingRounds ?? []} />
           </InsightCard>
 

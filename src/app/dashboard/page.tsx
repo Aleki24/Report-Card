@@ -1,7 +1,6 @@
 "use client";
 
 import { cn } from '@/lib/utils';
-import { hueForHref } from '@/components/ui/pageHues';
 import { TONES } from '@/components/ui/tones';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -29,6 +28,7 @@ import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
 import UpcomingRounds from '@/components/dashboard/UpcomingRounds';
 import { OperationsOverview } from '@/components/dashboard/OperationsOverview';
 import { AUTO_FIT_GRID } from '@/components/dashboard/grid';
+import { QuickActions, type QuickActionItem } from '@/components/dashboard/QuickActions';
 import { homePathForRole } from '@/lib/roles';
 
 // ── Admin Dashboard ──────────────────────────────────────────
@@ -155,9 +155,7 @@ function AdminDashboard({ userName }: { userName: string }) {
       {/* Every common task, the same weight */}
       <section aria-labelledby="actions-heading">
         <SectionTitle><span id="actions-heading">Quick actions</span></SectionTitle>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-8">
-          {QUICK_ACTIONS.map(a => <QuickAction key={a.label} {...a} />)}
-        </div>
+        <QuickActions items={QUICK_ACTIONS} />
       </section>
 
       {/* The headline snapshots side by side, so the two columns below stay
@@ -242,7 +240,7 @@ function TodoList({ data }: { data: DashboardData | null }) {
   );
 }
 
-const QUICK_ACTIONS: { label: string; href: string; icon: LucideIcon }[] = [
+const QUICK_ACTIONS: readonly QuickActionItem[] = [
   { label: 'Enter marks', href: '/dashboard/exams-marks', icon: ClipboardList },
   { label: 'Report cards', href: '/dashboard/reports', icon: FileText },
   { label: 'Attendance', href: '/dashboard/attendance', icon: CalendarCheck },
@@ -252,16 +250,6 @@ const QUICK_ACTIONS: { label: string; href: string; icon: LucideIcon }[] = [
   { label: 'Assignment', href: '/dashboard/assignments', icon: Briefcase },
   { label: 'Record payment', href: '/dashboard/fees', icon: Wallet },
 ];
-
-function QuickAction({ label, href, icon: Icon }: { label: string; href: string; icon: LucideIcon }) {
-  const tone = TONES[hueForHref(href)];
-  return (
-    <Link href={href} className={cn('group flex items-center gap-2.5 rounded-xl border border-border/60 bg-card px-3 py-2.5 no-underline shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md xl:flex-col xl:items-start xl:gap-2 xl:py-3', tone.hover)}>
-      <span className={cn('flex size-8 shrink-0 items-center justify-center rounded-lg', tone.tile)} aria-hidden><Icon className="size-4" /></span>
-      <span className="text-xs font-semibold leading-tight text-foreground sm:text-sm">{label}</span>
-    </Link>
-  );
-}
 
 function RecentActivity({ activities }: { activities: DashboardData['recentActivities'] }) {
   if (activities.length === 0) return <p className="py-4 text-center text-sm text-muted-foreground">Nothing yet this year.</p>;
@@ -460,8 +448,6 @@ export default function DashboardPage() {
 
   return (
     <div className="flex-1 p-2 md:p-6 lg:p-8 pt-1">
-      {/* The admin home places this under its greeting. */}
-      {!isAdmin && <OperationsOverview className="mb-6 px-1 pt-2 sm:px-2" />}
       {isAdmin && <AdminDashboard userName={userName} />}
       {role === 'CLASS_TEACHER' && <TeacherDashboard variant="class" />}
       {role === 'SUBJECT_TEACHER' && <TeacherDashboard variant="subject" />}
@@ -473,6 +459,7 @@ export default function DashboardPage() {
             <h1 className="relative mt-1 font-display text-2xl font-bold tracking-tight sm:text-3xl">Welcome{userName ? `, ${userName}` : ''}</h1>
             <p className="relative mt-1.5 max-w-lg text-sm text-white/85">Keep up with school news here. Your duties (bursar, nurse, matron, driver…) add their pages to your menu.</p>
           </section>
+          <OperationsOverview />
           <Link href="/dashboard/announcements" className="group flex items-center gap-4 rounded-2xl border border-border/60 bg-card p-5 no-underline shadow-sm transition-all hover:-translate-y-px hover:border-primary/40 hover:shadow-md">
             <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><Bell size={20} aria-hidden /></span>
             <span className="min-w-0 flex-1">

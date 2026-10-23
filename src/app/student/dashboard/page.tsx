@@ -20,6 +20,7 @@ import { localToday, type StudentAssignment } from '@/lib/assignments';
 import HomeworkPanel from '@/components/student/dashboard/HomeworkPanel';
 import { useSchoolPassMark } from '@/hooks/useSchoolPassMark';
 import { cn } from '@/lib/utils';
+import { AUTO_FIT_GRID } from '@/components/dashboard/grid';
 import { totalOwed } from '@/lib/fees';
 
 interface Announcement { id: string; title: string; content: string; isImportant: boolean; createdAt: string }
@@ -30,15 +31,6 @@ type DashboardData = Partial<StudentDashboardSummary> & {
     announcements?: Announcement[];
     assignments?: StudentAssignment[];
     materials?: LearningMaterial[];
-};
-
-/** Tailwind needs whole class names, so the tile grid picks from a fixed set. */
-const KPI_GRID: Record<number, string> = {
-    1: 'grid-cols-1',
-    2: 'grid-cols-2',
-    3: 'grid-cols-2 lg:grid-cols-3',
-    4: 'grid-cols-2 lg:grid-cols-4',
-    5: 'grid-cols-2 md:grid-cols-3 lg:grid-cols-5',
 };
 
 function formatFileSize(bytes: number): string {
@@ -261,7 +253,7 @@ export default function StudentDashboardPage() {
                         {refreshing ? 'Updating…' : lastUpdated ? `Updated ${timeAgo(lastUpdated.toISOString(), now)}` : 'Refresh'}
                     </button>
                 </div>
-                <div className={cn('grid gap-3', KPI_GRID[kpis.length] ?? KPI_GRID[4])}>{kpis}</div>
+                <div className={cn(AUTO_FIT_GRID.tile, 'gap-3')}>{kpis}</div>
             </section>
 
             {/* ── Results + what's coming ── */}

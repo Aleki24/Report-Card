@@ -14,6 +14,7 @@ import {
     type ChildLink, type ChildOverview as Overview,
 } from '@/lib/ops/forms/platform';
 import { cn } from '@/lib/utils';
+import { AUTO_FIT_GRID } from '@/components/dashboard/grid';
 
 function Section({ title, icon: Icon, children }: { title: string; icon: React.ComponentType<{ className?: string }>; children: React.ReactNode }) {
     return (
@@ -44,7 +45,7 @@ function ChildOverview({ childId }: { childId: string }) {
 
     return (
         <div className="flex flex-col gap-5">
-            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <div className={cn(AUTO_FIT_GRID.tile, 'gap-3')}>
                 {data.summary && <StatTile icon={GraduationCap} label="Average score" value={data.summary.stats.examsTaken ? `${data.summary.stats.averageScore}%` : '—'} hint={data.summary.stats.averageTerm ?? undefined} hue="blue" />}
                 {data.attendance.length > 0 && <StatTile icon={CalendarCheck} label="Absent (30 days)" value={absences} tone={absences > 2 ? 'warn' : 'good'} />}
                 {data.fees.length > 0 && <StatTile icon={DollarSign} label="Fee balance" value={money(balance)} tone={balance > 0 ? 'warn' : 'good'} />}
@@ -59,7 +60,9 @@ function ChildOverview({ childId }: { childId: string }) {
                 </Section>
             )}
 
-            <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+            {/* Columns rather than a grid: sections come and go with the data and
+                differ in height, and a grid left a hole beside every short one. */}
+            <div className="columns-1 gap-5 xl:columns-2 *:mb-5 *:break-inside-avoid">
                 {data.summary && (
                     <Section title="Latest results" icon={GraduationCap}>
                         {data.summary.latestResults.length === 0 ? <p className="text-sm text-muted-foreground">No released results yet.</p> : (
