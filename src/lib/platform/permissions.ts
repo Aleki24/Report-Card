@@ -20,6 +20,8 @@ export const PERMISSIONS = [
     'school.manage', 'modules.manage', 'duties.manage', 'audit.view',
     // Academics
     'calendar.view', 'calendar.manage',
+    // Choosing which exam each class is marking now (Exams & Marks).
+    'marking.open',
     'exam_papers.upload', 'exam_papers.moderate', 'exam_papers.manage',
     'timetable.view', 'timetable.manage',
     'lesson_records.write', 'lesson_records.review',
@@ -52,6 +54,7 @@ export const DOMAIN_MODULE = {
     duties: null,
     audit: null,
     calendar: 'calendar',
+    marking: null,
     exam_papers: 'exam_papers',
     timetable: 'timetable',
     lesson_records: 'lesson_records',
@@ -103,12 +106,12 @@ export const DUTIES = {
     DEPUTY_PRINCIPAL: {
         label: 'Deputy Principal',
         description: 'Runs academics, discipline and welfare day to day.',
-        grants: ['calendar.*', 'exam_papers.*', 'timetable.*', 'lesson_records.*', 'cbc.*', 'discipline.*', 'boarding.view', 'health.view', 'hr.manage', 'expenses.approve', 'expenses.view'],
+        grants: ['calendar.*', 'marking.open', 'exam_papers.*', 'timetable.*', 'lesson_records.*', 'cbc.*', 'discipline.*', 'boarding.view', 'health.view', 'hr.manage', 'expenses.approve', 'expenses.view'],
     },
     DOS: {
         label: 'Director of Studies',
-        description: 'Exams, papers, timetable, professional records and academic calendar.',
-        grants: ['calendar.*', 'exam_papers.*', 'timetable.*', 'lesson_records.*', 'cbc.*'],
+        description: 'Exams and which one is being marked, papers, timetable, professional records and academic calendar.',
+        grants: ['calendar.*', 'marking.open', 'exam_papers.*', 'timetable.*', 'lesson_records.*', 'cbc.*'],
     },
     HOD: {
         label: 'Head of Department',
@@ -116,7 +119,7 @@ export const DUTIES = {
         grants: ['exam_papers.moderate', 'exam_papers.upload', 'lesson_records.*', 'cbc.view', 'calendar.view', 'timetable.view'],
     },
     TIMETABLER: { label: 'Timetabler', description: 'Builds and publishes the timetable.', grants: ['timetable.*'], module: 'timetable' },
-    EXAMS_OFFICER: { label: 'Exams Officer', description: 'Runs the paper bank and printing.', grants: ['exam_papers.*', 'calendar.view'], module: 'exam_papers' },
+    EXAMS_OFFICER: { label: 'Exams Officer', description: 'Runs the paper bank and printing, and opens exams for marking.', grants: ['exam_papers.*', 'marking.open', 'calendar.view'], module: 'exam_papers' },
     BURSAR: {
         label: 'Bursar',
         description: 'Fees, billing, expenses and financial reports.',

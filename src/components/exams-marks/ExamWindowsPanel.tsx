@@ -1,52 +1,52 @@
 "use client";
 
 import React, { useState } from 'react';
-import { CheckCircle2, ChevronDown, DoorOpen } from 'lucide-react';
+import { BellRing, CheckCircle2, ChevronDown, DoorOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getExamTypeLabel } from '@/lib/exam-types';
-import { LEVEL_ORDER, levelLabel, levelOf, type ExamWindow, type LevelKey } from '@/lib/exam-windows';
-
-export interface WindowGrade { id: string; code?: string | null; name_display: string }
+import { LEVEL_ORDER, levelLabel, levelOf, type ExamClass, type ExamRequest, type LevelKey } from '@/lib/exam-windows';
 
 interface ExamWindowsPanelProps {
   termId: string;
   termName: string;
-  /** Classes with exams this term. */
-  grades: readonly WindowGrade[];
-  /** Scheduled exam types each class has this term (anytime types left out). */
-  typesByGrade: ReadonlyMap<string, readonly string[]>;
+  /** Every class with scheduled exams this term. */
+  classes: readonly ExamClass[];
   windows: ReadonlyMap<string, string>;
-  onSaved: (windows: ExamWindow[]) => void;
+  /** Teachers waiting for an exam to be opened, per class. */
+  requests: readonly ExamRequest[];
+  onSaved: () => void;
 }
 
 const MIXED = '__mixed';
 
-interface Level { key: LevelKey; grades: WindowGrade[]; types: string[] }
+interface Level { key: LevelKey; classes: ExamClass[]; types: string[]; waiting: number }
 
 /**
  * The admin's switch for which exam each class is marking now. Set once per
  * level (all of Junior School on End-Term); a class that differs — Form 4 on
  * Mock — gets its own. Teachers then go straight to that exam.
  */
-export function ExamWindowsPanel({ termId, termName, grades, typesByGrade, windows, onSaved }: ExamWindowsPanelProps) {
-  const unset = grades.filter(g => !windows.has(g.id)).length;
+export function ExamWindowsPanel({ termId, termName, classes, windows, requests, onSaved }: ExamWindowsPanelProps) {
+  const unset = classes.filter(c => !windows.has(c.grade_id)).length;
+  const requestFor = new Map(requests.map(r => [r.grade_id, r]));
+  const waitingTeachers = new Set(requests.flatMap(r => r.names)).size;
   // Open while any class is unset, until the admin folds it themselves.
   const [openChoice, setOpenChoice] = useState<boolean | null>(null);
-  const open = openChoice ?? unset > 0;
+  const open = openChoice ?? (unset > 0 || requests.length > 0);
   const [perClass, setPerClass] = useState<ReadonlySet<LevelKey>>(new Set());
   const [saving, setSaving] = useState<LevelKey | null>(null);
   const [error, setError] = useState('');
 
   const levels: Level[] = (() => {
-    const map = new Map<LevelKey, WindowGrade[]>();
-    for (const g of grades) {
-      const key = levelOf(g);
-      map.set(key, [...(map.get(key) ?? []), g]);
+    const map = new Map<LevelKey, ExamClass[]>();
+    for (const c of classes) {
+      const key = levelOf({ code: c.code, name_display: c.name });
+      map.set(key, [...(map.get(key) ?? []), c]);
     }
     return LEVEL_ORDER.filter(k => map.has(k)).map(key => {
-      const levelGrades = (map.get(key) ?? []).sort((a, b) => a.name_display.localeCompare(b.name_display, undefined, { numeric: true }));
-      const types = [...new Set(levelGrades.flatMap(g => typesByGrade.get(g.id) ?? []))];
-      return { key, grades: levelGrades, types };
+      const levelClasses = map.get(key) ?? [];
+      const types = [...new Set(levelClasses.flatMap(c => c.types))];
+      return { key, classes: levelClasses, types, waiting: levelClasses.filter(c => requestFor.has(c.grade_id)).length };
     });
   })();
 
@@ -60,9 +60,9 @@ export function ExamWindowsPanel({ termId, termName, grades, typesByGrade, windo
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ termId, entries }),
       });
-      const json = (await res.json().catch(() => null)) as { data?: ExamWindow[]; error?: string } | null;
+      const json = (await res.json().catch(() => null)) as { data?: unknown[]; error?: string } | null;
       if (!res.ok || !json?.data) throw new Error(json?.error || 'Could not save.');
-      onSaved(json.data);
+      onSaved();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save.');
     }
@@ -71,14 +71,14 @@ export function ExamWindowsPanel({ termId, termName, grades, typesByGrade, windo
 
   /** A level-wide choice sets every class in it that sits that exam. */
   const setLevel = (level: Level, examType: string) => {
-    const entries = level.grades
-      .filter(g => !examType || (typesByGrade.get(g.id) ?? []).includes(examType))
-      .map(g => ({ gradeId: g.id, examType: examType || null }));
+    const entries = level.classes
+      .filter(c => !examType || c.types.includes(examType))
+      .map(c => ({ gradeId: c.grade_id, examType: examType || null }));
     void save(level.key, entries);
   };
 
   const levelValue = (level: Level): string => {
-    const values = new Set(level.grades.map(g => windows.get(g.id) ?? ''));
+    const values = new Set(level.classes.map(c => windows.get(c.grade_id) ?? ''));
     return values.size === 1 ? [...values][0] : MIXED;
   };
 
@@ -107,6 +107,12 @@ export function ExamWindowsPanel({ termId, termName, grades, typesByGrade, windo
               ? `${unset} ${unset === 1 ? 'class has' : 'classes have'} no exam open. Teachers there pick one themselves until you choose.`
               : summary}
           </span>
+          {waitingTeachers > 0 && (
+            <span className="mt-1.5 inline-flex items-center gap-1.5 rounded-lg bg-amber-500/15 px-2 py-1 text-xs font-semibold text-amber-800 dark:text-amber-300">
+              <BellRing className="size-3.5" aria-hidden />
+              {waitingTeachers} {waitingTeachers === 1 ? 'teacher is' : 'teachers are'} waiting for an exam to be opened
+            </span>
+          )}
         </span>
         <ChevronDown className={cn('mt-1 size-4 shrink-0 text-muted-foreground transition-transform sm:mt-0', open && 'rotate-180')} aria-hidden />
       </button>
@@ -119,13 +125,17 @@ export function ExamWindowsPanel({ termId, termName, grades, typesByGrade, windo
           <ul className="flex flex-col divide-y divide-border/60">
             {levels.map(level => {
               const value = levelValue(level);
-              const expanded = perClass.has(level.key) || value === MIXED;
+              // Classes someone is waiting on are shown, so the admin sees who asked.
+              const expanded = perClass.has(level.key) || value === MIXED || level.waiting > 0;
               return (
                 <li key={level.key} className="py-3 first:pt-0 last:pb-0">
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <div className="min-w-0">
                       <p className="text-sm font-semibold text-foreground">{levelLabel(level.key)}</p>
-                      <p className="text-xs text-muted-foreground">{level.grades.length} {level.grades.length === 1 ? 'class' : 'classes'}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {level.classes.length} {level.classes.length === 1 ? 'class' : 'classes'}
+                        {level.waiting > 0 && <span className="font-semibold text-amber-700 dark:text-amber-400"> · {level.waiting} waiting</span>}
+                      </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
                       <ExamSelect
@@ -136,7 +146,7 @@ export function ExamWindowsPanel({ termId, termName, grades, typesByGrade, windo
                         disabled={saving === level.key}
                         onChange={v => setLevel(level, v)}
                       />
-                      {level.grades.length > 1 && value !== MIXED && (
+                      {level.classes.length > 1 && value !== MIXED && level.waiting === 0 && (
                         <button
                           type="button"
                           onClick={() => setPerClass(prev => { const next = new Set(prev); if (next.has(level.key)) next.delete(level.key); else next.add(level.key); return next; })}
@@ -147,20 +157,31 @@ export function ExamWindowsPanel({ termId, termName, grades, typesByGrade, windo
                       )}
                     </div>
                   </div>
-                  {expanded && level.grades.length > 1 && (
+                  {expanded && (level.classes.length > 1 || level.waiting > 0) && (
                     <ul className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                      {level.grades.map(g => (
-                        <li key={g.id} className="flex items-center justify-between gap-2 rounded-xl border border-border/60 px-3 py-2">
-                          <span className="min-w-0 truncate text-sm text-foreground">{g.name_display}</span>
-                          <ExamSelect
-                            label={`Exam open for ${g.name_display}`}
-                            value={windows.get(g.id) ?? ''}
-                            types={typesByGrade.get(g.id) ?? []}
-                            disabled={saving === level.key}
-                            onChange={v => void save(level.key, [{ gradeId: g.id, examType: v || null }])}
-                          />
-                        </li>
-                      ))}
+                      {level.classes.map(c => {
+                        const request = requestFor.get(c.grade_id);
+                        return (
+                          <li key={c.grade_id} className={cn('flex flex-col gap-1.5 rounded-xl border px-3 py-2', request ? 'border-amber-500/40 bg-amber-500/[0.06]' : 'border-border/60')}>
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="min-w-0 truncate text-sm text-foreground">{c.name}</span>
+                              <ExamSelect
+                                label={`Exam open for ${c.name}`}
+                                value={windows.get(c.grade_id) ?? ''}
+                                types={c.types}
+                                disabled={saving === level.key}
+                                onChange={v => void save(level.key, [{ gradeId: c.grade_id, examType: v || null }])}
+                              />
+                            </div>
+                            {request && (
+                              <p className="flex items-center gap-1 text-[11px] text-amber-800 dark:text-amber-300">
+                                <BellRing className="size-3 shrink-0" aria-hidden />
+                                <span className="truncate">Asked by {request.names.join(', ')}</span>
+                              </p>
+                            )}
+                          </li>
+                        );
+                      })}
                     </ul>
                   )}
                 </li>

@@ -4,7 +4,7 @@ import type { SetupStatus } from '@/lib/setup-status';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { findActiveTermId } from '@/lib/term-calendar';
-import { readExamWindows } from '@/lib/exam-windows';
+import { readExamRequests, readExamWindows } from '@/lib/exam-windows';
 import { PASS_MARK, passMarkOrDefault } from '@/lib/pass-mark';
 import { STAFF_TEACHING_ROLES, isRoleIn } from '@/lib/roles';
 import { schoolToday } from '@/lib/dates';
@@ -309,8 +309,9 @@ export async function GET(_request: NextRequest) {
     // Classes with scheduled exams this term but none opened for marking:
     // their teachers are left to pick an exam themselves.
     let classesWithoutOpenExam = 0;
+    let teachersWaitingForExam = 0;
     if (currentTerm && role === 'ADMIN') {
-      const [{ rows: termExams }, windows] = await Promise.all([
+      const [{ rows: termExams }, windows, requests] = await Promise.all([
         fetchAllRows<{ grade_id: string; exam_type: string }>(() => supabase
           .from('exams')
           .select('grade_id, exam_type')
@@ -318,9 +319,11 @@ export async function GET(_request: NextRequest) {
           .eq('term_id', currentTerm.id)
           .order('id')),
         readExamWindows(supabase, schoolId, currentTerm.id),
+        readExamRequests(supabase, schoolId, currentTerm.id),
       ]);
       const opened = new Set(windows.map(w => w.grade_id));
       classesWithoutOpenExam = new Set(termExams.filter(e => !isAnytimeExamType(e.exam_type) && !opened.has(e.grade_id)).map(e => e.grade_id)).size;
+      teachersWaitingForExam = new Set(requests.filter(r => !opened.has(r.grade_id)).map(r => r.requested_by)).size;
     }
 
     const activities: {
@@ -469,6 +472,7 @@ export async function GET(_request: NextRequest) {
       upcomingRounds,
       unreleasedResults,
       classesWithoutOpenExam,
+      teachersWaitingForExam,
       hasAttendanceData,
       takesRegisters,
       hasLogo,

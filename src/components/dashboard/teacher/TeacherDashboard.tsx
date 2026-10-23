@@ -16,6 +16,7 @@ import InsightCard from '@/components/dashboard/InsightCard';
 import UpcomingRounds from '@/components/dashboard/UpcomingRounds';
 import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
 import { OperationsOverview } from '@/components/dashboard/OperationsOverview';
+import { OpenExamReminder } from '@/components/dashboard/OpenExamReminder';
 import { QuickActions, type QuickActionItem } from '@/components/dashboard/QuickActions';
 import { AUTO_FIT_GRID } from '@/components/dashboard/grid';
 import type { TermSummary, UpcomingRound } from '@/lib/dashboard';
@@ -131,6 +132,8 @@ export default function TeacherDashboard({ variant }: { variant: Variant }) {
           </Link>
         </div>
       </DashboardHeader>
+
+      <OpenExamReminder />
 
       <OperationsOverview />
 

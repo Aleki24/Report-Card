@@ -53,3 +53,52 @@ export function levelOf(grade: GradeLike): LevelKey {
 export function levelLabel(level: LevelKey): string {
     return level === 'OTHER' ? 'Other classes' : BAND_LABELS[level];
 }
+
+export const EXAM_REQUESTS_TABLE = 'exam_marking_requests';
+
+/** A class with scheduled exams this term, and which ones. */
+export interface ExamClass {
+    grade_id: string;
+    name: string;
+    code: string | null;
+    /** Scheduled exam types this class has this term, in running order. */
+    types: string[];
+}
+
+/** Teachers waiting for an exam to be opened in a class. */
+export interface ExamRequest {
+    grade_id: string;
+    names: string[];
+    /** ISO time of the latest request. */
+    latest: string;
+}
+
+/** GET /api/school/exam-windows */
+export interface ExamWindowsResponse {
+    termId: string | null;
+    termName: string | null;
+    data: ExamWindow[];
+    /** Whether the caller can open exams (marking.open). */
+    canOpen: boolean;
+    /** For those who can open exams: every class with scheduled exams this term. */
+    classes: ExamClass[];
+    /** For those who can open exams: who is waiting, per class. */
+    requests: ExamRequest[];
+    /** Classes the caller has asked about and is still waiting on. */
+    myRequests: string[];
+}
+
+/** Rows for one term, or none before the migration is applied. */
+export async function readExamRequests(supabase: Db, schoolId: string, termId: string): Promise<{ grade_id: string; requested_by: string; created_at: string }[]> {
+    const { data, error } = await supabase
+        .from(EXAM_REQUESTS_TABLE)
+        .select('grade_id, requested_by, created_at')
+        .eq('school_id', schoolId)
+        .eq('term_id', termId)
+        .returns<{ grade_id: string; requested_by: string; created_at: string }[]>();
+    if (error) {
+        if ((error as { code?: string }).code === MISSING_TABLE) return [];
+        throw new Error(`Failed to load exam requests: ${error.message}`);
+    }
+    return data ?? [];
+}
