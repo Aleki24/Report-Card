@@ -21,6 +21,7 @@ import { cn } from '@/lib/utils';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { ExamSetupMenu } from './ExamSetupMenu';
 import { ExamWindowsPanel } from './ExamWindowsPanel';
+import { MarkingProgressBoard } from './MarkingProgressBoard';
 import { MODE_TONES, STEP_TONES, SUBJECT_CATEGORY_THEME, subjectCategory, type SubjectCategory } from './examTheme';
 
 interface MySubjectItem { id: string; code: string; name: string; academic_level_id: string; category?: string; }
@@ -801,6 +802,16 @@ export function MarksSetupTab() {
               void reloadExams();
             }
           }}
+        />
+      )}
+
+      {/* Who is behind on the open exams, for whoever opens them. */}
+      {canOpenExams && windows.size > 0 && (
+        <MarkingProgressBoard
+          termId={selectedTermId}
+          termName={selectedTermName}
+          version={[...windows].map(([g, t]) => `${g}:${t}`).sort().join(',')}
+          onOpenExam={openExam}
         />
       )}
 
