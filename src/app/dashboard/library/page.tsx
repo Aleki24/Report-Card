@@ -11,6 +11,7 @@ import { ActionButton } from '@/components/ops/ActionButton';
 import { useOpsList } from '@/hooks/useOpsList';
 import { date, money, personName, today } from '@/lib/ops/format';
 import { BOOK_DEFAULTS, BOOK_FIELDS, LOAN_TONES, copiesOut, loanDefaults, loanFields, loanState, type Book, type Loan } from '@/lib/ops/forms/operations';
+import { FEATURE_ICONS } from '@/components/ui/featureIcons';
 
 function LoansPanel({ manage }: { manage: boolean }) {
     const books = useOpsList<Book>('books');
@@ -61,7 +62,7 @@ export default function LibraryPage() {
             title="Library"
             eyebrow="Operations"
             description="The catalogue, what is out and who has it, and overdue books."
-            icon={Library}
+            icon={FEATURE_ICONS.library}
             hue="teal"
             tabs={[
                 {

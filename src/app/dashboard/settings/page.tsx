@@ -2,7 +2,7 @@
 
 import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { AlertTriangle, Award, BookOpen, CalendarRange, CreditCard, LayoutGrid, RotateCcw, School, Settings, UserCog } from 'lucide-react';
+import { AlertTriangle, Award, BookOpen, CalendarRange, CreditCard, LayoutGrid, RotateCcw, School, UserCog } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import PageHeader from '@/components/dashboard/PageHeader';
 import EmptyState from '@/components/dashboard/EmptyState';
@@ -20,6 +20,7 @@ import { SchoolForm, type SchoolProfile } from '@/components/settings/SchoolForm
 import { isSeniorRankGroup } from '@/lib/ranking';
 import { PASS_MARK_MAX, PASS_MARK_MIN } from '@/lib/pass-mark';
 import { apiErrorMessage } from '@/lib/api-error-message';
+import { FEATURE_ICONS } from '@/components/ui/featureIcons';
 
 interface AcademicLevel { id: string; code: string; name: string }
 interface Grade { id: string; code: string; name_display: string; numeric_order: number; academic_level_id: string }
@@ -275,7 +276,7 @@ function SettingsPageInner() {
 
   return (
     <div className="mx-auto w-full max-w-7xl pb-10">
-      <PageHeader title="School settings" eyebrow="Administration" icon={Settings} hue="slate" description="Your school's profile, modules, staff duties, academic calendar, grading and payments." />
+      <PageHeader title="School settings" eyebrow="Administration" icon={FEATURE_ICONS.settings} hue="slate" description="Your school's profile, modules, staff duties, academic calendar, grading and payments." />
 
       <PageTabs tabs={TABS} active={active} onSelect={select} label="Settings" idPrefix="settings" />
 

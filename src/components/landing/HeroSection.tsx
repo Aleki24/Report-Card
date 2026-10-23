@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type PointerEvent } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
 import type { LucideIcon } from 'lucide-react';
 import {
   CalendarCheck,
@@ -17,6 +16,7 @@ import { modules } from '@/lib/modules';
 import { cn } from '@/lib/utils';
 import { CtaLink } from './ui/CtaLink';
 import { Eyebrow } from './ui/Section';
+import { PhoneShot } from './ui/ProductShot';
 
 const TRUST_CHIPS: { icon: LucideIcon; label: string }[] = [
   { icon: CheckCircle2, label: 'CBC & 8-4-4' },
@@ -291,12 +291,15 @@ export default function HeroSection() {
           <div className="pointer-events-none absolute inset-[10%] rounded-full bg-[radial-gradient(circle,var(--color-accent-glow)_0%,transparent_70%)] opacity-60 blur-[100px] dark:opacity-90" />
 
           <div className="relative transform-3d transition-transform duration-250 ease-out [transform:rotateX(var(--rx))_rotateY(var(--ry))] motion-reduce:[transform:none]">
-            {/* Floating 3D asset — glass grade report */}
-            <div className="absolute -top-9 -right-2 z-3 hidden size-24 rotate-6 animate-float overflow-hidden rounded-2xl border border-border shadow-2xl shadow-black/35 translate-z-[70px] sm:block md:size-34">
-              <Image src="/images/dashboard_marks_icon.png" alt="" fill sizes="136px" className="object-cover" />
+            {/* What the parent sees on their phone: the same results, a minute later */}
+            {/* It sits in room kept beside the panel, overlapping only its padding, never its marks. */}
+            <div className="absolute top-1/2 right-0 z-3 hidden w-24 -translate-y-1/2 rotate-[5deg] animate-float translate-z-[70px] sm:block md:w-32 lg:w-36">
+              <PhoneShot src="/manual/mobile-parent.jpg" alt="" sizes="144px" />
             </div>
 
-            <MockMarksPanel />
+            <div className="sm:mr-20 md:mr-28 lg:mr-32">
+              <MockMarksPanel />
+            </div>
 
             {/* Chips sit over the panel's empty zones (tab strip, footer middle), never over data */}
             <FloatingChip

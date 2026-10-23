@@ -12,6 +12,7 @@ import { StaffSection } from '@/components/people/StaffSection';
 import { ParentsSection } from '@/components/people/ParentsSection';
 import { isRoleIn } from '@/lib/roles';
 import type { UserRole } from '@/types';
+import { FEATURE_ICONS } from '@/components/ui/featureIcons';
 
 type PeopleTab = 'students' | 'teachers' | 'parents';
 
@@ -43,7 +44,7 @@ function PeoplePageInner() {
       <PageHeader
         title={isClassTeacher ? 'My students' : 'People'}
         eyebrow={isClassTeacher ? 'My class' : 'School'}
-        icon={Users}
+        icon={FEATURE_ICONS.people}
         hue="orange"
         description={isClassTeacher
           ? 'The learners in your class, with their guardians. Open anyone for their full profile.'

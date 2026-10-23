@@ -8,6 +8,7 @@ import DashboardCard from '@/components/dashboard/DashboardCard';
 import EmptyState from '@/components/dashboard/EmptyState';
 import { Badge, Input } from '@/components/ui';
 import { useJsonList } from '@/hooks/useJsonList';
+import { FEATURE_ICONS } from '@/components/ui/featureIcons';
 
 interface Subject {
     id: string;
@@ -45,7 +46,7 @@ export default function StudentSubjectsPage() {
 
     return (
         <div className="w-full mx-auto max-w-[1100px] pb-10">
-            <PageHeader title="My subjects" eyebrow="Academics" icon={BookOpen} hue="emerald" description="Open a subject for its performance, assignments and notes." />
+            <PageHeader title="My subjects" eyebrow="Academics" icon={FEATURE_ICONS.subjects} hue="emerald" description="Open a subject for its performance, assignments and notes." />
 
             <div className="mb-6 flex max-w-[400px] items-center gap-2 rounded-xl border border-border bg-muted px-4 py-2.5">
                 <Search size={18} className="text-muted-foreground" />

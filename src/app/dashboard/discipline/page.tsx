@@ -11,6 +11,7 @@ import { admissionNo, date, humanize, personName, studentName } from '@/lib/ops/
 import {
     INCIDENT_MANAGE_FIELDS, INCIDENT_REPORT_FIELDS, INCIDENT_STATUS_TONES, SEVERITY_TONES, incidentDefaults, type Incident,
 } from '@/lib/ops/forms/welfare';
+import { FEATURE_ICONS } from '@/components/ui/featureIcons';
 
 export default function DisciplinePage() {
     const { can, profile } = useAuth();
@@ -23,7 +24,7 @@ export default function DisciplinePage() {
             title="Discipline"
             eyebrow="Welfare"
             description="Teachers report incidents; the discipline master records the action taken and informs parents."
-            icon={ShieldAlert}
+            icon={FEATURE_ICONS.discipline}
             hue="rose"
             tabs={[{
                 id: 'incidents', label: 'Incidents', icon: ShieldAlert, hue: 'rose',

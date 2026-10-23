@@ -18,6 +18,7 @@ import {
     type Coverage, type LessonPlan as Plan, type Scheme, type WorkRecord,
 } from '@/lib/ops/forms/academics';
 import { cn } from '@/lib/utils';
+import { FEATURE_ICONS } from '@/components/ui/featureIcons';
 
 const COVERAGE_BAR = { good: 'bg-emerald-500', warn: 'bg-amber-500', bad: 'bg-rose-500' } as const;
 
@@ -71,7 +72,7 @@ export default function LessonRecordsPage() {
                 title="Professional records"
                 eyebrow="Academics"
                 description="Schemes of work, lesson plans and records of work in one chain, with syllabus coverage for HODs and the DOS."
-                icon={NotebookPen}
+                icon={FEATURE_ICONS.lessonRecords}
                 hue="violet"
                 tabs={[
                     ...(writer ? [{

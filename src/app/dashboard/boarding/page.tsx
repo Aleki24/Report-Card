@@ -19,6 +19,7 @@ import {
     allocationDefaults, exeatActionMessage, exeatActions, inspectionFields,
     type Allocation, type Dorm, type Exeat, type ExeatAction, type Inspection,
 } from '@/lib/ops/forms/welfare';
+import { FEATURE_ICONS } from '@/components/ui/featureIcons';
 
 function Allocations({ dorm, canManage }: { dorm: Dorm; canManage: boolean }) {
     return (
@@ -92,7 +93,7 @@ export default function BoardingPage() {
                 title="Boarding"
                 eyebrow="Welfare"
                 description="Dorms and beds, roll calls, exeats with gate passes, and dorm inspections."
-                icon={BedDouble}
+                icon={FEATURE_ICONS.boarding}
                 hue="amber"
                 tabs={[
                     { id: 'roll', label: 'Roll call', icon: ClipboardCheck, hue: 'amber', visible: rollcall, render: () => <RollCallPanel /> },

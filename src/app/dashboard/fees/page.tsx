@@ -15,6 +15,7 @@ import { humanize } from '@/lib/text';
 import { cn } from '@/lib/utils';
 import { findActiveTermId } from '@/lib/term-calendar';
 import { computeFeeStatus, isOverdue, totalOwed, FEE_PAYMENT_METHODS, type FeePayment, type FeePaymentMethod } from '@/lib/fees';
+import { FEATURE_ICONS } from '@/components/ui/featureIcons';
 
 interface FeeRecord {
     id: string;
@@ -825,7 +826,7 @@ function FeesPageInner() {
             <PageHeader
                 title="Fees"
                 eyebrow="Finance"
-                icon={Wallet}
+                icon={FEATURE_ICONS.fees}
                 hue="emerald"
                 description="Bill students each term, record payments and track what is still owed."
                 action={

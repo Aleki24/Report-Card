@@ -1,10 +1,5 @@
 import React from 'react';
-import {
-    LayoutDashboard, GraduationCap, LineChart, FileText, Users, School,
-    UserCircle, Settings, BookOpen, ClipboardList, CalendarCheck, Bell,
-    Briefcase, DollarSign, CalendarDays, FileLock2, Clock, NotebookPen, Target,
-    Receipt, Wallet, BedDouble, HeartPulse, ShieldAlert, Bus, Library, Package, Plane, HeartHandshake, LifeBuoy,
-} from 'lucide-react';
+import { FEATURE_ICONS as I } from '@/components/ui/featureIcons';
 import { type UserRole } from '@/components/AuthProvider';
 import { PAGE_ACCESS, canViewPage, type PageAccess, type PageViewer } from '@/lib/platform/pages';
 
@@ -26,55 +21,55 @@ export interface NavGroup {
     items: NavItem[];
 }
 
-const icon = (I: React.ComponentType<{ size?: number; style?: React.CSSProperties }>) => (
-    <I size={18} style={{ flexShrink: 0 }} />
+const icon = (Icon: React.ComponentType<{ size?: number; style?: React.CSSProperties }>) => (
+    <Icon size={18} style={{ flexShrink: 0 }} />
 );
 
 /* Items are named constants and groups reference them directly, so a group
    can never point at a nav item that doesn't exist (the old label-string
    lookup silently dropped items when the strings drifted). */
-const dashboard: NavItem = { label: 'Dashboard', href: '/dashboard', ...PAGE_ACCESS.dashboard, icon: icon(LayoutDashboard) };
-const studentDashboard: NavItem = { label: 'Dashboard', href: '/student/dashboard', ...PAGE_ACCESS.studentDashboard, icon: icon(LayoutDashboard) };
-const examsMarks: NavItem = { label: 'Exams & Marks', shortLabel: 'Exams', href: '/dashboard/exams-marks', ...PAGE_ACCESS.examsMarks, icon: icon(ClipboardList) };
-const reports: NavItem = { label: 'Report Cards', shortLabel: 'Reports', href: '/dashboard/reports', ...PAGE_ACCESS.reports, icon: icon(FileText) };
-const attendance: NavItem = { label: 'Attendance', href: '/dashboard/attendance', ...PAGE_ACCESS.attendance, icon: icon(CalendarCheck) };
-const analytics: NavItem = { label: 'Analytics', href: '/dashboard/analytics', ...PAGE_ACCESS.analytics, icon: icon(LineChart) };
-const calendar: NavItem = { label: 'Calendar', href: '/dashboard/calendar', ...PAGE_ACCESS.calendar, icon: icon(CalendarDays) };
-const examPapers: NavItem = { label: 'Exam Papers', shortLabel: 'Papers', href: '/dashboard/exam-papers', ...PAGE_ACCESS.examPapers, icon: icon(FileLock2) };
-const timetable: NavItem = { label: 'Timetable', href: '/dashboard/timetable', ...PAGE_ACCESS.timetable, icon: icon(Clock) };
-const lessonRecords: NavItem = { label: 'Professional Records', shortLabel: 'Records', href: '/dashboard/lesson-records', ...PAGE_ACCESS.lessonRecords, icon: icon(NotebookPen) };
-const cbc: NavItem = { label: 'CBC Assessment', shortLabel: 'CBC', href: '/dashboard/cbc', ...PAGE_ACCESS.cbc, icon: icon(Target) };
-const people: NavItem = { label: 'People', href: '/dashboard/people', ...PAGE_ACCESS.people, icon: icon(Users) };
+const dashboard: NavItem = { label: 'Dashboard', href: '/dashboard', ...PAGE_ACCESS.dashboard, icon: icon(I.dashboard) };
+const studentDashboard: NavItem = { label: 'Dashboard', href: '/student/dashboard', ...PAGE_ACCESS.studentDashboard, icon: icon(I.dashboard) };
+const examsMarks: NavItem = { label: 'Exams & Marks', shortLabel: 'Exams', href: '/dashboard/exams-marks', ...PAGE_ACCESS.examsMarks, icon: icon(I.examsMarks) };
+const reports: NavItem = { label: 'Report Cards', shortLabel: 'Reports', href: '/dashboard/reports', ...PAGE_ACCESS.reports, icon: icon(I.reports) };
+const attendance: NavItem = { label: 'Attendance', href: '/dashboard/attendance', ...PAGE_ACCESS.attendance, icon: icon(I.attendance) };
+const analytics: NavItem = { label: 'Analytics', href: '/dashboard/analytics', ...PAGE_ACCESS.analytics, icon: icon(I.analytics) };
+const calendar: NavItem = { label: 'Calendar', href: '/dashboard/calendar', ...PAGE_ACCESS.calendar, icon: icon(I.calendar) };
+const examPapers: NavItem = { label: 'Exam Papers', shortLabel: 'Papers', href: '/dashboard/exam-papers', ...PAGE_ACCESS.examPapers, icon: icon(I.examPapers) };
+const timetable: NavItem = { label: 'Timetable', href: '/dashboard/timetable', ...PAGE_ACCESS.timetable, icon: icon(I.timetable) };
+const lessonRecords: NavItem = { label: 'Professional Records', shortLabel: 'Records', href: '/dashboard/lesson-records', ...PAGE_ACCESS.lessonRecords, icon: icon(I.lessonRecords) };
+const cbc: NavItem = { label: 'CBC Assessment', shortLabel: 'CBC', href: '/dashboard/cbc', ...PAGE_ACCESS.cbc, icon: icon(I.cbc) };
+const people: NavItem = { label: 'People', href: '/dashboard/people', ...PAGE_ACCESS.people, icon: icon(I.people) };
 // The same page, scoped to the class teacher's own class.
-const myStudents: NavItem = { label: 'My Students', shortLabel: 'Students', href: '/dashboard/people', ...PAGE_ACCESS.myStudents, icon: icon(Users) };
-const parentAccounts: NavItem = { label: 'Parent accounts', shortLabel: 'Parents', href: '/dashboard/parent-accounts', ...PAGE_ACCESS.parentAccounts, icon: icon(HeartHandshake) };
-const classes: NavItem = { label: 'Classes', href: '/dashboard/classes', ...PAGE_ACCESS.classes, icon: icon(School) };
-const subjects: NavItem = { label: 'Subjects', href: '/dashboard/subjects', ...PAGE_ACCESS.subjects, icon: icon(BookOpen) };
+const myStudents: NavItem = { label: 'My Students', shortLabel: 'Students', href: '/dashboard/people', ...PAGE_ACCESS.myStudents, icon: icon(I.people) };
+const parentAccounts: NavItem = { label: 'Parent accounts', shortLabel: 'Parents', href: '/dashboard/parent-accounts', ...PAGE_ACCESS.parentAccounts, icon: icon(I.parents) };
+const classes: NavItem = { label: 'Classes', href: '/dashboard/classes', ...PAGE_ACCESS.classes, icon: icon(I.classes) };
+const subjects: NavItem = { label: 'Subjects', href: '/dashboard/subjects', ...PAGE_ACCESS.subjects, icon: icon(I.subjects) };
 // The bursar's page: the principal/admin, or anyone holding a finance duty. Learners see their own under /student/fees.
-const fees: NavItem = { label: 'Fees', href: '/dashboard/fees', ...PAGE_ACCESS.fees, icon: icon(DollarSign) };
-const billing: NavItem = { label: 'Billing', href: '/dashboard/billing', ...PAGE_ACCESS.billing, icon: icon(Receipt) };
-const expenses: NavItem = { label: 'Expenses', href: '/dashboard/expenses', ...PAGE_ACCESS.expenses, icon: icon(Wallet) };
-const boarding: NavItem = { label: 'Boarding', href: '/dashboard/boarding', ...PAGE_ACCESS.boarding, icon: icon(BedDouble) };
-const health: NavItem = { label: 'Health', href: '/dashboard/health', ...PAGE_ACCESS.health, icon: icon(HeartPulse) };
-const discipline: NavItem = { label: 'Discipline', href: '/dashboard/discipline', ...PAGE_ACCESS.discipline, icon: icon(ShieldAlert) };
-const transport: NavItem = { label: 'Transport', href: '/dashboard/transport', ...PAGE_ACCESS.transport, icon: icon(Bus) };
-const library: NavItem = { label: 'Library', href: '/dashboard/library', ...PAGE_ACCESS.library, icon: icon(Library) };
-const inventory: NavItem = { label: 'Inventory', href: '/dashboard/inventory', ...PAGE_ACCESS.inventory, icon: icon(Package) };
-const leave: NavItem = { label: 'Staff Leave', shortLabel: 'Leave', href: '/dashboard/leave', ...PAGE_ACCESS.leave, icon: icon(Plane) };
-const announcements: NavItem = { label: 'Announcements', shortLabel: 'Notices', href: '/dashboard/announcements', ...PAGE_ACCESS.announcements, icon: icon(Bell) };
-const assignments: NavItem = { label: 'Assignments', shortLabel: 'Tasks', href: '/dashboard/assignments', ...PAGE_ACCESS.assignments, icon: icon(Briefcase) };
-const users: NavItem = { label: 'Users', href: '/dashboard/users', ...PAGE_ACCESS.users, icon: icon(UserCircle) };
-const settings: NavItem = { label: 'Settings', href: '/dashboard/settings', ...PAGE_ACCESS.settings, icon: icon(Settings) };
-const myResults: NavItem = { label: 'My Results', href: '/student/results', ...PAGE_ACCESS.myResults, icon: icon(GraduationCap) };
-const mySubjects: NavItem = { label: 'My Subjects', href: '/student/subjects', ...PAGE_ACCESS.mySubjects, icon: icon(BookOpen) };
-const myAttendance: NavItem = { label: 'Attendance', href: '/student/attendance', ...PAGE_ACCESS.myAttendance, icon: icon(CalendarCheck) };
-const myTimetable: NavItem = { label: 'Timetable', href: '/student/timetable', ...PAGE_ACCESS.myTimetable, icon: icon(Clock) };
-const myFees: NavItem = { label: 'Fees', href: '/student/fees', ...PAGE_ACCESS.myFees, icon: icon(DollarSign) };
-const parentHome: NavItem = { label: 'My children', shortLabel: 'Children', href: '/parent', ...PAGE_ACCESS.parentHome, icon: icon(Users) };
-const myProfile: NavItem = { label: 'My Profile', href: '/student/profile', ...PAGE_ACCESS.myProfile, icon: icon(UserCircle) };
-const help: NavItem = { label: 'Help & guide', shortLabel: 'Help', href: '/dashboard/help', ...PAGE_ACCESS.help, icon: icon(LifeBuoy) };
-const studentHelp: NavItem = { label: 'Help & guide', shortLabel: 'Help', href: '/student/help', ...PAGE_ACCESS.studentHelp, icon: icon(LifeBuoy) };
-const parentHelp: NavItem = { label: 'Help & guide', shortLabel: 'Help', href: '/parent/help', ...PAGE_ACCESS.parentHelp, icon: icon(LifeBuoy) };
+const fees: NavItem = { label: 'Fees', href: '/dashboard/fees', ...PAGE_ACCESS.fees, icon: icon(I.fees) };
+const billing: NavItem = { label: 'Billing', href: '/dashboard/billing', ...PAGE_ACCESS.billing, icon: icon(I.billing) };
+const expenses: NavItem = { label: 'Expenses', href: '/dashboard/expenses', ...PAGE_ACCESS.expenses, icon: icon(I.expenses) };
+const boarding: NavItem = { label: 'Boarding', href: '/dashboard/boarding', ...PAGE_ACCESS.boarding, icon: icon(I.boarding) };
+const health: NavItem = { label: 'Health', href: '/dashboard/health', ...PAGE_ACCESS.health, icon: icon(I.health) };
+const discipline: NavItem = { label: 'Discipline', href: '/dashboard/discipline', ...PAGE_ACCESS.discipline, icon: icon(I.discipline) };
+const transport: NavItem = { label: 'Transport', href: '/dashboard/transport', ...PAGE_ACCESS.transport, icon: icon(I.transport) };
+const library: NavItem = { label: 'Library', href: '/dashboard/library', ...PAGE_ACCESS.library, icon: icon(I.library) };
+const inventory: NavItem = { label: 'Inventory', href: '/dashboard/inventory', ...PAGE_ACCESS.inventory, icon: icon(I.inventory) };
+const leave: NavItem = { label: 'Staff Leave', shortLabel: 'Leave', href: '/dashboard/leave', ...PAGE_ACCESS.leave, icon: icon(I.leave) };
+const announcements: NavItem = { label: 'Announcements', shortLabel: 'Notices', href: '/dashboard/announcements', ...PAGE_ACCESS.announcements, icon: icon(I.announcements) };
+const assignments: NavItem = { label: 'Assignments', shortLabel: 'Tasks', href: '/dashboard/assignments', ...PAGE_ACCESS.assignments, icon: icon(I.assignments) };
+const users: NavItem = { label: 'Users', href: '/dashboard/users', ...PAGE_ACCESS.users, icon: icon(I.users) };
+const settings: NavItem = { label: 'Settings', href: '/dashboard/settings', ...PAGE_ACCESS.settings, icon: icon(I.settings) };
+const myResults: NavItem = { label: 'My Results', href: '/student/results', ...PAGE_ACCESS.myResults, icon: icon(I.results) };
+const mySubjects: NavItem = { label: 'My Subjects', href: '/student/subjects', ...PAGE_ACCESS.mySubjects, icon: icon(I.subjects) };
+const myAttendance: NavItem = { label: 'Attendance', href: '/student/attendance', ...PAGE_ACCESS.myAttendance, icon: icon(I.attendance) };
+const myTimetable: NavItem = { label: 'Timetable', href: '/student/timetable', ...PAGE_ACCESS.myTimetable, icon: icon(I.timetable) };
+const myFees: NavItem = { label: 'Fees', href: '/student/fees', ...PAGE_ACCESS.myFees, icon: icon(I.fees) };
+const parentHome: NavItem = { label: 'My children', shortLabel: 'Children', href: '/parent', ...PAGE_ACCESS.parentHome, icon: icon(I.people) };
+const myProfile: NavItem = { label: 'My Profile', href: '/student/profile', ...PAGE_ACCESS.myProfile, icon: icon(I.profile) };
+const help: NavItem = { label: 'Help & guide', shortLabel: 'Help', href: '/dashboard/help', ...PAGE_ACCESS.help, icon: icon(I.help) };
+const studentHelp: NavItem = { label: 'Help & guide', shortLabel: 'Help', href: '/student/help', ...PAGE_ACCESS.studentHelp, icon: icon(I.help) };
+const parentHelp: NavItem = { label: 'Help & guide', shortLabel: 'Help', href: '/parent/help', ...PAGE_ACCESS.parentHelp, icon: icon(I.help) };
 
 /** Flat list (legacy consumers + search). */
 const groups: NavGroup[] = [

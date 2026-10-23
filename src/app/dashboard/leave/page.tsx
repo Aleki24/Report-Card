@@ -1,7 +1,7 @@
 "use client";
 
 import React from 'react';
-import { CalendarOff, Plane } from 'lucide-react';
+import { CalendarOff } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { ModulePage } from '@/components/ops/ModulePage';
 import { ResourceManager } from '@/components/ops/ResourceManager';
@@ -9,6 +9,7 @@ import { StatusPill } from '@/components/ops/StatusPill';
 import { ActionButton } from '@/components/ops/ActionButton';
 import { date, humanize, personName } from '@/lib/ops/format';
 import { LEAVE_FIELDS, LEAVE_TONES, leaveDays, leaveDefaults, type Leave } from '@/lib/ops/forms/operations';
+import { FEATURE_ICONS } from '@/components/ui/featureIcons';
 
 export default function LeavePage() {
     const { can, profile } = useAuth();
@@ -20,7 +21,7 @@ export default function LeavePage() {
             title="Staff leave"
             eyebrow="Operations"
             description="Staff apply for leave; the principal, deputy or HR officer approves it."
-            icon={Plane}
+            icon={FEATURE_ICONS.leave}
             hue="sky"
             tabs={[{
                 id: 'leave', label: manage ? 'Leave requests' : 'My leave', icon: CalendarOff, hue: 'sky',

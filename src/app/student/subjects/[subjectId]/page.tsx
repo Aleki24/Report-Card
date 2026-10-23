@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { ArrowDownRight, ArrowUpRight, BookOpen, Minus, TrendingUp } from 'lucide-react';
+import { ArrowDownRight, ArrowUpRight, Minus, TrendingUp } from 'lucide-react';
 import PageHeader from '@/components/dashboard/PageHeader';
 import KpiTile from '@/components/dashboard/KpiTile';
 import { PerformanceTrendChart } from '@/components/charts/lazy';
@@ -12,6 +12,7 @@ import { Panel, QuietEmpty } from '@/components/student/dashboard/shared';
 import { useSchoolPassMark } from '@/hooks/useSchoolPassMark';
 import type { StudentAssignment } from '@/lib/assignments';
 import type { StudentTermTrend } from '@/types';
+import { FEATURE_ICONS } from '@/components/ui/featureIcons';
 
 interface Subject {
     id: string;
@@ -126,7 +127,7 @@ export default function StudentSubjectPage() {
                 className="mb-0"
                 title={subject.name}
                 eyebrow="My subjects"
-                icon={BookOpen}
+                icon={FEATURE_ICONS.subjects}
                 hue="emerald"
                 breadcrumbs={[{ label: 'My subjects', href: '/student/subjects' }, { label: subject.name }]}
                 description={[subject.code, `${badge} subject`].filter(Boolean).join(' · ')}

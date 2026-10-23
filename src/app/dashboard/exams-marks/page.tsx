@@ -4,7 +4,7 @@ import React, { Suspense } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
 import { isRoleIn } from '@/lib/roles';
-import { ClipboardList, PenTool, Trophy, Send } from 'lucide-react';
+import { PenTool, Trophy, Send } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import PageHeader from '@/components/dashboard/PageHeader';
 import { TAB_TONES } from '@/components/exams-marks/examTheme';
@@ -12,6 +12,7 @@ import { ContentSkeleton } from '@/components/dashboard/LoadingSkeleton';
 import { MarksSetupTab } from '@/components/exams-marks/MarksSetupTab';
 import { ExamResultsTab } from '@/components/exams-marks/ExamResultsTab';
 import { PublishResultsView } from '@/components/exams-marks/PublishResultsView';
+import { FEATURE_ICONS } from '@/components/ui/featureIcons';
 
 type Tab = 'setup' | 'results' | 'publish';
 
@@ -64,7 +65,7 @@ function ExamsMarksPageInner() {
       <PageHeader
         title="Exams & Marks"
         eyebrow="Academics"
-        icon={ClipboardList}
+        icon={FEATURE_ICONS.examsMarks}
         hue="blue"
         description="Enter or correct marks, review results, and release them to learners."
       />

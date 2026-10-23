@@ -18,6 +18,7 @@ import { cn } from '@/lib/utils';
 import {
   ATTENDANCE_LABELS, ATTENDANCE_STATUSES, attendanceRate, countAttendance, type AttendanceStatus,
 } from '@/lib/attendance';
+import { FEATURE_ICONS } from '@/components/ui/featureIcons';
 
 type StatusFilter = 'all' | 'unmarked' | AttendanceStatus;
 
@@ -134,7 +135,7 @@ export default function AttendancePage() {
       <PageHeader
         title="Attendance"
         eyebrow="Academics"
-        icon={CalendarCheck}
+        icon={FEATURE_ICONS.attendance}
         hue="teal"
         description="Take the daily register, add reasons for absence and let guardians know."
       />

@@ -13,6 +13,7 @@ import PlacementManager from '@/components/subjects/PlacementManager';
 import { SubjectTeachersTab } from '@/components/subjects/SubjectTeachersTab';
 import type { SubjectsData } from '@/components/subjects/subjectTypes';
 import { apiErrorMessage } from '@/lib/api-error-message';
+import { FEATURE_ICONS } from '@/components/ui/featureIcons';
 
 type SubjectsTab = 'subjects' | 'combinations' | 'placement' | 'teachers';
 
@@ -87,7 +88,7 @@ function SubjectsPageInner() {
             <PageHeader
                 title="Subjects"
                 eyebrow="School"
-                icon={BookOpen}
+                icon={FEATURE_ICONS.subjects}
                 hue="emerald"
                 description="Choose the subjects your school offers, set up senior school combinations and assign subject teachers."
             />

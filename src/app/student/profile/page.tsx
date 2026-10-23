@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from 'react';
-import { User, Phone, Mail, Calendar, Shield, Users, Save, Loader2, UserCircle } from 'lucide-react';
+import { User, Phone, Mail, Calendar, Shield, Users, Save, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/components/AuthProvider';
 import { Avatar } from '@/components/Avatar';
@@ -9,6 +9,7 @@ import PageHeader from '@/components/dashboard/PageHeader';
 import DashboardCard from '@/components/dashboard/DashboardCard';
 import { FormField, InputField } from '@/components/ui/FormField';
 import { LoadError } from '@/components/ui/LoadError';
+import { FEATURE_ICONS } from '@/components/ui/featureIcons';
 
 interface StudentProfile {
     admission_number: string | null;
@@ -71,7 +72,7 @@ export default function StudentProfilePage() {
     if (loadError || !profile) {
         return (
             <div className="w-full mx-auto max-w-[1100px] pb-10">
-                <PageHeader title="My profile" eyebrow="Account" icon={UserCircle} hue="blue" description="Your academic information and personal details." />
+                <PageHeader title="My profile" eyebrow="Account" icon={FEATURE_ICONS.profile} hue="blue" description="Your academic information and personal details." />
                 <LoadError
                     title="Your profile did not load"
                     message={loadError ?? 'Could not load your profile.'}
@@ -87,7 +88,7 @@ export default function StudentProfilePage() {
 
     return (
         <div className="w-full mx-auto max-w-[1100px] pb-10">
-            <PageHeader title="My profile" eyebrow="Account" icon={UserCircle} hue="blue" description="Your academic information and personal details." />
+            <PageHeader title="My profile" eyebrow="Account" icon={FEATURE_ICONS.profile} hue="blue" description="Your academic information and personal details." />
 
             <div className="grid grid-cols-1 items-start gap-5 [grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr))]">
                 {/* 1. Account Information */}

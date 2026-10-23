@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, Briefcase, CalendarClock, CheckCircle2, Edit3, FileText, Inbox, Loader2, Paperclip, Plus, Trash2, UserRound, X } from 'lucide-react';
+import { AlertTriangle, CalendarClock, CheckCircle2, Edit3, FileText, Inbox, Loader2, Paperclip, Plus, Trash2, UserRound, X } from 'lucide-react';
 import { toast } from 'sonner';
 import PageHeader from '@/components/dashboard/PageHeader';
 import EmptyState from '@/components/dashboard/EmptyState';
@@ -18,6 +18,7 @@ import {
     ASSIGNMENT_DESCRIPTION_MAX, ASSIGNMENT_UPLOAD_MAX_BYTES, ASSIGNMENT_FEEDBACK_MAX, ASSIGNMENT_TITLE_MAX, dueLabel, dueState, localToday,
     type Assignment, type DueState, type Submission,
 } from '@/lib/assignments';
+import { FEATURE_ICONS } from '@/components/ui/featureIcons';
 
 interface StreamOption { id: string; full_name: string; academicLevelId: string | null }
 interface SubjectOption { id: string; name: string; academicLevelId: string | null; band: string | null }
@@ -197,7 +198,7 @@ export default function AssignmentsPage() {
         { key: 'upcoming' as const, icon: CalendarClock, hue: 'violet' as const, label: 'Upcoming', value: counts.upcoming, hint: 'due today or later' },
         { key: 'past' as const, icon: CheckCircle2, hue: 'slate' as const, label: 'Past due', value: counts.past, hint: 'deadline passed' },
         { key: 'mine' as const, icon: UserRound, hue: 'blue' as const, label: 'Set by me', value: counts.mine, hint: 'that you created' },
-        { key: 'all' as const, icon: Briefcase, hue: 'emerald' as const, label: 'All', value: counts.all, hint: 'across your classes' },
+        { key: 'all' as const, icon: FEATURE_ICONS.assignments, hue: 'emerald' as const, label: 'All', value: counts.all, hint: 'across your classes' },
     ];
 
     return (
@@ -205,7 +206,7 @@ export default function AssignmentsPage() {
             <PageHeader
                 title="Assignments"
                 eyebrow="Communication"
-                icon={Briefcase}
+                icon={FEATURE_ICONS.assignments}
                 hue="violet"
                 description="Set homework for a class, attach files, and review and grade what learners hand in."
                 action={
@@ -245,7 +246,7 @@ export default function AssignmentsPage() {
             ) : shown.length === 0 ? (
                 <EmptyState
                     hue="violet"
-                    icon={<Briefcase className="size-6" />}
+                    icon={<FEATURE_ICONS.assignments className="size-6" />}
                     title={search || classFilter ? 'Nothing matches these filters' : view === 'upcoming' ? 'Nothing due' : view === 'past' ? 'No past assignments' : view === 'mine' ? "You haven't set any assignments" : 'No assignments yet'}
                     description={search || classFilter ? 'Clear the search or pick another class.' : 'Set one for a class and learners see it on their dashboard.'}
                     action={!search && !classFilter ? <button type="button" className="btn-primary" onClick={openNew}><Plus className="size-4" aria-hidden /> New assignment</button> : undefined}

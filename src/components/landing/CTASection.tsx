@@ -1,22 +1,24 @@
 import { PLAN_FOOTNOTE } from '@/lib/pricing';
-import Image from 'next/image';
 import { cn } from '@/lib/utils';
 import { CtaLink } from './ui/CtaLink';
 import { CtaPanel } from './ui/CtaPanel';
+import { PhoneShot } from './ui/ProductShot';
 
-type FloatingAsset = { src: string; alt: string; className: string };
+type FloatingShot = { src: string; alt: string; className: string };
 
-// Decorative tiles pinned to the card's corners on large screens.
-const FLOATING_ASSETS: FloatingAsset[] = [
+// Phones rising from the card's bottom edge on large screens: the teacher's
+// marks and the parent's view, the two ends of what the school runs here.
+// The card clips them, so both sit on the edge it cuts.
+const FLOATING_SHOTS: FloatingShot[] = [
   {
-    src: '/images/empty_state.png',
-    alt: 'Holographic school records folder',
-    className: '-top-7 right-[4%] size-36 rotate-8 opacity-90',
+    src: '/manual/mobile-teacher-marks.jpg',
+    alt: 'A teacher entering Grade 7 Mathematics marks on a phone',
+    className: '-bottom-24 right-[5%] w-32 rotate-6',
   },
   {
-    src: '/images/dashboard_hero.png',
-    alt: 'Abstract glass geometric shapes',
-    className: '-bottom-8 left-[5%] size-31 -rotate-7 opacity-85 [animation-delay:2s]',
+    src: '/manual/mobile-parent.jpg',
+    alt: 'A parent viewing their child’s results, fees and bus on a phone',
+    className: '-bottom-28 left-[5%] w-32 -rotate-6 [animation-delay:2s]',
   },
 ];
 
@@ -37,15 +39,9 @@ export default function CTASection() {
         </>
       }
       footnote={PLAN_FOOTNOTE}
-      decoration={FLOATING_ASSETS.map((asset) => (
-        <div
-          key={asset.src}
-          className={cn(
-            'absolute hidden animate-float overflow-hidden rounded-2xl border border-border shadow-2xl shadow-black/40 lg:block',
-            asset.className,
-          )}
-        >
-          <Image src={asset.src} alt={asset.alt} fill sizes="144px" className="object-cover" />
+      decoration={FLOATING_SHOTS.map((shot) => (
+        <div key={shot.src} className={cn('absolute hidden animate-float opacity-95 xl:block', shot.className)}>
+          <PhoneShot src={shot.src} alt={shot.alt} sizes="128px" />
         </div>
       ))}
     />

@@ -19,6 +19,7 @@ import {
     EXPENSE_DECISION_DONE, EXPENSE_DECISION_TITLES, EXPENSE_TONES, SUPPLIER_FIELDS, expenseDecisions, expenseDefaults, expenseFields, expenseTotal,
     type Expense, type ExpenseDecision, type Named, type Supplier,
 } from '@/lib/ops/forms/finance';
+import { FEATURE_ICONS } from '@/components/ui/featureIcons';
 
 type Decision = { expense: Expense; decision: ExpenseDecision };
 
@@ -71,7 +72,7 @@ export default function ExpensesPage() {
                 title="Expenses"
                 eyebrow="Finance"
                 description="Raise payment vouchers, approve them, and track spending by vote head and supplier."
-                icon={Wallet}
+                icon={FEATURE_ICONS.expenses}
                 hue="orange"
                 tabs={[
                     {
