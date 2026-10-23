@@ -19,6 +19,8 @@ export interface ExamClass {
     code: string | null;
     /** Scheduled exam types this class has this term, in running order. */
     types: string[];
+    /** When each of those exams starts (YYYY-MM-DD): its earliest paper. */
+    dates: Record<string, string>;
 }
 
 /** Teachers waiting for an exam to be opened in a class. */
@@ -58,4 +60,13 @@ export function levelOf(grade: GradeLike): LevelKey {
 
 export function levelLabel(level: LevelKey): string {
     return level === 'OTHER' ? 'Other classes' : BAND_LABELS[level];
+}
+
+/** PATCH /api/school/exam-windows: when an exam starts for some classes. */
+export interface ExamDateUpdate {
+    termId: string;
+    gradeIds: string[];
+    examType: string;
+    /** YYYY-MM-DD */
+    date: string;
 }

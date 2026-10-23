@@ -6,7 +6,7 @@ import { findActiveTermId } from '@/lib/term-calendar';
 import { seedExamSlots } from '@/lib/seed-exam-slots';
 import { ALL_EXAM_TYPES, isAnytimeExamType, isValidExamType } from '@/lib/exam-types';
 import { EXAM_REQUESTS_TABLE, EXAM_WINDOWS_TABLE, readExamRequests, readExamWindows } from '@/lib/exam-windows-server';
-import type { ExamClass, ExamRequest, ExamWindowsResponse } from '@/lib/exam-windows';
+import type { ExamClass, ExamDateUpdate, ExamRequest, ExamWindowsResponse } from '@/lib/exam-windows';
 
 /**
  * Which exam each class is marking now.
@@ -18,6 +18,9 @@ import type { ExamClass, ExamRequest, ExamWindowsResponse } from '@/lib/exam-win
  *      deputy, DOS and exams officer.
  * POST { termId, gradeIds } — a teacher asks for an exam to be opened for
  *      classes they have exams in.
+ * PATCH { termId, gradeIds, examType, date } — when an exam starts for those
+ *      classes: every one of their papers for it moves to that date. Also
+ *      marking.open.
  */
 
 type Db = ReturnType<typeof createSupabaseAdmin>;
@@ -31,7 +34,9 @@ async function staffAccess(): Promise<Access | NextResponse> {
   return access;
 }
 
-async function schoolTerm(supabase: Db, schoolId: string, termId: string | null): Promise<{ id: string; name: string; academicYearId: string } | null> {
+interface SchoolTerm { id: string; name: string; academicYearId: string; startDate: string | null; endDate: string | null }
+
+async function schoolTerm(supabase: Db, schoolId: string, termId: string | null): Promise<SchoolTerm | null> {
   const { data: terms } = await supabase
     .from('terms')
     .select('id, name, start_date, end_date, is_current, academic_year_id')
@@ -39,7 +44,9 @@ async function schoolTerm(supabase: Db, schoolId: string, termId: string | null)
   const list = terms ?? [];
   const id = termId ?? findActiveTermId(list);
   const term = list.find(t => t.id === id);
-  return term ? { id: term.id as string, name: term.name as string, academicYearId: term.academic_year_id as string } : null;
+  return term
+    ? { id: term.id as string, name: term.name as string, academicYearId: term.academic_year_id as string, startDate: (term.start_date as string | null) ?? null, endDate: (term.end_date as string | null) ?? null }
+    : null;
 }
 
 /**
@@ -67,7 +74,7 @@ async function ensurePapers(supabase: Db, schoolId: string, term: { id: string; 
   return created;
 }
 
-interface ExamRow { grade_id: string; exam_type: string; grades: { name_display: string; code: string | null } | { name_display: string; code: string | null }[] | null }
+interface ExamRow { grade_id: string; exam_type: string; exam_date: string | null; grades: { name_display: string; code: string | null } | { name_display: string; code: string | null }[] | null }
 
 const typeOrder = (code: string) => ALL_EXAM_TYPES.find(t => t.code === code)?.order ?? 999;
 
@@ -75,7 +82,7 @@ const typeOrder = (code: string) => ALL_EXAM_TYPES.find(t => t.code === code)?.o
 async function termClasses(supabase: Db, schoolId: string, termId: string): Promise<ExamClass[]> {
   const { rows, error } = await fetchAllRows<ExamRow>(() => supabase
     .from('exams')
-    .select('grade_id, exam_type, grades:grade_id ( name_display, code )')
+    .select('grade_id, exam_type, exam_date, grades:grade_id ( name_display, code )')
     .eq('school_id', schoolId)
     .eq('term_id', termId)
     .order('id'));
@@ -84,8 +91,10 @@ async function termClasses(supabase: Db, schoolId: string, termId: string): Prom
   for (const r of rows) {
     if (isAnytimeExamType(r.exam_type)) continue;
     const grade = embedOne(r.grades);
-    const c = classes.get(r.grade_id) ?? { grade_id: r.grade_id, name: grade?.name_display ?? 'Class', code: grade?.code ?? null, types: [] };
+    const c = classes.get(r.grade_id) ?? { grade_id: r.grade_id, name: grade?.name_display ?? 'Class', code: grade?.code ?? null, types: [], dates: {} };
     if (!c.types.includes(r.exam_type)) c.types.push(r.exam_type);
+    const date = r.exam_date?.slice(0, 10);
+    if (date && (!c.dates[r.exam_type] || date < c.dates[r.exam_type])) c.dates[r.exam_type] = date;
     classes.set(r.grade_id, c);
   }
   return [...classes.values()]
@@ -240,4 +249,44 @@ export async function POST(request: NextRequest) {
   const { error } = await supabase.from(EXAM_REQUESTS_TABLE).upsert(rows, { onConflict: 'school_id,term_id,grade_id,requested_by', ignoreDuplicates: true });
   if (error) return NextResponse.json({ error: 'Could not send your request' }, { status: 500 });
   return NextResponse.json({ requested: rows.map(r => r.grade_id) });
+}
+
+const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+function parseDateUpdate(raw: unknown): ExamDateUpdate | null {
+  const { termId, gradeIds, examType, date } = (raw ?? {}) as Record<string, unknown>;
+  const grades = parseGradeIds(gradeIds);
+  if (typeof termId !== 'string' || !isUuid(termId) || !grades) return null;
+  if (typeof examType !== 'string' || !isValidExamType(examType) || isAnytimeExamType(examType)) return null;
+  if (typeof date !== 'string' || !ISO_DAY.test(date) || Number.isNaN(Date.parse(`${date}T00:00:00Z`))) return null;
+  return { termId, gradeIds: grades, examType, date };
+}
+
+export async function PATCH(request: NextRequest) {
+  const access = await staffAccess();
+  if (access instanceof NextResponse) return access;
+  if (!access.can('marking.open')) return NextResponse.json({ error: 'Only the admin, principal, DOS or exams officer can set exam dates' }, { status: 403 });
+
+  const update = parseDateUpdate(await request.json().catch(() => null));
+  if (!update) return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
+
+  const supabase = createSupabaseAdmin();
+  const term = await schoolTerm(supabase, access.schoolId, update.termId);
+  if (!term) return NextResponse.json({ error: 'Term not found' }, { status: 404 });
+  const start = term.startDate?.slice(0, 10);
+  const end = term.endDate?.slice(0, 10);
+  if ((start && update.date < start) || (end && update.date > end)) {
+    return NextResponse.json({ error: `Pick a day within ${term.name}${start && end ? ` (${start} to ${end})` : ''}.` }, { status: 400 });
+  }
+
+  const { data, error } = await supabase
+    .from('exams')
+    .update({ exam_date: update.date })
+    .eq('school_id', access.schoolId)
+    .eq('term_id', term.id)
+    .eq('exam_type', update.examType)
+    .in('grade_id', update.gradeIds)
+    .select('id');
+  if (error) return NextResponse.json({ error: 'Could not save the date' }, { status: 500 });
+  return NextResponse.json({ updated: data?.length ?? 0 });
 }

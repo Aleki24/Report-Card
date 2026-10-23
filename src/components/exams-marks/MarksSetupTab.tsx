@@ -805,6 +805,14 @@ export function MarksSetupTab() {
               void reloadExams();
             }
           }}
+          onDateSaved={({ gradeIds, examType, date }) => {
+            setWindowInfo(prev => prev && {
+              ...prev,
+              classes: prev.classes.map(c => (gradeIds.includes(c.grade_id) ? { ...c, dates: { ...c.dates, [examType]: date } } : c)),
+            });
+            // Which exam is "due" follows the papers' dates.
+            void reloadExams();
+          }}
         />
       )}
 
