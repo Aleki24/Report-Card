@@ -10,6 +10,7 @@ import { isBuiltInExamType } from './exam-types';
 import { SCHOOL_SUBJECT_VIEW } from '@/lib/school-subjects';
 import { isSubjectOfferedAtGrade } from '@/lib/curriculum-bands';
 import { fetchAllRows } from '@/lib/postgrest';
+import { isTaughtInGrade, seniorSubjectsTaught } from '@/lib/senior-subjects';
 
 export const STANDARD_EXAM_TYPES = ['OPENER', 'MIDTERM', 'ENDTERM'] as const;
 export type StandardExamType = typeof STANDARD_EXAM_TYPES[number];
@@ -52,7 +53,7 @@ export async function seedExamSlots(options: SeedOptions) {
   // from Grade 1 to Grade 10.
   const { data: subjects } = await supabase
     .from(SCHOOL_SUBJECT_VIEW)
-    .select('id, name, code, academic_level_id, band')
+    .select('id, name, code, academic_level_id, band, subject_type')
     .eq('school_id', schoolId);
 
   if (!subjects?.length) return { created: 0, skipped: 0, error: 'No subjects found' };
@@ -89,6 +90,7 @@ export async function seedExamSlots(options: SeedOptions) {
     .in('id', gradeIds);
 
   const gradeMap = new Map((grades || []).map(g => [g.id, g]));
+  const taught = await seniorSubjectsTaught(supabase, schoolId, grades || []);
 
   // Build exam slots
   const slots: any[] = [];
@@ -130,6 +132,8 @@ export async function seedExamSlots(options: SeedOptions) {
       if (!assigned && !isSubjectOfferedAtGrade(subject, grade)) {
         continue;
       }
+      // A Senior School class only sits the electives its learners chose.
+      if (!isTaughtInGrade(taught, gradeId, subject)) continue;
 
       for (const examType of types) {
         const key = `${subject.id}|${gradeId}|${examType}`;

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { AlertTriangle, ArrowRight, Camera, Check, FileSpreadsheet, History, Keyboard, Layers, RefreshCw, Search } from 'lucide-react';
+import { AlertTriangle, ArrowRight, CalendarClock, Camera, Check, FileSpreadsheet, History, Keyboard, Layers, RefreshCw, Search } from 'lucide-react';
 import { ManualEntryGrid } from '@/components/marks/ManualEntryGrid';
 import { BulkUpload } from '@/components/marks/BulkUpload';
 import { ScanSheet } from '@/components/marks/ScanSheet';
@@ -13,6 +13,7 @@ import type { ExamSubjectComponentScheme } from '@/types';
 import { useAuth } from '@/components/AuthProvider';
 import { ALL_EXAM_TYPES, STANDARD_TERM_EXAMS, getExamTypeLabel } from '@/lib/exam-types';
 import { findActiveTermId } from '@/lib/term-calendar';
+import { localToday } from '@/lib/assignments';
 import { isSubjectOfferedAtGrade } from '@/lib/curriculum-bands';
 import { cn } from '@/lib/utils';
 import { ExamSetupMenu } from './ExamSetupMenu';
@@ -24,6 +25,10 @@ interface AcademicLevel { id: string; code: string; name: string; }
 interface GradeItem { id: string; name_display: string; academic_level_id: string; }
 interface ExamSlot {
   id: string; name: string; exam_type: string; max_score: number;
+  /** YYYY-MM-DD the paper is scheduled for. */
+  exam_date: string;
+  /** Marks entered so far. */
+  mark_count: number;
   subject_id: string; subject_name: string; subject_code: string; subject_category: string;
   grade_id: string; grade_name: string; term_id: string;
   grade_stream_id?: string | null; grade_stream_name?: string | null;
@@ -51,6 +56,25 @@ function readLastExam(): LastExam | null {
 
 function writeLastExam(value: LastExam): void {
   try { window.localStorage.setItem(LAST_EXAM_KEY, JSON.stringify(value)); } catch { /* private mode: nothing to remember */ }
+}
+
+const examDay = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+
+/** When each exam type in a term is scheduled: its earliest paper. */
+function examTypeDates(exams: readonly ExamSlot[]): Map<string, string> {
+  const dates = new Map<string, string>();
+  for (const e of exams) {
+    const d = dates.get(e.exam_type);
+    if (e.exam_date && (!d || e.exam_date < d)) dates.set(e.exam_type, e.exam_date);
+  }
+  return dates;
+}
+
+/** The exam the term is on now: the latest one already scheduled to have been sat. */
+function currentExamType(dates: ReadonlyMap<string, string>, today: string): string | null {
+  let current: [string, string] | null = null;
+  for (const [type, date] of dates) if (date <= today && (!current || date > current[1])) current = [type, date];
+  return current?.[0] ?? null;
 }
 
 async function fetchTermExams(termId: string): Promise<ExamSlot[]> {
@@ -137,6 +161,8 @@ export function MarksSetupTab() {
   // mark sheet gets the screen; "Change" opens them again.
   const [pickerOpen, setPickerOpen] = useState(true);
   const [lastExam, setLastExam] = useState<LastExam | null>(null);
+  // Exams not yet sat that the teacher has confirmed they mean to mark.
+  const [confirmedEarly, setConfirmedEarly] = useState<ReadonlySet<string>>(new Set());
 
   const [academicLevels, setAcademicLevels] = useState<AcademicLevel[]>([]);
   const [allGrades, setAllGrades] = useState<GradeItem[]>([]);
@@ -195,20 +221,12 @@ export function MarksSetupTab() {
     })();
   }, []);
 
-  // ── Subjects to offer beyond those with exams: a teacher's assigned ones;
-  // for an admin every subject the school offers, so a class with no exams
-  // yet (e.g. newly added Pre-primary areas) still lists its subjects. ──
+  // ── Subjects to offer beyond those with exams: a teacher's assigned ones.
+  // An admin's are loaded per class further down. ──
   useEffect(() => {
-    if (!profile?.role) return;
-    const type = profile.role === 'ADMIN' ? 'subjects' : 'my_subjects';
-    (async () => {
-      try {
-        const res = await fetch(`/api/school/data?type=${type}`, { cache: 'no-store' });
-        const json = (await res.json()) as { data?: MySubjectItem[] };
-        setMySubjects(json.data ?? []);
-      } catch (err) { console.error('Failed to fetch my subjects:', err); }
-    })();
-  }, [profile?.role]);
+    if (!profile?.role || isAdmin) return;
+    void loadSubjects('/api/school/data?type=my_subjects').then(setMySubjects);
+  }, [profile?.role, isAdmin]);
 
   // ── Terms: open the linked term, else the active one ──
   const loadTerms = useCallback(async () => {
@@ -304,6 +322,9 @@ export function MarksSetupTab() {
   // ── Derived choices ──
   const existingTypes = new Set(exams.map(e => e.exam_type));
   const availableExamTypes = ALL_EXAM_TYPES.filter(et => existingTypes.has(et.code));
+  const today = localToday();
+  const typeDates = examTypeDates(exams);
+  const nowExamType = currentExamType(typeDates, today);
   const examsByType = exams.filter(e => e.exam_type === selectedExamType);
 
   // Teachers only see the classes they have exams in; an admin sees every
@@ -315,6 +336,16 @@ export function MarksSetupTab() {
     .sort((a, b) => a.name_display.localeCompare(b.name_display, undefined, { numeric: true }));
   // With only one class to choose from, it is chosen.
   const effectiveGradeId = filterGradeId || (availableGrades.length === 1 ? availableGrades[0].id : '');
+
+  // For an admin, every subject the class takes, so one with no exams yet
+  // (e.g. newly added Pre-primary areas) still lists its subjects. Per class:
+  // a Senior School class only takes the electives its learners chose.
+  useEffect(() => {
+    if (!isAdmin || !effectiveGradeId) return;
+    let cancelled = false;
+    void loadSubjects(`/api/school/data?type=subjects&grade_id=${encodeURIComponent(effectiveGradeId)}`).then(list => { if (!cancelled) setMySubjects(list); });
+    return () => { cancelled = true; };
+  }, [isAdmin, effectiveGradeId]);
 
   const filteredExamsByType = examsByType
     .filter(e => !selectedLevelId || gradeLevelMap.get(e.grade_id) === selectedLevelId)
@@ -465,6 +496,14 @@ export function MarksSetupTab() {
 
   /* ── Folded view: the chosen exam and its mark sheet ── */
   if (showSheet && selectedExam) {
+    // Every exam of the term exists from day one, so an End-Term sheet is open
+    // in week 5 and Mid-Term marks were landing in it. A paper not yet sat
+    // with no marks asks first, and offers the exam the term is on.
+    const notYetSat = selectedExam.exam_date > today && selectedExam.mark_count === 0 && !confirmedEarly.has(selectedExam.id);
+    const nowSlot = nowExamType && nowExamType !== selectedExam.exam_type
+      ? exams.find(e => e.exam_type === nowExamType && e.subject_id === selectedExam.subject_id && e.grade_id === selectedExam.grade_id && (e.grade_stream_id ?? null) === (selectedExam.grade_stream_id ?? null))
+      : undefined;
+    const examLabel = getExamTypeLabel(selectedExam.exam_type);
     return (
       <div className="w-full">
         <div className="mb-4 rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/[0.07] to-transparent p-4 shadow-sm sm:p-5">
@@ -476,12 +515,16 @@ export function MarksSetupTab() {
               return <span className={cn('flex size-12 shrink-0 items-center justify-center rounded-2xl sm:size-14', theme.tone.tile)} aria-hidden><Icon className="size-6 sm:size-7" /></span>;
             })()}
           <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">Entering marks for</p>
+            <p className="flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">
+              Entering marks for
+              {/* The exam itself, big enough that nobody types Mid-Term marks into End-Term. */}
+              <span className="rounded-lg bg-primary px-2.5 py-1 text-xs font-bold tracking-wide text-primary-foreground normal-case">{examLabel}</span>
+            </p>
             <h2 className="mt-1 truncate font-display text-xl font-bold tracking-tight sm:text-2xl">
               {selectedExam.subject_name} <span className="text-muted-foreground">·</span> {selectedClassName}
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              {selectedTermName} · {getExamTypeLabel(selectedExam.exam_type)} · {examIsMultiPaper ? <span className="font-medium text-primary">Papers {examPaperSummary}</span> : <>Out of {selectedExam.max_score}</>}
+              {selectedTermName} · {examLabel} · {examIsMultiPaper ? <span className="font-medium text-primary">Papers {examPaperSummary}</span> : <>Out of {selectedExam.max_score}</>}
             </p>
           </div>
           </div>
@@ -535,6 +578,31 @@ export function MarksSetupTab() {
         )}
 
 
+        {notYetSat ? (
+          <section role="alert" className="flex flex-col gap-4 rounded-2xl border border-amber-500/30 bg-amber-500/[0.08] p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+            <div className="flex min-w-0 items-start gap-3">
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-amber-500/15 text-amber-700 dark:text-amber-400" aria-hidden><CalendarClock className="size-5" /></span>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-foreground">{examLabel} isn&apos;t until {examDay(selectedExam.exam_date)}</p>
+                <p className="mt-0.5 text-sm text-muted-foreground">
+                  {nowSlot
+                    ? <>The term is on <strong className="text-foreground">{getExamTypeLabel(nowSlot.exam_type)}</strong> now. Check which exam these marks are from before you start.</>
+                    : 'Check which exam these marks are from before you start.'}
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-col gap-2 xs:flex-row sm:shrink-0">
+              {nowSlot && (
+                <button type="button" onClick={() => applyExam(nowSlot)} className="btn-primary px-4 py-2">
+                  Enter {getExamTypeLabel(nowSlot.exam_type)} marks
+                </button>
+              )}
+              <button type="button" onClick={() => setConfirmedEarly(prev => new Set(prev).add(selectedExam.id))} className="btn-secondary px-4 py-2">
+                Enter {examLabel} marks anyway
+              </button>
+            </div>
+          </section>
+        ) : <>
         {mode === 'manual' && (
           <ManualEntryGrid
             key={`${effectiveSelectedExamId}-${schemeVersion}`}
@@ -563,6 +631,7 @@ export function MarksSetupTab() {
             />
           </>
         )}
+        </>}
 
         {showPaperModal && (
           <PaperSchemeModal
@@ -656,9 +725,10 @@ export function MarksSetupTab() {
                   key={et.code}
                   active={selectedExamType === et.code}
                   onClick={() => { setSelectedExamType(et.code); setSelectedSubjectId(''); setSelectedExamId(''); }}
-                  title={et.description}
+                  title={`${et.description}${typeDates.get(et.code) ? ` · scheduled ${examDay(typeDates.get(et.code)!)}` : ''}`}
                 >
                   <span aria-hidden>{et.icon}</span> {et.shortName}
+                  <ExamTiming active={selectedExamType === et.code} isNow={et.code === nowExamType} date={typeDates.get(et.code)} today={today} />
                 </ChoiceChip>
               ))}
 
@@ -740,7 +810,9 @@ export function MarksSetupTab() {
           ) : shownSubjects.length === 0 ? (
             <p className="text-sm text-muted-foreground">No subject matches &ldquo;{subjectQuery}&rdquo;.</p>
           ) : (
-            <div className={cn('grid gap-x-4 gap-y-5', subjectGroups.length > 1 && 'md:grid-cols-2 xl:grid-cols-3')}>
+            // Columns rather than a grid: categories differ a lot in size, and a
+            // grid row is as tall as its biggest group, leaving holes beside the rest.
+            <div className={cn(subjectGroups.length > 1 && 'gap-x-4 md:columns-2 xl:columns-3 -mb-5 *:mb-5 *:break-inside-avoid')}>
               {subjectGroups.map(([category, groupSubjects]) => {
                 const theme = SUBJECT_CATEGORY_THEME[category];
                 const CategoryIcon = theme.icon;
@@ -847,4 +919,26 @@ function LoadError({ message, onRetry }: { message: string; onRetry: () => void 
       </button>
     </div>
   );
+}
+
+async function loadSubjects(url: string): Promise<MySubjectItem[]> {
+  try {
+    const res = await fetch(url, { cache: 'no-store' });
+    const json = (await res.json()) as { data?: MySubjectItem[] };
+    return json.data ?? [];
+  } catch (err) {
+    console.error('Failed to fetch subjects:', err);
+    return [];
+  }
+}
+
+/** "Now" on the exam the term is on, the date on one not yet sat. */
+function ExamTiming({ active, isNow, date, today }: { active: boolean; isNow: boolean; date?: string; today: string }) {
+  if (isNow) {
+    return <span className={cn('rounded px-1.5 py-0.5 text-[9px] font-bold', active ? 'bg-white/20' : 'bg-primary/10 text-primary')}>NOW</span>;
+  }
+  if (date && date > today) {
+    return <span className={cn('text-[10px] font-medium', active ? 'text-primary-foreground/80' : 'text-muted-foreground')}>from {examDay(date)}</span>;
+  }
+  return null;
 }
