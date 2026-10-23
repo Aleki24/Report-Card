@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, CheckCircle2, Cloud, CloudOff, Info, Loader2, Save, Search, X } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Cloud, CloudOff, Info, Loader2, Save, Search, Send, X } from 'lucide-react';
 import type { ExamSubjectComponent, ExamSubjectComponentScheme } from '@/types';
 import type { RosterMode } from '@/lib/subject-roster';
 import { calculateCompositeSubjectScore, isMultiPaper } from '@/lib/multi-paper';
@@ -19,6 +19,7 @@ import { cn } from '@/lib/utils';
 import { MarkSheetRow, type GradeOption, type MarkSheetLearner } from './entry/MarkSheetRow';
 import { examRosterUrl } from '@/lib/marks/roster-url';
 import { useConfirm } from '@/components/ui/ConfirmProvider';
+import { releasePapers } from '@/components/exams-marks/releasePapers';
 
 /* ── API shapes ─────────────────────────────────────────── */
 
@@ -74,6 +75,12 @@ interface Props {
     gradeStreamId?: string | null;
     /** The exam's subject — narrows the roster to learners who take it (electives). */
     subjectId?: string;
+    /** The subject's name, for the release prompt. */
+    subjectName?: string;
+    /** Results already released to learners and parents. */
+    released?: boolean;
+    /** Called once this sheet's results are released from here. */
+    onReleased?: () => void;
 }
 
 const UNSAVED: ReadonlySet<RowStatus> = new Set<RowStatus>(['changed', 'new', 'removing']);
@@ -112,8 +119,9 @@ function fromDraftRow(row: DraftRow): EntryValues {
     };
 }
 
-export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId, subjectId }: Props) {
+export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId, subjectId, subjectName = 'this subject', released = false, onReleased }: Props) {
     const confirm = useConfirm();
+    const [releasing, setReleasing] = useState(false);
     const { profile } = useAuth();
     const isAdmin = profile?.role === 'ADMIN';
 
@@ -451,6 +459,26 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
             }
         });
     }, [rows, query, filter, streamFilter]);
+
+    /* ── Release: offered once every learner on the sheet has a saved mark ── */
+    const readyToRelease = !released && !!onReleased && counts.total > 0 && counts.todo === 0 && counts.unsaved === 0;
+    const releaseResults = async () => {
+        const ok = await confirm({
+            title: `Release ${subjectName} results?`,
+            message: `Learners and parents will see these ${counts.total} marks on their portal and report cards. You can still correct a mark afterwards.`,
+            confirmText: 'Release results',
+        });
+        if (!ok) return;
+        setReleasing(true);
+        const { ok: releasedCount, failures } = await releasePapers([{ id: examId, subject_name: subjectName }]);
+        setReleasing(false);
+        if (releasedCount > 0 || failures.length === 0) {
+            setNotice({ tone: 'success', text: `${subjectName} results are released to learners and parents.` });
+            onReleased?.();
+        } else {
+            setNotice({ tone: 'error', text: failures.join('; ') });
+        }
+    };
 
     /* ── Keyboard: Enter / arrows move down the same score column ── */
     const handleScoreKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, column: string) => {
@@ -813,6 +841,28 @@ export function ManualEntryGrid({ examId, maxScore = 100, gradeId, gradeStreamId
                     {notice.tone === 'success' ? <CheckCircle2 size={16} className="mt-0.5 shrink-0" aria-hidden /> : <AlertCircle size={16} className="mt-0.5 shrink-0" aria-hidden />}
                     <span className="flex-1">{notice.text}</span>
                     <button type="button" onClick={() => setNotice(null)} className="shrink-0 opacity-70 hover:opacity-100" aria-label="Dismiss"><X size={14} aria-hidden /></button>
+                </div>
+            )}
+
+            {readyToRelease && (
+                <div className="flex flex-col gap-3 border-b border-emerald-500/25 bg-emerald-500/[0.07] px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+                    <div className="flex items-start gap-2.5 text-sm">
+                        <CheckCircle2 size={18} className="mt-px shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />
+                        <p>
+                            <span className="font-semibold text-foreground">Every learner has a mark.</span>{' '}
+                            <span className="text-muted-foreground">Release them so learners and parents can see the results.</span>
+                        </p>
+                    </div>
+                    <button type="button" onClick={() => void releaseResults()} disabled={releasing} className="btn-primary inline-flex shrink-0 items-center justify-center gap-2 self-stretch sm:self-auto">
+                        {releasing ? <Loader2 size={15} className="animate-spin" aria-hidden /> : <Send size={15} aria-hidden />}
+                        {releasing ? 'Releasing…' : 'Release results'}
+                    </button>
+                </div>
+            )}
+            {released && (
+                <div className="flex items-center gap-2 border-b border-border/60 px-4 py-2 text-xs text-muted-foreground sm:px-5">
+                    <Send size={13} className="shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />
+                    Released to learners and parents. Corrections you save show to them straight away.
                 </div>
             )}
 

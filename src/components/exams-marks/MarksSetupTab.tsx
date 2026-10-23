@@ -728,6 +728,9 @@ export function MarksSetupTab() {
             gradeId={selectedExam.grade_id}
             gradeStreamId={selectedExam.grade_stream_id ?? null}
             subjectId={selectedExam.subject_id}
+            subjectName={selectedExam.subject_name}
+            released={selectedExam.status === 'APPROVED'}
+            onReleased={() => setExams(prev => prev.map(e => (e.id === selectedExam.id ? { ...e, status: 'APPROVED' } : e)))}
           />
         )}
         {mode === 'bulk' && <BulkUpload examId={effectiveSelectedExamId} subjectId={selectedExam.subject_id} gradeStreamId={selectedExam.grade_stream_id ?? null} gradeId={selectedExam.grade_id} />}
