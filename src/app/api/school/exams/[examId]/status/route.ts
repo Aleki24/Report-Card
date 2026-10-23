@@ -255,12 +255,13 @@ export async function POST(
                 return NextResponse.json({ error: 'Enter at least one student\'s marks before releasing them.' }, { status: 400 });
             }
 
-            const readiness = await computePublishReadiness(supabase, exam);
-
             // Two-step publish: the first call (no confirm) returns the readiness
             // report so the teacher can see who is missing papers or has no marks
-            // before committing. Nothing is published until confirm is sent.
+            // before committing. Nothing is published until confirm is sent, and
+            // the confirmed call doesn't rebuild the report: it is about eight
+            // queries nobody reads once the release is decided.
             if (!body.confirm) {
+                const readiness = await computePublishReadiness(supabase, exam);
                 return NextResponse.json({ requiresConfirmation: true, readiness });
             }
 
@@ -282,7 +283,7 @@ export async function POST(
                 .select()
                 .single();
             if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-            return NextResponse.json({ success: true, data: updated, readiness });
+            return NextResponse.json({ success: true, data: updated });
         }
 
         /**
