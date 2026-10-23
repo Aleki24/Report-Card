@@ -69,23 +69,27 @@ export async function GET() {
         const empty: MarkingProgressResponse = { term: term ? { id: term.id, name: term.name } : null, items: [] };
         if (!term) return NextResponse.json(empty);
 
-        const { data: examRows, error: examsError } = await supabase
-            .from('exams')
-            .select(`
-                id, name, exam_type, grade_id, grade_stream_id, subject_id, term_id, status, created_by_teacher_id,
-                subjects:subject_id ( name ),
-                grades:grade_id ( name_display ),
-                grade_streams:grade_stream_id ( full_name )
-            `)
-            .eq('school_id', schoolId)
-            .eq('term_id', term.id);
+        // Independent reads, side by side: each is a round trip to the database.
+        const [{ data: examRows, error: examsError }, perms, windows] = await Promise.all([
+            supabase
+                .from('exams')
+                .select(`
+                    id, name, exam_type, grade_id, grade_stream_id, subject_id, term_id, status, created_by_teacher_id,
+                    subjects:subject_id ( name ),
+                    grades:grade_id ( name_display ),
+                    grade_streams:grade_stream_id ( full_name )
+                `)
+                .eq('school_id', schoolId)
+                .eq('term_id', term.id),
+            getTeacherPermissions(userId),
+            readExamWindows(supabase, schoolId, term.id),
+        ]);
         if (examsError) throw new Error(examsError.message);
 
-        const perms = await getTeacherPermissions(userId);
         const exams = ((examRows ?? []) as unknown as ExamRow[]).filter(e => isExamVisibleToTeacher(e, perms, userId));
         if (exams.length === 0) return NextResponse.json(empty);
 
-        const openByGrade = new Map((await readExamWindows(supabase, schoolId, term.id)).map(w => [w.grade_id, w.exam_type]));
+        const openByGrade = new Map(windows.map(w => [w.grade_id, w.exam_type]));
 
         // Learners in every stream of this school these exams reach (grades
         // are shared by every school; streams are each school's own).
