@@ -4,10 +4,8 @@ import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { embedOne, fetchAllRows, isUuid } from '@/lib/postgrest';
 import { findActiveTermId } from '@/lib/term-calendar';
 import { ALL_EXAM_TYPES, isAnytimeExamType, isValidExamType } from '@/lib/exam-types';
-import {
-  EXAM_REQUESTS_TABLE, EXAM_WINDOWS_TABLE, readExamRequests, readExamWindows,
-  type ExamClass, type ExamRequest, type ExamWindowsResponse,
-} from '@/lib/exam-windows';
+import { EXAM_REQUESTS_TABLE, EXAM_WINDOWS_TABLE, readExamRequests, readExamWindows } from '@/lib/exam-windows-server';
+import type { ExamClass, ExamRequest, ExamWindowsResponse } from '@/lib/exam-windows';
 
 /**
  * Which exam each class is marking now.

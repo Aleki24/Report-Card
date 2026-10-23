@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Text } from 'react-native';
-import { Badge, Card, ChipSelect, FilterGrid, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView } from '@/components/ui';
-import { fonts, useTheme } from '@/lib/theme';
+import { Text, View } from 'react-native';
+import { Badge, Button, ButtonRow, Card, ChipSelect, FilterGrid, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView, Notice } from '@/components/ui';
+import { fonts, spacing, useTheme } from '@/lib/theme';
+import { useApi } from '@/lib/api';
+import { errorMessage } from '@/lib/format';
 import { examTypeLabel, sortExamTypes } from '@/lib/academics';
-import { examClasses, examLabel, useExams, useTerms } from '@/lib/useSchoolData';
+import { examClasses, examLabel, useExams, useOpenExams, useTerms } from '@/lib/useSchoolData';
 import type { ExamSlot, Term } from '@/lib/types';
 
 /**
@@ -18,6 +20,7 @@ export function ExamPicker({
     headerAction,
     allClasses,
     fillGaps,
+    followOpen = false,
 }: {
     onSelect: (exam: ExamSlot, term: Term | null) => void;
     /** Shown when the term has no exams (the admin's "set up exams" button). */
@@ -33,6 +36,11 @@ export function ExamPicker({
     allClasses?: readonly { key: string; label: string }[];
     /** Admins: give classes the term's exams they lack (seeding fills gaps only). */
     fillGaps?: (term: Term, examTypes: string[]) => Promise<void>;
+    /**
+     * Teachers entering marks: once the school has opened an exam for their
+     * class, skip choosing one (class → subject → the open exam), as on the web.
+     */
+    followOpen?: boolean;
 }) {
     const { colors } = useTheme();
     const filled = useRef(new Set<string>());
@@ -44,9 +52,21 @@ export function ExamPicker({
 
     const [examType, setExamType] = useState<string | null>(null);
     const [gradeId, setGradeId] = useState<string | null>(null);
+    // A teacher choosing an exam themselves: a CAT, a correction, another term.
+    const [pickAny, setPickAny] = useState(false);
+    const open = useOpenExams(followOpen ? effectiveTermId : null);
+    const follow = followOpen && !pickAny && open.windows.size > 0;
 
     const types = useMemo(() => sortExamTypes(exams.map((e) => e.exam_type)), [exams]);
-    const effectiveType = examType && types.includes(examType) ? examType : types.length === 1 ? types[0] : null;
+    // Following the open exam, classes come first (every class the teacher has
+    // exams in) and the exam follows from the class.
+    const followClasses = useMemo(() => examClasses(exams), [exams]);
+    const followGrade = gradeId && followClasses.some((c) => c.key === gradeId) ? gradeId : followClasses.length === 1 ? followClasses[0].key : null;
+    const classTypes = useMemo(() => sortExamTypes(exams.filter((e) => e.grade_id === followGrade).map((e) => e.exam_type)), [exams, followGrade]);
+    const openType = followGrade ? open.windows.get(followGrade) ?? null : null;
+    const effectiveType = follow
+        ? openType ?? (examType && classTypes.includes(examType) ? examType : null)
+        : examType && types.includes(examType) ? examType : types.length === 1 ? types[0] : null;
     const ofType = useMemo(() => exams.filter((e) => e.exam_type === effectiveType), [exams, effectiveType]);
     const classes = useMemo(() => {
         const withExams = examClasses(ofType);
@@ -55,7 +75,7 @@ export function ExamPicker({
         const listed = new Set(allClasses.map((c) => c.key));
         return [...allClasses, ...withExams.filter((c) => !listed.has(c.key))];
     }, [ofType, allClasses]);
-    const effectiveGrade = gradeId && classes.some((c) => c.key === gradeId) ? gradeId : classes.length === 1 ? classes[0].key : null;
+    const effectiveGrade = follow ? followGrade : gradeId && classes.some((c) => c.key === gradeId) ? gradeId : classes.length === 1 ? classes[0].key : null;
     const slots = useMemo(
         () => ofType.filter((e) => e.grade_id === effectiveGrade).sort((a, b) => examLabel(a).localeCompare(examLabel(b))),
         [ofType, effectiveGrade],
@@ -77,6 +97,25 @@ export function ExamPicker({
         setExamType(null);
         setGradeId(null);
     }, [effectiveTermId]);
+
+    // ── Asking for an exam to be opened ──
+    const api = useApi();
+    const [asking, setAsking] = useState(false);
+    const [askError, setAskError] = useState('');
+    const askFor = async (gradeIds: string[]) => {
+        if (!effectiveTermId || gradeIds.length === 0) return;
+        setAsking(true);
+        setAskError('');
+        try {
+            await api.post('/api/school/exam-windows', { termId: effectiveTermId, gradeIds });
+            open.reload();
+        } catch (err) {
+            setAskError(errorMessage(err, 'Could not send your request'));
+        } finally {
+            setAsking(false);
+        }
+    };
+    const unasked = followClasses.filter((c) => !open.windows.has(c.key) && !open.myRequests.has(c.key)).map((c) => c.key);
 
     if (termsLoading) return <LoadingView />;
     if (termsError) return <ErrorBanner message={termsError} onRetry={reloadTerms} />;
@@ -107,15 +146,75 @@ export function ExamPicker({
                         action={term && emptyAction ? emptyAction(term, reload) : undefined}
                     />
                 </Card>
+            ) : follow ? (
+                <>
+                    <Card style={{ marginBottom: spacing.md }}>
+                        <Text style={{ fontSize: 14, fontFamily: fonts.bold, color: colors.foreground }}>Marking now{term ? ` · ${term.name}` : ''}</Text>
+                        <Text style={{ fontSize: 12, fontFamily: fonts.regular, color: colors.muted, marginTop: 2, marginBottom: spacing.sm }}>
+                            Choose your class and subject; the mark sheet opens on the exam your school is marking.
+                        </Text>
+                        {followClasses.map((c) => {
+                            const type = open.windows.get(c.key);
+                            const subjects = [...new Set(exams.filter((e) => e.grade_id === c.key && e.exam_type === type).map((e) => e.subject_name))].sort();
+                            return (
+                                <View key={c.key} style={{ paddingVertical: 4 }}>
+                                    <Text style={{ fontSize: 13, fontFamily: fonts.bold, color: colors.foreground }}>
+                                        {c.label} · <Text style={{ color: type ? colors.primary : colors.warning }}>{type ? examTypeLabel(type) : open.myRequests.has(c.key) ? 'asked · waiting' : 'no exam open yet'}</Text>
+                                    </Text>
+                                    {subjects.length > 0 ? <Text style={{ fontSize: 12, fontFamily: fonts.regular, color: colors.muted }}>{subjects.join(', ')}</Text> : null}
+                                </View>
+                            );
+                        })}
+                        <ButtonRow>
+                            <Button size="sm" variant="ghost" label="CAT, correction or another term" onPress={() => { setPickAny(true); setExamType(null); setGradeId(null); }} />
+                        </ButtonRow>
+                    </Card>
+                    <ChipSelect
+                        label="Class"
+                        options={followClasses.map((c) => ({ value: c.key, label: c.label }))}
+                        value={effectiveGrade}
+                        onChange={(g) => { setGradeId(g); setExamType(null); }}
+                    />
+                    {effectiveGrade && !openType ? (
+                        <>
+                            <AskForExam
+                                title="Your school hasn't opened an exam for this class"
+                                asked={open.myRequests.has(effectiveGrade)}
+                                busy={asking}
+                                error={askError}
+                                onAsk={() => void askFor([effectiveGrade])}
+                            />
+                            <ChipSelect label="Or choose the exam" options={classTypes.map((t) => ({ value: t, label: examTypeLabel(t) }))} value={effectiveType} onChange={setExamType} />
+                        </>
+                    ) : null}
+                </>
             ) : (
                 <>
+                    {followOpen && pickAny && open.windows.size > 0 ? (
+                        <ButtonRow>
+                            <Button size="sm" variant="ghost" label="← Back to the exam open for marking" onPress={() => { setPickAny(false); setExamType(null); setGradeId(null); }} />
+                        </ButtonRow>
+                    ) : null}
+                    {followOpen && open.data?.termId === effectiveTermId && open.windows.size === 0 && followClasses.length > 0 ? (
+                        <AskForExam
+                            title="Your school hasn't chosen which exam is being marked"
+                            asked={unasked.length === 0}
+                            busy={asking}
+                            error={askError}
+                            onAsk={() => void askFor(unasked)}
+                        />
+                    ) : null}
                     <FilterGrid>
                         <ChipSelect label="Exam" options={types.map((t) => ({ value: t, label: examTypeLabel(t) }))} value={effectiveType} onChange={setExamType} />
                         {effectiveType ? (
                             <ChipSelect label="Class" options={classes.map((c) => ({ value: c.key, label: c.label }))} value={effectiveGrade} onChange={setGradeId} />
                         ) : null}
                     </FilterGrid>
-                    {effectiveGrade ? (
+                </>
+            )}
+            {!loading && types.length > 0 ? (
+                <>
+                    {effectiveGrade && effectiveType ? (
                         <>
                             <Text style={{ fontSize: 12, fontFamily: fonts.bold, color: colors.muted, marginBottom: 6 }}>Subject</Text>
                             {slots.length === 0 ? (
@@ -135,8 +234,28 @@ export function ExamPicker({
                         </>
                     ) : null}
                 </>
-            )}
+            ) : null}
         </>
+    );
+}
+
+/** A teacher's "ask for the exam to be opened", and its answer once sent. */
+function AskForExam({ title, asked, busy, error, onAsk }: { title: string; asked: boolean; busy: boolean; error: string; onAsk: () => void }) {
+    return (
+        <View style={{ marginBottom: spacing.md }}>
+            <Notice
+                tone="warning"
+                message={`${title}. ${asked
+                    ? "You've asked: your admin, principal or DOS will see it and open the right exam."
+                    : 'Ask your admin, principal or DOS to open it, so your marks go into the right exam.'}`}
+            />
+            {error ? <Notice tone="danger" message={error} /> : null}
+            {!asked ? (
+                <ButtonRow>
+                    <Button size="sm" variant="secondary" label="Ask for the exam" onPress={onAsk} loading={busy} />
+                </ButtonRow>
+            ) : null}
+        </View>
     );
 }
 

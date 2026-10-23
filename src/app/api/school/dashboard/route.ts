@@ -4,7 +4,7 @@ import type { SetupStatus } from '@/lib/setup-status';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { findActiveTermId } from '@/lib/term-calendar';
-import { readExamRequests, readExamWindows } from '@/lib/exam-windows';
+import { readExamRequests, readExamWindows } from '@/lib/exam-windows-server';
 import { PASS_MARK, passMarkOrDefault } from '@/lib/pass-mark';
 import { STAFF_TEACHING_ROLES, isRoleIn } from '@/lib/roles';
 import { schoolToday } from '@/lib/dates';
