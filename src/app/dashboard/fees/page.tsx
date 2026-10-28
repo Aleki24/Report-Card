@@ -2,7 +2,7 @@
 
 import PageHeader from '@/components/dashboard/PageHeader';
 import React, { Suspense, useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import { Plus, Search, Edit3, Trash2, Save, RotateCcw, Wallet, ArrowUpRight, Clock, AlertTriangle, Upload, FileText, CircleDollarSign, History, Download, Ban, Receipt, Layers } from 'lucide-react';
+import { Plus, Search, Edit3, Trash2, Save, RotateCcw, Wallet, ArrowUpRight, Clock, AlertTriangle, Upload, FileText, CircleDollarSign, History, Download, Ban, Receipt, Layers, UsersRound, ChartColumn } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api-error-message';
@@ -12,6 +12,9 @@ import { PageTabs, useUrlTab, type PageTab } from '@/components/ui/PageTabs';
 import { DataTable, LoadError, StatTile, TermSelect, type TermSelectYear } from '@/components/ui';
 import { UnmatchedPaymentsPanel } from '@/components/fees/UnmatchedPaymentsPanel';
 import { FeeAccountDrawer } from '@/components/fees/FeeAccountDrawer';
+import { DefaultersPanel } from '@/components/fees/DefaultersPanel';
+import { CollectionsPanel } from '@/components/fees/CollectionsPanel';
+import Link from 'next/link';
 import { feeReceiptUrl, type FeeAccountLearner, type FeeAccountTerm } from '@/lib/fee-account';
 import { humanize } from '@/lib/text';
 import { cn } from '@/lib/utils';
@@ -69,7 +72,7 @@ const toStudentOption = (s: StudentApiRow): StudentOption => ({
     status: s.status,
 });
 
-type FeesMode = 'list' | 'payments' | 'batch';
+type FeesMode = 'list' | 'payments' | 'batch' | 'defaulters' | 'collections';
 
 /** One row of the batch screen. Money already paid is read from the ledger, never typed. */
 interface BatchEntry {
@@ -173,7 +176,14 @@ const FEES_TABS: readonly PageTab<FeesMode>[] = [
     // The school-wide log exposes every receipt; it is admin-only on the server.
     { id: 'payments', label: 'Payments', icon: Receipt, hue: 'blue' },
     { id: 'batch', label: 'Batch entry', shortLabel: 'Batch', icon: Layers, hue: 'violet' },
+    { id: 'defaulters', label: 'Who owes', icon: UsersRound, hue: 'amber' },
+    { id: 'collections', label: 'Collections', icon: ChartColumn, hue: 'teal' },
 ];
+
+/** Tabs about the whole school rather than one term's records: no term KPIs over them. */
+const REPORT_MODES: ReadonlySet<FeesMode> = new Set<FeesMode>(['defaulters', 'collections']);
+/** Tabs only finance staff see (school-wide money). */
+const FINANCE_ONLY_MODES: ReadonlySet<FeesMode> = new Set<FeesMode>(['payments', 'defaulters', 'collections']);
 
 /** Requests in flight at once while a batch saves. */
 const BATCH_CONCURRENCY = 6;
@@ -208,7 +218,7 @@ export default function FeesPage() {
 }
 
 function FeesPageInner() {
-    const { can } = useAuth();
+    const { can, hasModule } = useAuth();
     // Deleting a record and voiding receipts are admin-only on the server.
     // The admin, or staff with a finance duty (bursar, accountant).
     const canViewAll = can('fees.view');
@@ -216,7 +226,7 @@ function FeesPageInner() {
     // Recording payments (and matching unmatched Paybill money) is fees.collect:
     // an accountant can, without billing or editing fee records.
     const canCollect = can('fees.collect');
-    const visibleTabs = useMemo(() => FEES_TABS.filter(t => t.id !== 'payments' || canViewAll), [canViewAll]);
+    const visibleTabs = useMemo(() => FEES_TABS.filter(t => !FINANCE_ONLY_MODES.has(t.id) || canViewAll), [canViewAll]);
     const [mode, selectMode] = useUrlTab(visibleTabs, 'view');
     const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm | null>(null);
     const [confirming, setConfirming] = useState(false);
@@ -859,7 +869,7 @@ function FeesPageInner() {
                             emptyLabel="All terms"
                         />
                     </label>
-                    {mode !== 'batch' && (
+                    {(mode === 'list' || mode === 'payments') && (
                         <button
                             className="btn-secondary h-11"
                             onClick={mode === 'payments' ? exportPaymentsLog : exportExcel}
@@ -900,6 +910,16 @@ function FeesPageInner() {
                 </div>
             )}
 
+            {/* Fee structures and invoicing, and the payment channels, live on their own pages. */}
+            {canManageFees && (
+                <nav aria-label="Fee setup" className="-mt-1 mb-4 flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                    {hasModule('fee_structures') && <Link href="/dashboard/billing" className="font-medium text-primary hover:underline">Fee structures, invoicing &amp; bursaries →</Link>}
+                    <Link href="/dashboard/settings?tab=payments" className="font-medium text-primary hover:underline">M-Pesa, Pesapal &amp; bank accounts →</Link>
+                    {hasModule('parent_portal') && <Link href="/dashboard/parent-accounts?tab=class" className="font-medium text-primary hover:underline">Link parents for a class →</Link>}
+                </nav>
+            )}
+
+            {!REPORT_MODES.has(mode) && (<>
             {/* ── KPI Cards ── */}
             <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
                 <StatTile icon={Wallet} hue="blue" label="Expected" value={feesError ? '—' : formatCurrency(kpi.expected)} hint={feesError ? undefined : `${kpi.records} record${kpi.records === 1 ? '' : 's'}${streamFilter ? ` · ${gradeStreams.find(g => g.id === streamFilter)?.full_name ?? 'this class'}` : ''}`} />
@@ -928,7 +948,19 @@ function FeesPageInner() {
                 </div>
             </div>
 
+            </>)}
+
             <div role="tabpanel" id="fees-panel" aria-labelledby={`fees-tab-${mode}`}>
+            {mode === 'defaulters' && (
+                <DefaultersPanel
+                    streams={gradeStreams}
+                    termId={selectedTerm}
+                    canRemind={canManageFees}
+                    onOpenAccount={(studentId, name) => setAccount({ studentId, name })}
+                />
+            )}
+            {mode === 'collections' && <CollectionsPanel />}
+
             {/* ════════════════════════════════════════════ */}
             {/* BATCH ENTRY MODE                           */}
             {/* ════════════════════════════════════════════ */}
