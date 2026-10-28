@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, Image, StyleSheet } from '@react-pdf/renderer';
+import { View, Text, Image, StyleSheet, Font } from '@react-pdf/renderer';
 import { FONTS } from '../pdfFonts';
 
 /**
@@ -18,6 +18,13 @@ export const FEE_GOOD = '#047857';
 export const FEE_WARN = '#B45309';
 
 export const FEE_FONT = FONTS.inter;
+
+// Emails, links and receipt codes must not break with a hyphen ("bur-sar@").
+try {
+    Font.registerHyphenationCallback(word => [word]);
+} catch {
+    // Never let a font problem stop a receipt from being produced.
+}
 
 export interface FeeSchool {
     name: string;
@@ -64,7 +71,7 @@ const s = StyleSheet.create({
 
 /** School name, motto and contacts on the left; what the document is on the right. */
 export function FeeLetterhead({ school, title, meta, sub }: { school: FeeSchool; title: string; meta?: string; sub?: string }) {
-    const contact = [school.address, school.phone, school.email].filter(Boolean).join('  ·  ');
+    const reach = [school.phone, school.email].filter(Boolean).join('  ·  ');
     return (
         <View style={s.letterhead}>
             {/* eslint-disable-next-line jsx-a11y/alt-text -- @react-pdf Image has no alt prop */}
@@ -72,7 +79,8 @@ export function FeeLetterhead({ school, title, meta, sub }: { school: FeeSchool;
             <View style={s.schoolBlock}>
                 <Text style={s.schoolName}>{school.name}</Text>
                 {school.motto ? <Text style={s.motto}>{school.motto}</Text> : null}
-                {contact ? <Text style={s.contact}>{contact}</Text> : null}
+                {school.address ? <Text style={s.contact}>{school.address}</Text> : null}
+                {reach ? <Text style={[s.contact, { marginTop: 1 }]}>{reach}</Text> : null}
             </View>
             <View style={s.titleBlock}>
                 <Text style={s.title}>{title}</Text>
