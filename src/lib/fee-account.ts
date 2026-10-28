@@ -217,3 +217,15 @@ export const feeStatementUrl = (studentId: string) => `/api/school/fees/accounts
 
 /** A learner's fee account (JSON). */
 export const feeAccountUrl = (studentId: string) => `/api/school/fees/accounts/${studentId}`;
+
+/** POST /api/finance/reminders: who a balance reminder reaches. */
+export interface FeeReminderSummary {
+    /** Learners owing enough who have at least one number to text. */
+    learners: number;
+    /** Learners owing enough with no parent number on record. */
+    without_phone: number;
+    /** Text messages (a learner with two parents gets two). */
+    recipients: number;
+    sent: number;
+    failed: number;
+}

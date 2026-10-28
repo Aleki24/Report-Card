@@ -1422,6 +1422,7 @@ function FeesPageInner() {
                         onClose={() => setAccount(null)}
                         onRecordPayment={canCollect ? payFromAccount : undefined}
                         version={accountVersion}
+                        canLinkParents={can('school.manage')}
                     />
 
                     {/* ── Record Payment ── */}
