@@ -24,7 +24,7 @@ export const guardianStatus = (l: GuardianLink) => (l.parent?.is_active ? 'Activ
 
 // ── Parent portal ────────────────────────────────────────────
 
-export interface ChildLink { relationship: string; student: { id: string; admission_number: string | null; stream: { full_name: string } | null; user: PersonName | null } | null }
+export interface ChildLink { relationship: string; student: { id: string; admission_number: string | null; stream: { full_name: string } | null; user: PersonName | null } | null; /** Owed across every term; null when never billed. */ balance: number | null }
 export interface ChildResult { id: string; percentage: number | null; grade_symbol: string | null; exams: { name: string; exam_date: string; subjects: { name: string } | null } | null }
 export interface ChildOverview {
     child: { id: string; name: string; admissionNumber: string };

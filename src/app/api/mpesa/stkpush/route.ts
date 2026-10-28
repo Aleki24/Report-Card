@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { internalError } from '@/lib/api-errors';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
-import { getActiveUserProfile } from '@/lib/auth-server';
-import { FEE_VIEWER_ROLES } from '@/lib/fees';
+import { canViewStudentFees, getActiveUserProfile } from '@/lib/auth-server';
+import { getAccess } from '@/lib/platform/access';
 import { initiateStkPush, type MpesaEnvironment } from '@/lib/mpesa';
 import { decryptSecret, generateWebhookToken } from '@/lib/crypto';
 import { normalizeMpesaPhone } from '@/lib/phone';
@@ -38,9 +38,10 @@ export async function POST(request: NextRequest) {
         if (!fee || fee.school_id !== userProfile.school_id) {
             return NextResponse.json({ error: 'Not found' }, { status: 404 });
         }
-        // Same audience as the rest of the fee routes; a student only for
-        // their own fee.
-        if (!FEE_VIEWER_ROLES.includes(userProfile.role) || (userProfile.role === 'STUDENT' && fee.student_id !== userId)) {
+        // Whoever may see this learner's fees may pay them: finance staff,
+        // the learner, and their linked parents.
+        const access = await getAccess();
+        if (!access || !(await canViewStudentFees(access, fee.student_id as string))) {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
 

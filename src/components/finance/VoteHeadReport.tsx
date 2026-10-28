@@ -11,13 +11,14 @@ import { LookupSelect } from '@/components/ops/SearchableSelect';
 import { errorText, opsFetch } from '@/lib/ops/client';
 import { money } from '@/lib/ops/format';
 import { statementTotal, type VoteHeadStatement as Report } from '@/lib/ops/forms/finance';
+import type { FeeReminderSummary } from '@/lib/fee-account';
 
 /** Billed, collected, owed and spent per vote head for a term, and balance reminders by SMS. */
 export function VoteHeadReport({ canRemind }: { canRemind: boolean }) {
     const [termId, setTermId] = useState('');
     const [report, setReport] = useState<Report | null>(null);
     const [minBalance, setMinBalance] = useState('1000');
-    const [reminder, setReminder] = useState<number | null>(null);
+    const [reminder, setReminder] = useState<FeeReminderSummary | null>(null);
     const [sending, setSending] = useState(false);
 
     useEffect(() => {
@@ -30,8 +31,8 @@ export function VoteHeadReport({ canRemind }: { canRemind: boolean }) {
     const remind = async (dryRun: boolean) => {
         setSending(true);
         try {
-            const r = await opsFetch<{ recipients: number; sent: number; failed: number }>('/api/finance/reminders', { method: 'POST', json: { term_id: termId, min_balance: Number(minBalance) || 1, dry_run: dryRun } });
-            if (dryRun) setReminder(r.recipients);
+            const r = await opsFetch<FeeReminderSummary>('/api/finance/reminders', { method: 'POST', json: { term_id: termId, min_balance: Number(minBalance) || 1, dry_run: dryRun } });
+            if (dryRun) setReminder(r);
             else { toast.success(`Reminders sent: ${r.sent}${r.failed ? `, ${r.failed} failed` : ''}.`); setReminder(null); }
         } catch (err) { toast.error(errorText(err)); }
         finally { setSending(false); }
@@ -67,7 +68,7 @@ export function VoteHeadReport({ canRemind }: { canRemind: boolean }) {
                 <section className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-card p-4 shadow-sm sm:flex-row sm:items-end sm:p-5">
                     <div className="sm:flex-1">
                         <h3 className="flex items-center gap-2 text-sm font-semibold"><MessageSquare className="size-4" aria-hidden />Balance reminders</h3>
-                        <p className="text-sm text-muted-foreground">Text the guardians of learners who owe at least this much for the term.</p>
+                        <p className="text-sm text-muted-foreground">Text the parents of learners billed this term who owe at least this much, arrears included. Each linked parent and the number on the learner&apos;s record gets one SMS, with your Paybill when it is set up.</p>
                     </div>
                     <FormField label="Owing at least (KES)" htmlFor="vh-min" className="sm:w-44"><InputField id="vh-min" type="number" min={1} value={minBalance} onChange={e => setMinBalance(e.target.value)} /></FormField>
                     <Button onClick={() => void remind(true)} disabled={sending}>Send reminders</Button>
@@ -76,11 +77,13 @@ export function VoteHeadReport({ canRemind }: { canRemind: boolean }) {
             <ConfirmDialog
                 isOpen={reminder !== null}
                 onClose={() => setReminder(null)}
-                onConfirm={() => void remind(false)}
+                onConfirm={() => { if (reminder?.recipients) void remind(false); else setReminder(null); }}
                 loading={sending}
                 title="Send fee reminders?"
-                message={reminder === 0 ? 'No guardians match; nothing will be sent.' : `${reminder} guardians will get an SMS with their child's balance.`}
-                confirmText="Send"
+                message={!reminder || reminder.recipients === 0
+                    ? `Nobody to text${reminder?.without_phone ? `: ${reminder.without_phone} learners owing have no parent phone. Link parents under Parent accounts.` : '.'}`
+                    : `${reminder.recipients} ${reminder.recipients === 1 ? 'SMS' : 'SMSes'} to the parents of ${reminder.learners} ${reminder.learners === 1 ? 'learner' : 'learners'}.${reminder.without_phone ? ` ${reminder.without_phone} more owe but have no parent phone; link parents under Parent accounts.` : ''}`}
+                confirmText={reminder?.recipients ? 'Send' : 'OK'}
             />
         </div>
     );

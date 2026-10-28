@@ -3,89 +3,37 @@ import { internalError } from '@/lib/api-errors';
 import { canViewStudentFees } from '@/lib/auth-server';
 import { getAccess } from '@/lib/platform/access';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
-import { generateFeeReceiptPDF } from '@/lib/pdf/feeReceiptServer';
+import { loadFeeReceipt } from '@/lib/fee-receipt-server';
+import { FEE_SCHOOL_COLUMNS, feeSchool } from '@/lib/pdf/fees/FeeDocParts';
+import { generateFeeReceiptPDF, receiptVerifyUrl } from '@/lib/pdf/feeReceiptServer';
 
 export const runtime = 'nodejs';
 
+/** GET — one payment's receipt (PDF), for finance staff, the learner and their linked parents. */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ paymentId: string }> }) {
     try {
         const caller = await getAccess();
         if (!caller) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
         const supabase = createSupabaseAdmin();
-
         const { paymentId } = await params;
+        const receipt = await loadFeeReceipt(supabase, paymentId);
+        if (!receipt || receipt.schoolId !== caller.schoolId) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+        if (!(await canViewStudentFees(caller, receipt.studentId))) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        if (receipt.status === 'CANCELLED') return NextResponse.json({ error: 'This payment was voided and has no valid receipt' }, { status: 400 });
+        if (receipt.status !== 'COMPLETED') return NextResponse.json({ error: 'This payment has not been confirmed yet, so it has no receipt' }, { status: 400 });
 
-        const { data: payment, error } = await supabase
-            .from('fee_payments')
-            .select(`
-                id, receipt_number, amount, method, mpesa_receipt_number, payer_name, phone_number, notes, paid_at, recorded_by, status,
-                student_fees (
-                    id, total_fee, paid_amount, school_id, student_id,
-                    terms ( name ),
-                    students ( admission_number, current_grade_stream_id, users ( first_name, last_name ), grade_streams ( full_name ) )
-                )
-            `)
-            .eq('id', paymentId)
-            .maybeSingle();
-
-        if (error) throw error;
-
-        const fee = payment?.student_fees as any;
-        if (!payment || !fee || fee.school_id !== caller.schoolId) {
-            return NextResponse.json({ error: 'Not found' }, { status: 404 });
-        }
-        if (!(await canViewStudentFees(caller, fee.student_id))) {
-            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-        }
-        if (payment.status === 'CANCELLED') {
-            return NextResponse.json({ error: 'This payment was voided and has no valid receipt' }, { status: 400 });
-        }
-
-        const { data: school } = await supabase
-            .from('schools')
-            .select('name, logo_url, address')
-            .eq('id', fee.school_id)
-            .maybeSingle();
-
-        let recordedByName: string | null = null;
-        if (payment.recorded_by) {
-            const { data: recorder } = await supabase
-                .from('users')
-                .select('first_name, last_name')
-                .eq('id', payment.recorded_by)
-                .maybeSingle();
-            if (recorder) recordedByName = `${recorder.first_name} ${recorder.last_name}`;
-        }
-
-        const student = fee.students;
-        const pdfBuffer = await generateFeeReceiptPDF({
-            schoolName: school?.name || 'School',
-            schoolLogoUrl: school?.logo_url || undefined,
-            schoolAddress: school?.address || undefined,
-            receiptNumber: payment.receipt_number,
-            paidAt: payment.paid_at,
-            studentName: student?.users ? `${student.users.first_name} ${student.users.last_name}` : 'Student',
-            admissionNumber: student?.admission_number || '',
-            className: student?.grade_streams?.full_name,
-            termName: fee.terms?.name,
-            amount: Number(payment.amount),
-            method: payment.method,
-            mpesaReceiptNumber: payment.mpesa_receipt_number,
-            payerName: payment.payer_name,
-            phoneNumber: payment.phone_number,
-            notes: payment.notes,
-            recordedByName,
-            totalFee: Number(fee.total_fee),
-            totalPaidToDate: Number(fee.paid_amount),
-            balance: Number(fee.total_fee) - Number(fee.paid_amount),
+        const { data: school } = await supabase.from('schools').select(FEE_SCHOOL_COLUMNS).eq('id', receipt.schoolId).maybeSingle();
+        const pdf = await generateFeeReceiptPDF({
+            school: feeSchool(school),
+            receipt,
+            verifyUrl: receiptVerifyUrl(new URL(request.url).origin, receipt.paymentId),
         });
-
-        return new NextResponse(new Uint8Array(pdfBuffer), {
-            status: 200,
+        return new NextResponse(new Uint8Array(pdf), {
             headers: {
                 'Content-Type': 'application/pdf',
-                'Content-Disposition': `inline; filename="receipt-${payment.receipt_number}.pdf"`,
+                'Content-Disposition': `inline; filename="receipt-${receipt.receiptNumber}.pdf"`,
+                'Cache-Control': 'private, no-store',
             },
         });
     } catch (err: unknown) {

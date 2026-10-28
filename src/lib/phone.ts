@@ -11,3 +11,16 @@ export function normalizeMpesaPhone(phone: string): string | null {
     if (/^[17]\d{8}$/.test(digits)) return `254${digits}`;
     return null;
 }
+
+/**
+ * The ways one Kenyan number is commonly stored (0712…, 254712…, +254712…),
+ * so a parent typed differently on two forms is still one person. Anything
+ * that isn't a Kenyan mobile number is matched only as typed.
+ */
+export function phoneVariants(phone: string): string[] {
+    const trimmed = phone.trim();
+    const intl = normalizeMpesaPhone(trimmed);
+    if (!intl) return [trimmed];
+    const local = `0${intl.slice(3)}`;
+    return [...new Set([trimmed, intl, `+${intl}`, local])];
+}

@@ -9,13 +9,6 @@
 export type FeeStatus = 'PENDING' | 'PARTIAL' | 'PAID' | 'OVERPAID';
 
 /**
- * Roles that may read fee records at all: the admin (principal or bursar) and
- * the learner, limited to their own records by each route. Teachers do not
- * handle fees.
- */
-export const FEE_VIEWER_ROLES: readonly string[] = ['ADMIN', 'STUDENT'];
-
-/**
  * A total_fee of 0 (a full waiver/scholarship) means nothing is owed, so it
  * must resolve to PAID rather than PENDING even though paid_amount is also 0.
  */

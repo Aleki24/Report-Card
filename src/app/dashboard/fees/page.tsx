@@ -2,7 +2,7 @@
 
 import PageHeader from '@/components/dashboard/PageHeader';
 import React, { Suspense, useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import { Plus, Search, Edit3, Trash2, Save, RotateCcw, Wallet, ArrowUpRight, Clock, AlertTriangle, Upload, FileText, CircleDollarSign, History, Download, Ban, Receipt, Layers } from 'lucide-react';
+import { Plus, Search, Edit3, Trash2, Wallet, ArrowUpRight, Clock, AlertTriangle, Upload, FileText, CircleDollarSign, History, Download, Ban, Receipt, Layers, UsersRound, ChartColumn } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api-error-message';
@@ -10,192 +10,49 @@ import { requestJson, jsonBody } from '@/lib/api-error-message';
 import { ConfirmDialog, Modal } from '@/components/ui/Modal';
 import { PageTabs, useUrlTab, type PageTab } from '@/components/ui/PageTabs';
 import { DataTable, LoadError, StatTile, TermSelect, type TermSelectYear } from '@/components/ui';
-import { UnmatchedPaymentsPanel } from '@/components/fees/UnmatchedPaymentsPanel';
-import { humanize } from '@/lib/text';
+import { FeeAccountDrawer } from '@/components/fees/FeeAccountDrawer';
+import { DefaultersPanel } from '@/components/fees/DefaultersPanel';
+import { CollectionsPanel } from '@/components/fees/CollectionsPanel';
+import { BatchEntryPanel } from '@/components/fees/BatchEntryPanel';
+import { PaymentsLogPanel } from '@/components/fees/PaymentsLogPanel';
+import {
+    balanceColor, formatCurrency, methodLabel, statusBadge, timeAgo, todayIso, toStudentOption,
+    type FeeRecord, type PendingConfirm, type StreamOption, type StudentApiRow, type StudentOption, type TermOption,
+} from '@/components/fees/feesShared';
+import Link from 'next/link';
+import { feeReceiptUrl, type FeeAccountLearner, type FeeAccountTerm } from '@/lib/fee-account';
 import { cn } from '@/lib/utils';
 import { findActiveTermId } from '@/lib/term-calendar';
-import { computeFeeStatus, isOverdue, totalOwed, FEE_PAYMENT_METHODS, type FeePayment, type FeePaymentMethod } from '@/lib/fees';
+import { isOverdue, totalOwed, FEE_PAYMENT_METHODS, type FeePayment, type FeePaymentMethod } from '@/lib/fees';
 import { FEATURE_ICONS } from '@/components/ui/featureIcons';
 
-interface FeeRecord {
-    id: string;
-    totalFee: number;
-    paidAmount: number;
-    balance: number;
-    dueDate: string;
-    status: string;
-    notes: string;
-    termId: string | null;
-    termName: string;
-    studentName: string | null;
-    admissionNumber: string | null;
-    studentId: string | null;
-    gradeStreamId: string | null;
-    className: string | null;
-    createdAt: string;
-    updatedAt: string;
-}
 
-interface StudentOption {
-    id: string;
-    name: string;
-    admission: string;
-    gradeStreamId?: string | null;
-    status?: string;
-}
 
-interface TermOption {
-    id: string;
-    name: string;
-    academic_year_id: string | null;
-}
+type FeesMode = 'list' | 'payments' | 'batch' | 'defaulters' | 'collections';
 
-/** Rows of /api/school/data?type=students, as far as this page reads them. */
-interface StudentApiRow {
-    id: string;
-    admission_number: string | null;
-    current_grade_stream_id: string | null;
-    status: string;
-    users: { first_name: string | null; last_name: string | null } | null;
-}
 
-const toStudentOption = (s: StudentApiRow): StudentOption => ({
-    id: s.id,
-    name: `${s.users?.first_name || ''} ${s.users?.last_name || ''}`.trim(),
-    admission: s.admission_number ?? '',
-    gradeStreamId: s.current_grade_stream_id || null,
-    status: s.status,
-});
 
-type FeesMode = 'list' | 'payments' | 'batch';
 
-/** One row of the batch screen. Money already paid is read from the ledger, never typed. */
-interface BatchEntry {
-    total: string;
-    /** New money received now, recorded as a payment on save. */
-    payNow: string;
-    dueDate: string;
-    notes: string;
-    existing: FeeRecord | null;
-}
 
-const emptyBatchEntry = (existing: FeeRecord | null): BatchEntry => ({
-    total: existing ? String(existing.totalFee) : '',
-    payNow: '',
-    dueDate: existing?.dueDate || '',
-    notes: existing?.notes || '',
-    existing,
-});
+const receiptUrl = feeReceiptUrl;
 
-/** Whether the fee part of a row differs from what is saved. */
-const feeChanged = (e: BatchEntry) =>
-    e.total !== '' && (
-        !e.existing
-        || Number(e.total) !== e.existing.totalFee
-        || (e.dueDate || '') !== (e.existing.dueDate || '')
-        || (e.notes || '') !== (e.existing.notes || '')
-    );
 
-const methodLabel = (m: string) => (m === 'MPESA' ? 'M-Pesa' : humanize(m));
-
-interface StreamOption {
-    id: string;
-    full_name: string;
-}
-
-interface PaymentLogRow {
-    id: string;
-    studentFeeId: string | null;
-    receiptNumber: string;
-    amount: number;
-    method: string;
-    status: string;
-    source: 'AUTO' | 'MANUAL';
-    studentName: string | null;
-    admissionNumber: string | null;
-    unmatchedReference: string | null;
-    termId: string | null;
-    termName: string | null;
-    mpesaReceiptNumber: string | null;
-    pesapalConfirmationCode: string | null;
-    notes: string | null;
-    recordedByName: string | null;
-    paidAt: string;
-}
-
-function timeAgo(dateStr: string): string {
-    if (!dateStr) return '';
-    const now = Date.now();
-    const then = new Date(dateStr).getTime();
-    const diff = Math.max(0, now - then);
-    const mins = Math.floor(diff / 60000);
-    if (mins < 1) return 'Just now';
-    if (mins < 60) return `${mins}m ago`;
-    const hrs = Math.floor(mins / 60);
-    if (hrs < 24) return `${hrs}h ago`;
-    const days = Math.floor(hrs / 24);
-    if (days < 30) return `${days}d ago`;
-    return new Date(dateStr).toLocaleDateString('en-GB');
-}
-
-/** Today as YYYY-MM-DD in the viewer's time zone (what a date input shows). */
-function todayIso(): string {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-const receiptUrl = (paymentId: string) => `/api/school/fees/payments/${paymentId}/receipt`;
-
-/** Runs `task` over `items`, at most `limit` at a time. */
-async function runLimited<T>(items: readonly T[], limit: number, task: (item: T) => Promise<void>): Promise<void> {
-    let next = 0;
-    const worker = async () => {
-        while (next < items.length) {
-            const item = items[next++];
-            await task(item);
-        }
-    };
-    await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
-}
-
-/** A destructive action waiting for the user to confirm it. */
-interface PendingConfirm {
-    title: string;
-    message: string;
-    confirmText: string;
-    run: () => Promise<void>;
-}
 
 const FEES_TABS: readonly PageTab<FeesMode>[] = [
     { id: 'list', label: 'Fee records', shortLabel: 'Records', icon: FileText, hue: 'emerald' },
     // The school-wide log exposes every receipt; it is admin-only on the server.
     { id: 'payments', label: 'Payments', icon: Receipt, hue: 'blue' },
     { id: 'batch', label: 'Batch entry', shortLabel: 'Batch', icon: Layers, hue: 'violet' },
+    { id: 'defaulters', label: 'Who owes', icon: UsersRound, hue: 'amber' },
+    { id: 'collections', label: 'Collections', icon: ChartColumn, hue: 'teal' },
 ];
 
-/** Requests in flight at once while a batch saves. */
-const BATCH_CONCURRENCY = 6;
+/** Tabs about the whole school rather than one term's records: no term KPIs over them. */
+const REPORT_MODES: ReadonlySet<FeesMode> = new Set<FeesMode>(['defaulters', 'collections']);
+/** Tabs only finance staff see (school-wide money). */
+const FINANCE_ONLY_MODES: ReadonlySet<FeesMode> = new Set<FeesMode>(['payments', 'defaulters', 'collections']);
 
-function formatCurrency(n: number): string {
-    return `KSh ${n.toLocaleString()}`;
-}
 
-const STATUS_BADGE: Record<string, string> = {
-    PENDING: 'badge-warning',
-    PARTIAL: 'badge-info',
-    PAID: 'badge-success',
-    OVERPAID: 'badge-info',
-    COMPLETED: 'badge-success',
-    FAILED: 'badge-danger',
-    CANCELLED: 'badge-danger',
-};
-
-const statusBadge = (status: string) => (
-    <span className={`badge whitespace-nowrap ${STATUS_BADGE[status] || 'badge-warning'}`}>{humanize(status)}</span>
-);
-
-/** Balance figures: red when owing, green when settled (theme-aware viz tokens). */
-const balanceColor = (balance: number) => (balance > 0 ? 'var(--viz-bad)' : 'var(--viz-good)');
 
 export default function FeesPage() {
     return (
@@ -206,7 +63,7 @@ export default function FeesPage() {
 }
 
 function FeesPageInner() {
-    const { can } = useAuth();
+    const { can, hasModule } = useAuth();
     // Deleting a record and voiding receipts are admin-only on the server.
     // The admin, or staff with a finance duty (bursar, accountant).
     const canViewAll = can('fees.view');
@@ -214,7 +71,7 @@ function FeesPageInner() {
     // Recording payments (and matching unmatched Paybill money) is fees.collect:
     // an accountant can, without billing or editing fee records.
     const canCollect = can('fees.collect');
-    const visibleTabs = useMemo(() => FEES_TABS.filter(t => t.id !== 'payments' || canViewAll), [canViewAll]);
+    const visibleTabs = useMemo(() => FEES_TABS.filter(t => !FINANCE_ONLY_MODES.has(t.id) || canViewAll), [canViewAll]);
     const [mode, selectMode] = useUrlTab(visibleTabs, 'view');
     const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm | null>(null);
     const [confirming, setConfirming] = useState(false);
@@ -244,15 +101,6 @@ function FeesPageInner() {
 
     // Batch entry state
     const [gradeStreams, setGradeStreams] = useState<StreamOption[]>([]);
-    const [batchStream, setBatchStream] = useState('');
-    const [batchTerm, setBatchTerm] = useState('');
-    const [batchStudents, setBatchStudents] = useState<StudentOption[]>([]);
-    const [batchEntries, setBatchEntries] = useState<Record<string, BatchEntry>>({});
-    const [batchMethod, setBatchMethod] = useState<FeePaymentMethod>('CASH');
-    const [bulkFee, setBulkFee] = useState('');
-    const [bulkDue, setBulkDue] = useState('');
-    const [batchSaving, setBatchSaving] = useState(false);
-    const [batchMsg, setBatchMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
     // Record-payment modal
     const [payingFee, setPayingFee] = useState<FeeRecord | null>(null);
@@ -266,26 +114,17 @@ function FeesPageInner() {
     const [paySaving, setPaySaving] = useState(false);
     const [payError, setPayError] = useState('');
 
+    // A learner's whole fee account (every term), opened from their row.
+    const [account, setAccount] = useState<{ studentId: string; name: string | null } | null>(null);
+    const [accountVersion, setAccountVersion] = useState(0);
+
     // Payment history modal
     const [historyFee, setHistoryFee] = useState<FeeRecord | null>(null);
     const [historyPayments, setHistoryPayments] = useState<FeePayment[]>([]);
     const [historyLoading, setHistoryLoading] = useState(false);
 
-    // Payments log (school-wide transactions view)
-    const [paymentsLog, setPaymentsLog] = useState<PaymentLogRow[]>([]);
-    /** How many payments match, when the log shows only the newest of them. */
-    const [paymentsLogTotal, setPaymentsLogTotal] = useState<number | null>(null);
-    const [paymentsLogLoading, setPaymentsLogLoading] = useState(false);
     // Paybill money that could not be matched to a student; assigned on the Payments tab.
     const [unmatchedCount, setUnmatchedCount] = useState(0);
-    const [plSearch, setPlSearch] = useState('');
-    // What the log is actually filtered by: the search box, 300ms after typing stops.
-    const [plSearchQuery, setPlSearchQuery] = useState('');
-    const [plMethod, setPlMethod] = useState('');
-    const [plStatus, setPlStatus] = useState('');
-    const [plSource, setPlSource] = useState('');
-    const [plDateFrom, setPlDateFrom] = useState('');
-    const [plDateTo, setPlDateTo] = useState('');
 
     useEffect(() => {
         if (!canViewAll) return;
@@ -297,10 +136,6 @@ function FeesPageInner() {
         return () => controller.abort();
     }, [canViewAll]);
 
-    useEffect(() => {
-        const timer = window.setTimeout(() => setPlSearchQuery(plSearch.trim()), 300);
-        return () => window.clearTimeout(timer);
-    }, [plSearch]);
 
     // Only the latest request may fill the list: an earlier, slower one (all
     // terms, or the previous term) landing last showed another term's records
@@ -532,6 +367,17 @@ function FeesPageInner() {
         setPayError('');
     };
 
+    /** Pay a term picked in the fee account, which may not be the term on screen. */
+    const payFromAccount = (term: FeeAccountTerm, learner: FeeAccountLearner) => {
+        const onScreen = fees.find(f => f.id === term.feeId);
+        openPay(onScreen ?? {
+            id: term.feeId, totalFee: term.billed, paidAmount: term.paid, balance: term.balance, dueDate: term.dueDate ?? '',
+            status: term.status, notes: term.notes ?? '', termId: term.termId, termName: term.termName,
+            studentName: learner.name, admissionNumber: learner.admissionNumber, studentId: learner.id,
+            gradeStreamId: null, className: learner.className, createdAt: '', updatedAt: '',
+        });
+    };
+
     const submitPayment = async () => {
         if (!payingFee) return;
         const amountValue = parseFloat(payAmount);
@@ -570,6 +416,7 @@ function FeesPageInner() {
                 duration: 10000,
             });
             setPayingFee(null);
+            setAccountVersion(v => v + 1);
             await fetchFees();
         } catch (err) {
             console.error('Record payment failed:', err);
@@ -600,212 +447,7 @@ function FeesPageInner() {
         confirmVoid(payment, fee.id, () => Promise.all([openHistory(fee), fetchFees()]));
     };
 
-    // ── Payments log (school-wide transactions view) ──
 
-    const fetchPaymentsLog = useCallback(async () => {
-        setPaymentsLogLoading(true);
-        try {
-            const params = new URLSearchParams();
-            if (selectedTerm) params.set('term_id', selectedTerm);
-            if (plMethod) params.set('method', plMethod);
-            if (plStatus) params.set('status', plStatus);
-            if (plSource) params.set('source', plSource);
-            if (plDateFrom) params.set('date_from', plDateFrom);
-            if (plDateTo) params.set('date_to', plDateTo);
-            if (plSearchQuery) params.set('search', plSearchQuery);
-            const res = await fetch(`/api/school/fees/payments?${params}`);
-            const json: { data?: PaymentLogRow[]; total?: number; truncated?: boolean; error?: string } = await res.json();
-            if (!res.ok) throw new Error(json.error || 'Could not load payments.');
-            setPaymentsLog(json.data ?? []);
-            setPaymentsLogTotal(json.truncated ? json.total ?? null : null);
-        } catch (err) {
-            console.error('Failed to load payments log:', err);
-            setPaymentsLog([]);
-            setPaymentsLogTotal(null);
-            toast.error(err instanceof Error ? err.message : 'Could not load payments.');
-        }
-        setPaymentsLogLoading(false);
-    }, [selectedTerm, plMethod, plStatus, plSource, plDateFrom, plDateTo, plSearchQuery]);
-
-    useEffect(() => {
-        if (mode === 'payments') fetchPaymentsLog();
-    }, [mode, fetchPaymentsLog]);
-
-
-    // Unmatched payments have no fee to void against; they are assigned from
-    // Settings > Payments, and the log offers no void button for them.
-    const voidLogPayment = (payment: PaymentLogRow) => {
-        if (!payment.studentFeeId) return;
-        confirmVoid(payment, payment.studentFeeId, () => Promise.all([fetchPaymentsLog(), fetchFees()]));
-    };
-
-    const exportPaymentsLog = () => {
-        const params = new URLSearchParams();
-        if (selectedTerm) params.set('term_id', selectedTerm);
-        if (plMethod) params.set('method', plMethod);
-        if (plStatus) params.set('status', plStatus);
-        if (plSource) params.set('source', plSource);
-        if (plDateFrom) params.set('date_from', plDateFrom);
-        if (plDateTo) params.set('date_to', plDateTo);
-        // The same rows as on screen: the search used to be left out.
-        if (plSearchQuery) params.set('search', plSearchQuery);
-        window.location.href = `/api/school/fees/payments/export?${params}`;
-    };
-
-    // ── Batch entry ──
-
-    // Only the latest class/term load may fill the sheet: a slower earlier
-    // response must not overwrite it.
-    const batchLoadRef = useRef(0);
-    const loadBatchStudents = useCallback(async () => {
-        if (!batchStream || !batchTerm) return;
-        const requestId = ++batchLoadRef.current;
-        try {
-            const [res, feeRes] = await Promise.all([
-                fetch(`/api/school/data?type=students&grade_stream_id=${encodeURIComponent(batchStream)}`, { cache: 'no-store' }),
-                fetch(`/api/school/fees?term_id=${encodeURIComponent(batchTerm)}`, { cache: 'no-store' }),
-            ]);
-            if (requestId !== batchLoadRef.current) return;
-            // A failed fees read would show every learner as not billed yet,
-            // and saving would then bill them again.
-            if (!res.ok || !feeRes.ok) {
-                setBatchStudents([]);
-                setBatchEntries({});
-                setBatchMsg({ type: 'error', text: 'Could not load this class and its fees. Try again.' });
-                return;
-            }
-            const json: { data?: StudentApiRow[] } = await res.json();
-            const feeJson: { data?: FeeRecord[] } = await feeRes.json();
-            if (requestId !== batchLoadRef.current) return;
-            const mapped = (json.data || [])
-                .filter(s => !s.status || s.status === 'ACTIVE')
-                .map(toStudentOption)
-                .sort((a, b) => a.name.localeCompare(b.name));
-            // Matched by student id: admission numbers are optional.
-            const byStudent = new Map((feeJson.data || []).filter(f => f.studentId).map(f => [f.studentId as string, f]));
-            setBatchStudents(mapped);
-            setBatchEntries(Object.fromEntries(mapped.map(s => [s.id, emptyBatchEntry(byStudent.get(s.id) ?? null)])));
-        } catch (err) {
-            if (requestId !== batchLoadRef.current) return;
-            console.error('Failed to load batch students:', err);
-            setBatchMsg({ type: 'error', text: 'Failed to load students.' });
-        }
-    }, [batchStream, batchTerm]);
-
-    useEffect(() => {
-        if (mode === 'batch' && batchStream && batchTerm) {
-            setBatchMsg(null);
-            loadBatchStudents();
-        }
-    }, [mode, batchStream, batchTerm, loadBatchStudents]);
-
-    const updateBatchEntry = (studentId: string, field: 'total' | 'payNow' | 'dueDate' | 'notes', value: string) => {
-        setBatchEntries(prev => ({
-            ...prev,
-            [studentId]: { ...prev[studentId], [field]: value },
-        }));
-    };
-
-    const applyToAll = (field: 'total' | 'dueDate', value: string) => {
-        if (!value) return;
-        setBatchEntries(prev => Object.fromEntries(Object.entries(prev).map(([id, e]) => [id, { ...e, [field]: value }])));
-    };
-
-    const batchChanges = useMemo(() => {
-        const rows = Object.values(batchEntries);
-        const fees = rows.filter(feeChanged).length;
-        const payments = rows.filter(e => Number(e.payNow) > 0);
-        return { fees, payments: payments.length, paymentTotal: payments.reduce((sum, e) => sum + Number(e.payNow), 0) };
-    }, [batchEntries]);
-
-    const saveBatch = async () => {
-        setBatchSaving(true);
-        setBatchMsg(null);
-        const errors: string[] = [];
-        let savedFees = 0;
-        let savedPayments = 0;
-        const nameOf = (id: string) => batchStudents.find(s => s.id === id)?.name || 'A student';
-
-        // A few at a time: a class of fifty used to send up to a hundred requests at once.
-        await runLimited(Object.entries(batchEntries), BATCH_CONCURRENCY, async ([studentId, entry]) => {
-            const payNow = Number(entry.payNow) || 0;
-            const saveFee = feeChanged(entry);
-            if (!saveFee && payNow <= 0) return;
-
-            const total = Number(entry.total);
-            if (entry.total !== '' && (isNaN(total) || total < 0)) {
-                errors.push(`${nameOf(studentId)}: the fee must be 0 or more`);
-                return;
-            }
-            if (payNow < 0) {
-                errors.push(`${nameOf(studentId)}: a payment can't be negative. Void a receipt from Payment history instead.`);
-                return;
-            }
-
-            let feeId = entry.existing?.id ?? null;
-            if (saveFee) {
-                try {
-                    const res = await fetch('/api/school/fees', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ student_id: studentId, term_id: batchTerm, total_fee: total, due_date: entry.dueDate || null, notes: entry.notes || null }),
-                    });
-                    const body: { data?: { id: string }; error?: string } = await res.json();
-                    if (!res.ok || !body.data) {
-                        errors.push(`${nameOf(studentId)}: ${body.error || 'fee not saved'}`);
-                        return;
-                    }
-                    feeId = body.data.id;
-                    savedFees++;
-                } catch {
-                    errors.push(`${nameOf(studentId)}: fee not saved`);
-                    return;
-                }
-            }
-
-            if (payNow > 0) {
-                if (!feeId) {
-                    errors.push(`${nameOf(studentId)}: set a fee before recording a payment`);
-                    return;
-                }
-                try {
-                    const res = await fetch(`/api/school/fees/${feeId}/payments`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ amount: payNow, method: batchMethod, notes: 'Batch entry' }),
-                    });
-                    if (!res.ok) {
-                        const body: { error?: string } = await res.json().catch(() => ({}));
-                        errors.push(`${nameOf(studentId)}: payment not recorded (${body.error || res.status})`);
-                        return;
-                    }
-                    savedPayments++;
-                } catch {
-                    errors.push(`${nameOf(studentId)}: payment not recorded`);
-                }
-            }
-        });
-
-        // Always reload: rows that did save now have a new "paid so far", and a
-        // stale screen is what let a second save record the same money twice.
-        await Promise.all([fetchFees(), loadBatchStudents()]);
-        setBatchSaving(false);
-
-        const summary = `${savedFees} fee record(s) saved, ${savedPayments} payment(s) recorded.`;
-        setBatchMsg(errors.length === 0
-            ? { type: 'success', text: summary }
-            : { type: 'error', text: `${summary} ${errors.length} problem(s): ${errors.slice(0, 4).join('; ')}${errors.length > 4 ? '…' : ''}` });
-    };
-
-    const clearBatch = () => {
-        setBulkFee('');
-        setBulkDue('');
-        setBatchEntries({});
-        setBatchStudents([]);
-        setBatchMsg(null);
-        setBatchStream('');
-        setBatchTerm('');
-    };
 
     const exportExcel = () => {
         const params = new URLSearchParams();
@@ -816,9 +458,7 @@ function FeesPageInner() {
     };
 
     function changeMode(next: FeesMode) {
-        if (next === mode) return;
-        if (mode === 'batch') clearBatch();
-        selectMode(next);
+        if (next !== mode) selectMode(next);
     }
 
     return (
@@ -841,11 +481,11 @@ function FeesPageInner() {
                             emptyLabel="All terms"
                         />
                     </label>
-                    {mode !== 'batch' && (
+                    {mode === 'list' && (
                         <button
                             className="btn-secondary h-11"
-                            onClick={mode === 'payments' ? exportPaymentsLog : exportExcel}
-                            title={mode === 'payments' ? 'Export the payments log to Excel' : 'Export the current view to Excel'}
+                            onClick={exportExcel}
+                            title="Export the current view to Excel"
                         >
                             <Download className="size-4" aria-hidden="true" />Export
                         </button>
@@ -882,6 +522,16 @@ function FeesPageInner() {
                 </div>
             )}
 
+            {/* Fee structures and invoicing, and the payment channels, live on their own pages. */}
+            {canManageFees && (
+                <nav aria-label="Fee setup" className="-mt-1 mb-4 flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                    {hasModule('fee_structures') && <Link href="/dashboard/billing" className="font-medium text-primary hover:underline">Fee structures, invoicing &amp; bursaries →</Link>}
+                    <Link href="/dashboard/settings?tab=payments" className="font-medium text-primary hover:underline">M-Pesa, Pesapal &amp; bank accounts →</Link>
+                    {hasModule('parent_portal') && <Link href="/dashboard/parent-accounts?tab=class" className="font-medium text-primary hover:underline">Link parents for a class →</Link>}
+                </nav>
+            )}
+
+            {!REPORT_MODES.has(mode) && (<>
             {/* ── KPI Cards ── */}
             <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
                 <StatTile icon={Wallet} hue="blue" label="Expected" value={feesError ? '—' : formatCurrency(kpi.expected)} hint={feesError ? undefined : `${kpi.records} record${kpi.records === 1 ? '' : 's'}${streamFilter ? ` · ${gradeStreams.find(g => g.id === streamFilter)?.full_name ?? 'this class'}` : ''}`} />
@@ -910,281 +560,37 @@ function FeesPageInner() {
                 </div>
             </div>
 
+            </>)}
+
             <div role="tabpanel" id="fees-panel" aria-labelledby={`fees-tab-${mode}`}>
+            {mode === 'defaulters' && (
+                <DefaultersPanel
+                    streams={gradeStreams}
+                    termId={selectedTerm}
+                    canRemind={canManageFees}
+                    onOpenAccount={(studentId, name) => setAccount({ studentId, name })}
+                />
+            )}
+            {mode === 'collections' && <CollectionsPanel />}
+
             {/* ════════════════════════════════════════════ */}
             {/* BATCH ENTRY MODE                           */}
             {/* ════════════════════════════════════════════ */}
-            {mode === 'batch' && (
-                <div>
-                    <div className="mb-4 rounded-2xl border border-border/70 bg-card p-4 shadow-sm sm:p-5">
-                        <h2 className="font-semibold">Batch fee entry</h2>
-                        <p className="mt-0.5 mb-4 text-xs text-muted-foreground">
-                            Pick a class and term, set each student&apos;s fee, and enter any money received now. Payments already on record are shown, not re-entered.
-                        </p>
-                        <div className="grid gap-3 md:grid-cols-2">
-                            <div>
-                                <label htmlFor="batch-class" className="mb-2 block text-xs font-medium text-muted-foreground">Class</label>
-                                <select id="batch-class" className="input-field w-full" value={batchStream} onChange={e => setBatchStream(e.target.value)}>
-                                    <option value="">Select class…</option>
-                                    {gradeStreams.map(gs => <option key={gs.id} value={gs.id}>{gs.full_name}</option>)}
-                                </select>
-                            </div>
-                            <div>
-                                <label htmlFor="batch-term" className="mb-2 block text-xs font-medium text-muted-foreground">Term</label>
-                                <TermSelect id="batch-term" terms={terms} years={years} value={batchTerm} onChange={setBatchTerm} emptyLabel="Select term…" />
-                            </div>
-                        </div>
-
-                        {batchStream && batchTerm && batchStudents.length > 0 && (
-                            <div className={cn('mt-4 grid gap-3 border-t border-border/60 pt-4', canManageFees && 'md:grid-cols-3')}>
-                                {canManageFees && (<>
-                                <div>
-                                    <label htmlFor="bulk-fee" className="mb-2 block text-xs font-medium text-muted-foreground">Same fee for everyone (KSh)</label>
-                                    <div className="flex gap-2">
-                                        <input id="bulk-fee" type="number" inputMode="decimal" min="0" step="0.01" className="input-field min-w-0 flex-1" placeholder="e.g. 45000" value={bulkFee} onChange={e => setBulkFee(e.target.value)} />
-                                        <button type="button" className="btn-secondary h-11 shrink-0" onClick={() => applyToAll('total', bulkFee)} disabled={!bulkFee}>Apply</button>
-                                    </div>
-                                </div>
-                                <div>
-                                    <label htmlFor="bulk-due" className="mb-2 block text-xs font-medium text-muted-foreground">Same due date for everyone</label>
-                                    <div className="flex gap-2">
-                                        <input id="bulk-due" type="date" className="input-field min-w-0 flex-1" value={bulkDue} onChange={e => setBulkDue(e.target.value)} />
-                                        <button type="button" className="btn-secondary h-11 shrink-0" onClick={() => applyToAll('dueDate', bulkDue)} disabled={!bulkDue}>Apply</button>
-                                    </div>
-                                </div>
-                                </>)}
-                                <div>
-                                    <label htmlFor="batch-method" className="mb-2 block text-xs font-medium text-muted-foreground">Payments below were received by</label>
-                                    <select id="batch-method" className="input-field w-full" value={batchMethod} onChange={e => setBatchMethod(e.target.value as FeePaymentMethod)}>
-                                        {FEE_PAYMENT_METHODS.filter(m => m !== 'PESAPAL').map(m => <option key={m} value={m}>{methodLabel(m)}</option>)}
-                                    </select>
-                                </div>
-                            </div>
-                        )}
-
-                        {batchMsg && (
-                            <div role={batchMsg.type === 'error' ? 'alert' : 'status'} className={cn('mt-4 rounded-xl border p-3 text-sm', batchMsg.type === 'success' ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400' : 'border-destructive/30 bg-destructive/5 text-destructive')}>
-                                {batchMsg.text}
-                            </div>
-                        )}
-                    </div>
-
-                    {!batchStream || !batchTerm ? (
-                        <div className="rounded-2xl border border-dashed border-border py-12 text-center text-sm text-muted-foreground">
-                            Choose a class and a term to load its students.
-                        </div>
-                    ) : batchStudents.length === 0 ? (
-                        <div className="rounded-2xl border border-dashed border-border py-12 text-center text-sm text-muted-foreground">
-                            No active students in this class.
-                        </div>
-                    ) : (
-                        <>
-                            <div className="overflow-hidden rounded-2xl border border-border/70 bg-card">
-                                <div className="w-full overflow-x-auto">
-                                    <table className="data-table">
-                                        <thead>
-                                            <tr>
-                                                <th className="min-w-44">Student</th>
-                                                <th className="min-w-32">Fee (KSh)</th>
-                                                <th className="min-w-28 text-right">Paid so far</th>
-                                                <th className="min-w-32">Payment now (KSh)</th>
-                                                <th className="min-w-28 text-right">Balance after</th>
-                                                <th className="min-w-36">Due date</th>
-                                                <th className="min-w-32">Notes</th>
-                                                <th>Status</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {batchStudents.map(s => {
-                                                const entry = batchEntries[s.id];
-                                                if (!entry) return null;
-                                                const hasTotal = entry.total !== '';
-                                                const total = Number(entry.total) || 0;
-                                                const paidSoFar = entry.existing?.paidAmount ?? 0;
-                                                const paidAfter = paidSoFar + (Number(entry.payNow) || 0);
-                                                const balance = total - paidAfter;
-                                                const dirty = feeChanged(entry) || Number(entry.payNow) > 0;
-                                                return (
-                                                    <tr key={s.id} className={cn(dirty && 'bg-primary/[0.04]')}>
-                                                        <td data-label="Student">
-                                                            <div className="font-semibold">{s.name}</div>
-                                                            <div className="text-[11px] text-muted-foreground">{s.admission || 'No admission no.'}{entry.existing ? '' : ' · not billed yet'}</div>
-                                                        </td>
-                                                        <td data-label="Fee (KSh)">
-                                                            <input type="number" inputMode="decimal" min="0" step="0.01" className="input-field input-field-sm w-full min-w-24" placeholder="0" aria-label={`Fee for ${s.name}`} value={entry.total} onChange={e => updateBatchEntry(s.id, 'total', e.target.value)} disabled={!canManageFees} />
-                                                        </td>
-                                                        <td data-label="Paid so far" className="text-right tabular-nums text-muted-foreground">{paidSoFar.toLocaleString()}</td>
-                                                        <td data-label="Payment now">
-                                                            <input type="number" inputMode="decimal" min="0" step="0.01" className="input-field input-field-sm w-full min-w-24" placeholder="0" aria-label={`Payment received now for ${s.name}`} value={entry.payNow} onChange={e => updateBatchEntry(s.id, 'payNow', e.target.value)} disabled={!canManageFees && !entry.existing} title={!canManageFees && !entry.existing ? 'Not billed yet: the bursar or an admin sets the fee first' : undefined} />
-                                                        </td>
-                                                        <td data-label="Balance after" className="text-right font-mono font-semibold tabular-nums" style={{ color: hasTotal ? balanceColor(balance) : undefined }}>
-                                                            {hasTotal ? balance.toLocaleString() : '—'}
-                                                        </td>
-                                                        <td data-label="Due date">
-                                                            <input type="date" className="input-field input-field-sm min-w-32" aria-label={`Due date for ${s.name}`} value={entry.dueDate} onChange={e => updateBatchEntry(s.id, 'dueDate', e.target.value)} disabled={!canManageFees} />
-                                                        </td>
-                                                        <td data-label="Notes">
-                                                            <input type="text" className="input-field input-field-sm w-full min-w-24" placeholder="Notes" aria-label={`Notes for ${s.name}`} value={entry.notes} onChange={e => updateBatchEntry(s.id, 'notes', e.target.value)} disabled={!canManageFees} />
-                                                        </td>
-                                                        <td data-label="Status">{hasTotal ? statusBadge(computeFeeStatus(total, paidAfter)) : '—'}</td>
-                                                    </tr>
-                                                );
-                                            })}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-
-                            {/* Sticky save bar: the table can be long, the button must stay reachable. */}
-                            <div className="sticky bottom-20 z-10 mt-4 flex flex-col gap-3 rounded-2xl border border-border/70 bg-card/95 p-3 shadow-lg backdrop-blur sm:flex-row sm:items-center sm:justify-between md:bottom-4">
-                                <p className="text-sm text-muted-foreground" aria-live="polite">
-                                    {batchChanges.fees === 0 && batchChanges.payments === 0
-                                        ? 'No changes yet.'
-                                        : `${batchChanges.fees} fee change(s) · ${batchChanges.payments} payment(s) totalling ${formatCurrency(batchChanges.paymentTotal)}`}
-                                </p>
-                                <div className="grid grid-cols-2 gap-2">
-                                    <button className="btn-secondary" onClick={loadBatchStudents} disabled={batchSaving}>
-                                        <RotateCcw className="size-4" aria-hidden="true" />Discard
-                                    </button>
-                                    <button className="btn-primary" onClick={saveBatch} disabled={batchSaving || (batchChanges.fees === 0 && batchChanges.payments === 0)}>
-                                        <Save className="size-4" aria-hidden="true" />{batchSaving ? 'Saving…' : 'Save all'}
-                                    </button>
-                                </div>
-                            </div>
-                        </>
-                    )}
-                </div>
-            )}
+            {mode === 'batch' && <BatchEntryPanel streams={gradeStreams} terms={terms} years={years} canManageFees={canManageFees} onSaved={fetchFees} />}
 
             {/* ════════════════════════════════════════════ */}
             {/* PAYMENTS LOG (school-wide transactions)       */}
             {/* ════════════════════════════════════════════ */}
             {mode === 'payments' && (
-                <div>
-                    {unmatchedCount > 0 && (
-                        <div className="mb-4">
-                            <UnmatchedPaymentsPanel
-                                canAssign={canCollect}
-                                onCountChange={setUnmatchedCount}
-                                // The money is now on the learner's record: refresh what shows it.
-                                onAssigned={() => void Promise.all([fetchFees(), fetchPaymentsLog()])}
-                            />
-                        </div>
-                    )}
-                    <section aria-label="Payment filters" className="mb-4 rounded-2xl border border-border/70 bg-card p-3 shadow-sm sm:p-4">
-                        <div className="relative">
-                            <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-                            <input
-                                type="text"
-                                placeholder="Search student, admission no. or receipt"
-                                aria-label="Search payments"
-                                value={plSearch}
-                                onChange={e => setPlSearch(e.target.value)}
-                                className="input-field input-icon-left w-full"
-                            />
-                        </div>
-                        <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-5">
-                            <select className="input-field" aria-label="Payment method" value={plMethod} onChange={e => setPlMethod(e.target.value)}>
-                                <option value="">All methods</option>
-                                {FEE_PAYMENT_METHODS.map(m => <option key={m} value={m}>{methodLabel(m)}</option>)}
-                            </select>
-                            <select className="input-field" aria-label="Payment source" value={plSource} onChange={e => setPlSource(e.target.value)}>
-                                <option value="">Auto &amp; manual</option>
-                                <option value="AUTO">Auto only</option>
-                                <option value="MANUAL">Manual only</option>
-                            </select>
-                            <select className="input-field col-span-2 md:col-span-1" aria-label="Payment status" value={plStatus} onChange={e => setPlStatus(e.target.value)}>
-                                <option value="">All statuses</option>
-                                <option value="COMPLETED">Completed</option>
-                                <option value="PENDING">Pending</option>
-                                <option value="FAILED">Failed</option>
-                                <option value="CANCELLED">Cancelled</option>
-                            </select>
-                            <label className="relative">
-                                <span className="pointer-events-none absolute -top-2 left-3 bg-card px-1 text-[10px] font-medium text-muted-foreground">From</span>
-                                <input type="date" className="input-field w-full" value={plDateFrom} onChange={e => setPlDateFrom(e.target.value)} aria-label="Paid from" />
-                            </label>
-                            <label className="relative">
-                                <span className="pointer-events-none absolute -top-2 left-3 bg-card px-1 text-[10px] font-medium text-muted-foreground">To</span>
-                                <input type="date" className="input-field w-full" value={plDateTo} min={plDateFrom || undefined} onChange={e => setPlDateTo(e.target.value)} aria-label="Paid to" />
-                            </label>
-                        </div>
-                    </section>
-
-                    {paymentsLogTotal !== null && (
-                        <p role="status" className="mb-3 rounded-xl border border-border/70 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-                            Showing the newest {paymentsLog.length.toLocaleString()} of {paymentsLogTotal.toLocaleString()} payments. Narrow the dates or search, or export to Excel for all of them.
-                        </p>
-                    )}
-                    <DataTable<PaymentLogRow>
-                        columns={[
-                            {
-                                key: 'paidAt', header: 'Date',
-                                render: p => <span className="text-xs text-muted-foreground">{new Date(p.paidAt).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>,
-                            },
-                            {
-                                key: 'student', header: 'Student',
-                                render: p => (
-                                    <div>
-                                        <div className="font-semibold text-sm">{p.studentName || (p.unmatchedReference ? `Unmatched (${p.unmatchedReference})` : '—')}</div>
-                                        <div className="text-[11px] text-muted-foreground">{p.admissionNumber || ''} {p.termName ? `· ${p.termName}` : ''}</div>
-                                    </div>
-                                ),
-                            },
-                            { key: 'receiptNumber', header: 'Receipt', render: p => <span className="font-mono text-xs">{p.receiptNumber}</span> },
-                            { key: 'amount', header: 'Amount', numeric: true, render: p => <span className="font-semibold">{formatCurrency(p.amount)}</span> },
-                            {
-                                key: 'method', header: 'Method',
-                                render: p => <span>{methodLabel(p.method)}</span>,
-                            },
-                            {
-                                key: 'transactionCode', header: 'Transaction Code', hideOnMobile: true,
-                                render: p => <span className="font-mono text-xs">{p.mpesaReceiptNumber || p.pesapalConfirmationCode || '—'}</span>,
-                            },
-                            {
-                                key: 'source', header: 'Source', hideOnMobile: true,
-                                render: p => (
-                                    <span className={`badge whitespace-nowrap ${p.source === 'AUTO' ? 'badge-success' : 'badge-info'}`}>
-                                        {p.source === 'AUTO' ? 'Auto' : 'Manual'}
-                                    </span>
-                                ),
-                            },
-                            {
-                                key: 'status', header: 'Status',
-                                render: p => statusBadge(p.status),
-                            },
-                            {
-                                key: 'recordedBy', header: 'Recorded By', hideOnMobile: true,
-                                render: p => <span className="text-xs text-muted-foreground">{p.recordedByName || (p.source === 'AUTO' ? 'System' : '—')}</span>,
-                            },
-                        ]}
-                        rows={paymentsLog}
-                        rowKey={p => p.id}
-                        loading={paymentsLogLoading}
-                        mobileTitleKey="student"
-                        rowActions={p => (
-                            <span className="inline-flex items-center gap-1 whitespace-nowrap">
-                                {p.status !== 'CANCELLED' && (
-                                    <a
-                                        className="btn-icon text-muted-foreground hover:text-foreground"
-                                        href={receiptUrl(p.id)}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        title="Download Receipt"
-                                    >
-                                        <Receipt size={14} />
-                                    </a>
-                                )}
-                                {canManageFees && p.status === 'COMPLETED' && p.studentFeeId && (
-                                    <button className="btn-icon text-destructive/80 hover:text-destructive" onClick={() => voidLogPayment(p)} title="Void Payment">
-                                        <Ban size={14} />
-                                    </button>
-                                )}
-                            </span>
-                        )}
-                        emptyState={<p className="py-6 text-sm">No payments match these filters.</p>}
-                    />
-                </div>
+                <PaymentsLogPanel
+                    termId={selectedTerm}
+                    canCollect={canCollect}
+                    canVoid={canManageFees}
+                    unmatchedCount={unmatchedCount}
+                    onUnmatchedCountChange={setUnmatchedCount}
+                    onChanged={fetchFees}
+                    confirmVoid={confirmVoid}
+                />
             )}
 
             {/* ════════════════════════════════════════════ */}
@@ -1314,7 +720,7 @@ function FeesPageInner() {
                             ]}
                             rows={filtered}
                             rowKey={fee => fee.id}
-                            onRowClick={openHistory}
+                            onRowClick={fee => { if (fee.studentId) setAccount({ studentId: fee.studentId, name: fee.studentName }); }}
                             rowActions={fee => (
                                 <span className="inline-flex items-center gap-1 whitespace-nowrap">
                                     <button className="btn-primary h-8 rounded-lg px-3 text-xs" onClick={() => openPay(fee)} title="Record a payment" aria-label={`Record payment for ${fee.studentName ?? 'student'}`}><CircleDollarSign className="size-3.5" aria-hidden="true" />Pay</button>
@@ -1396,6 +802,16 @@ function FeesPageInner() {
                             </div>
                         </div>
                     </Modal>
+
+                    {/* ── A learner's account; before Record payment so that dialog opens over it ── */}
+                    <FeeAccountDrawer
+                        studentId={account?.studentId ?? null}
+                        studentName={account?.name}
+                        onClose={() => setAccount(null)}
+                        onRecordPayment={canCollect ? payFromAccount : undefined}
+                        version={accountVersion}
+                        canLinkParents={can('school.manage')}
+                    />
 
                     {/* ── Record Payment ── */}
                     <Modal
@@ -1510,7 +926,7 @@ function FeesPageInner() {
                                                               {statusBadge(p.status)}
                                                           </td>
                                                           <td data-label="" className="whitespace-nowrap text-right">
-                                                              {p.status !== 'CANCELLED' && (
+                                                              {p.status === 'COMPLETED' && (
                                                                   <>
                                                                       <a
                                                                           className="btn-icon text-muted-foreground hover:text-foreground"

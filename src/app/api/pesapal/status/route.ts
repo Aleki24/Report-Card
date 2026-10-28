@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { internalError } from '@/lib/api-errors';
 import { auth } from '@clerk/nextjs/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
-import { getActiveUserProfile } from '@/lib/auth-server';
+import { canViewStudentFees, getActiveUserProfile } from '@/lib/auth-server';
+import { getAccess } from '@/lib/platform/access';
 
 /** Polled by the client after redirecting to Pesapal checkout, until the IPN resolves it. */
 export async function GET(request: NextRequest) {
@@ -30,7 +31,11 @@ export async function GET(request: NextRequest) {
         if (!payment || payment.school_id !== userProfile.school_id) {
             return NextResponse.json({ error: 'Not found' }, { status: 404 });
         }
-        if (userProfile.role === 'STUDENT' && (payment.student_fees as any)?.student_id !== userId) {
+        // Only someone who may see the learner's fees can follow the payment.
+        const access = await getAccess();
+        const studentId = (payment.student_fees as { student_id?: string } | { student_id?: string }[] | null);
+        const owner = Array.isArray(studentId) ? studentId[0]?.student_id : studentId?.student_id;
+        if (!access || !owner || !(await canViewStudentFees(access, owner))) {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
 

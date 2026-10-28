@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { HeartHandshake, Trash2, UserPlus } from 'lucide-react';
+import { HeartHandshake, Trash2, UserPlus, Users } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { FormField, FormGrid, InputField, SelectField } from '@/components/ui/FormField';
 import DataTable from '@/components/ui/DataTable';
@@ -15,6 +15,7 @@ import {
     type GuardianLink as Link, type ParentLinkResult,
 } from '@/lib/ops/forms/platform';
 import { FEATURE_ICONS } from '@/components/ui/featureIcons';
+import { ClassParentsSheet } from '@/components/people/ClassParentsSheet';
 
 /** Link parents to learners; new parents get an invite code by SMS. */
 function ParentLinks() {
@@ -93,7 +94,10 @@ export default function ParentAccountsPage() {
             description="Give parents their own sign-in to follow each of their children."
             icon={FEATURE_ICONS.parents}
             hue="rose"
-            tabs={[{ id: 'links', label: 'Parents', icon: HeartHandshake, hue: 'rose', render: () => <ParentLinks /> }]}
+            tabs={[
+                { id: 'links', label: 'Parents', icon: HeartHandshake, hue: 'rose', render: () => <ParentLinks /> },
+                { id: 'class', label: 'Whole class', icon: Users, hue: 'violet', render: () => <ClassParentsSheet /> },
+            ]}
         />
     );
 }

@@ -1,192 +1,158 @@
 import React from 'react';
-import { Document, Page, View, Text, Image, StyleSheet } from '@react-pdf/renderer';
-import { FONT_STACKS } from './pdfFonts';
+import { Document, Page, View, Text, StyleSheet } from '@react-pdf/renderer';
+import { amountInWords, balanceState, formatKsh, methodLabel } from '../fee-account';
+import type { FeeReceiptRecord } from '../fee-receipt-server';
+import {
+    FEE_ACCENT, FEE_FONT, FEE_GOOD, FEE_INK, FEE_MUTED, FEE_RULE, FEE_TINT, FEE_WARN,
+    FeeField, FeeFooter, FeeLetterhead, docDateTime, type FeeSchool,
+} from './fees/FeeDocParts';
 
-const INK = '#111111';
-const GRAY = '#555555';
-const LIGHT = '#8A8A8A';
-const RULE = '#D8D8D8';
-const GOOD = '#0F7A3D';
+const INSET = 30;
 
 const s = StyleSheet.create({
-    page: { paddingHorizontal: 44, paddingTop: 36, paddingBottom: 36, fontFamily: FONT_STACKS.helvetica },
+    page: { padding: INSET, paddingBottom: INSET + 54, fontFamily: FEE_FONT, color: FEE_INK },
+    fields: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 12 },
 
-    letterhead: { alignItems: 'center', marginBottom: 10 },
-    logo: { width: 40, height: 40, objectFit: 'contain', marginBottom: 6 },
-    schoolName: { fontSize: 15, fontFamily: FONT_STACKS.helvetica, fontWeight: 700, color: INK, textAlign: 'center' },
-    schoolAddress: { fontSize: 8, color: GRAY, marginTop: 2, textAlign: 'center' },
+    amount: { marginTop: 2, marginBottom: 12, padding: 12, borderRadius: 8, backgroundColor: '#ECFDF5', border: '0.75pt solid #A7F3D0' },
+    amountRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
+    amountLabel: { fontSize: 6.5, fontWeight: 700, color: FEE_GOOD, textTransform: 'uppercase', letterSpacing: 1 },
+    amountValue: { fontSize: 22, fontWeight: 800, color: FEE_GOOD, marginTop: 2, letterSpacing: -0.4 },
+    amountWords: { fontSize: 7.5, color: FEE_MUTED, marginTop: 4 },
+    method: { fontSize: 8, fontWeight: 600, color: FEE_INK, textAlign: 'right' },
+    methodSub: { fontSize: 7, color: FEE_MUTED, textAlign: 'right', marginTop: 1.5 },
 
-    titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, marginBottom: 4 },
-    docTitle: { fontSize: 12, fontFamily: FONT_STACKS.helvetica, fontWeight: 700, color: INK, textTransform: 'uppercase', letterSpacing: 1.5 },
-    receiptNo: { fontSize: 10, fontFamily: FONT_STACKS.helvetica, fontWeight: 700, color: INK },
-    doubleRule: { borderBottom: `2pt solid ${INK}`, marginBottom: 14 },
+    heading: { fontSize: 6.5, fontWeight: 700, color: FEE_ACCENT, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 },
+    table: { border: `0.75pt solid ${FEE_RULE}`, borderRadius: 4, marginBottom: 12 },
+    row: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4, paddingHorizontal: 8, borderBottom: `0.5pt solid ${FEE_RULE}` },
+    rowLast: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4, paddingHorizontal: 8 },
+    rowStrong: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5, paddingHorizontal: 8, backgroundColor: FEE_TINT, borderTop: `0.75pt solid ${FEE_INK}` },
+    cell: { fontSize: 8 },
+    cellMuted: { fontSize: 8, color: FEE_MUTED },
+    cellStrong: { fontSize: 8.5, fontWeight: 800 },
 
-    row: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-    col: { width: '48%' },
-    label: { fontSize: 7.5, fontFamily: FONT_STACKS.helvetica, fontWeight: 700, color: GRAY, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 },
-    value: { fontSize: 10, color: INK },
-
-    amountBox: { marginTop: 18, marginBottom: 18, padding: 14, borderRadius: 6, backgroundColor: '#F3F7F4', borderWidth: 1, borderColor: '#D9E6DC', alignItems: 'center' },
-    amountLabel: { fontSize: 8, fontFamily: FONT_STACKS.helvetica, fontWeight: 700, color: GRAY, textTransform: 'uppercase', letterSpacing: 1 },
-    amountValue: { fontSize: 22, fontFamily: FONT_STACKS.helvetica, fontWeight: 700, color: GOOD, marginTop: 4 },
-    amountWords: { fontSize: 8, color: GRAY, marginTop: 4, textAlign: 'center' },
-
-    summaryTable: { borderTop: `1pt solid ${INK}`, borderBottom: `1pt solid ${INK}`, paddingVertical: 8, marginBottom: 18 },
-    summaryRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 3 },
-    summaryLabel: { fontSize: 9, color: GRAY },
-    summaryValue: { fontSize: 9, fontFamily: FONT_STACKS.helvetica, fontWeight: 700, color: INK },
-
-    sigRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 30 },
-    sigBlock: { width: '45%', alignItems: 'center' },
-    sigLine: { borderBottom: `0.75pt solid ${INK}`, height: 24, width: '100%', marginBottom: 3 },
-    sigLabel: { fontSize: 7.5, color: GRAY },
-
-    footer: { marginTop: 'auto', paddingTop: 10, borderTop: `0.5pt solid ${RULE}`, alignItems: 'center' },
-    footerText: { fontSize: 6.5, color: LIGHT, marginBottom: 1.5 },
+    signRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 16, marginTop: 6 },
+    sign: { flex: 1 },
+    signLine: { borderBottom: `0.75pt solid ${FEE_INK}`, height: 20, marginBottom: 3 },
+    signLabel: { fontSize: 6.5, color: FEE_MUTED },
+    void: { position: 'absolute', top: 220, left: 40, right: 40, textAlign: 'center', fontSize: 64, fontWeight: 800, color: '#DC2626', opacity: 0.18, transform: 'rotate(-24deg)' },
 });
 
-const METHOD_LABELS: Record<string, string> = {
-    MPESA: 'M-Pesa',
-    CASH: 'Cash',
-    BANK: 'Bank Transfer',
-    CHEQUE: 'Cheque',
-    OTHER: 'Other',
-};
-
 export interface FeeReceiptData {
-    schoolName: string;
-    schoolLogoUrl?: string;
-    schoolAddress?: string;
-    receiptNumber: string;
-    paidAt: string;
-    studentName: string;
-    admissionNumber: string;
-    className?: string;
-    termName?: string;
-    amount: number;
-    method: string;
-    mpesaReceiptNumber?: string | null;
-    payerName?: string | null;
-    phoneNumber?: string | null;
-    notes?: string | null;
-    recordedByName?: string | null;
-    totalFee: number;
-    totalPaidToDate: number;
-    balance: number;
+    school: FeeSchool;
+    receipt: FeeReceiptRecord;
+    /** The QR that opens the public check of this receipt. */
+    qrDataUri: string | null;
+    /** Where the QR leads, printed for anyone without a camera. */
+    verifyUrl: string;
 }
 
-function formatKES(n: number): string {
-    return `KSh ${n.toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+function balanceText(balance: number): string {
+    const state = balanceState(balance);
+    if (state === 'credit') return `${formatKsh(-balance)} credit`;
+    if (state === 'clear') return 'Cleared';
+    return formatKsh(balance);
 }
+
+const tone = (balance: number) => (balanceState(balance) === 'owing' ? FEE_WARN : FEE_GOOD);
 
 export function FeeReceiptDocument({ data }: { data: FeeReceiptData }) {
-    const paidAtLabel = new Date(data.paidAt).toLocaleString('en-GB', {
-        day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
-    });
-
+    const { school, receipt: r } = data;
+    const arrears = Math.round((r.accountBalance - r.termBalance) * 100) / 100;
     return (
-        <Document>
+        <Document title={`Receipt ${r.receiptNumber}`} author={school.name}>
             <Page size="A5" style={s.page}>
-                <View style={s.letterhead}>
-                    {data.schoolLogoUrl && <Image src={data.schoolLogoUrl} style={s.logo} />}
-                    <Text style={s.schoolName}>{data.schoolName}</Text>
-                    {data.schoolAddress && <Text style={s.schoolAddress}>{data.schoolAddress}</Text>}
+                <FeeLetterhead school={school} title="Official receipt" meta={`No. ${r.receiptNumber}`} sub={docDateTime(r.paidAt)} />
+
+                <View style={s.fields}>
+                    <FeeField label="Received from" value={r.payerName || 'Parent / guardian'} width="50%" />
+                    <FeeField label="For learner" value={r.learner.name} width="50%" />
+                    <FeeField label="Admission no." value={r.learner.admissionNumber || '—'} width="33%" />
+                    <FeeField label="Class" value={r.learner.className || '—'} width="33%" />
+                    <FeeField label="Term" value={`${r.termName}${r.yearName ? ` ${r.yearName}` : ''}`} width="34%" />
                 </View>
 
-                <View style={s.titleRow}>
-                    <Text style={s.docTitle}>Payment Receipt</Text>
-                    <Text style={s.receiptNo}>{data.receiptNumber}</Text>
-                </View>
-                <View style={s.doubleRule} />
-
-                <View style={s.row}>
-                    <View style={s.col}>
-                        <Text style={s.label}>Student</Text>
-                        <Text style={s.value}>{data.studentName}</Text>
-                    </View>
-                    <View style={s.col}>
-                        <Text style={s.label}>Admission No.</Text>
-                        <Text style={s.value}>{data.admissionNumber}</Text>
-                    </View>
-                </View>
-                <View style={s.row}>
-                    <View style={s.col}>
-                        <Text style={s.label}>Class</Text>
-                        <Text style={s.value}>{data.className || '—'}</Text>
-                    </View>
-                    <View style={s.col}>
-                        <Text style={s.label}>Term</Text>
-                        <Text style={s.value}>{data.termName || '—'}</Text>
-                    </View>
-                </View>
-                <View style={s.row}>
-                    <View style={s.col}>
-                        <Text style={s.label}>Date Received</Text>
-                        <Text style={s.value}>{paidAtLabel}</Text>
-                    </View>
-                    <View style={s.col}>
-                        <Text style={s.label}>Payment Method</Text>
-                        <Text style={s.value}>
-                            {METHOD_LABELS[data.method] || data.method}
-                            {data.mpesaReceiptNumber ? ` — ${data.mpesaReceiptNumber}` : ''}
-                        </Text>
-                    </View>
-                </View>
-                {(data.payerName || data.phoneNumber) && (
-                    <View style={s.row}>
-                        <View style={s.col}>
-                            <Text style={s.label}>Paid By</Text>
-                            <Text style={s.value}>{data.payerName || '—'}</Text>
+                <View style={s.amount}>
+                    <View style={s.amountRow}>
+                        <View>
+                            <Text style={s.amountLabel}>Amount received</Text>
+                            <Text style={s.amountValue}>{formatKsh(r.amount)}</Text>
                         </View>
-                        <View style={s.col}>
-                            <Text style={s.label}>Phone</Text>
-                            <Text style={s.value}>{data.phoneNumber || '—'}</Text>
+                        <View>
+                            <Text style={s.method}>{methodLabel(r.method)}</Text>
+                            {r.reference ? <Text style={s.methodSub}>{r.reference}</Text> : null}
+                            {r.phoneNumber ? <Text style={s.methodSub}>{r.phoneNumber}</Text> : null}
                         </View>
                     </View>
-                )}
-
-                <View style={s.amountBox}>
-                    <Text style={s.amountLabel}>Amount Received</Text>
-                    <Text style={s.amountValue}>{formatKES(data.amount)}</Text>
+                    <Text style={s.amountWords}>{amountInWords(r.amount)}</Text>
                 </View>
 
-                <View style={s.summaryTable}>
-                    <View style={s.summaryRow}>
-                        <Text style={s.summaryLabel}>Total Fee for Term</Text>
-                        <Text style={s.summaryValue}>{formatKES(data.totalFee)}</Text>
+                {r.allocation.length > 0 ? (
+                    <View wrap={false}>
+                        <Text style={s.heading}>This payment paid for</Text>
+                        <View style={s.table}>
+                            {r.allocation.map((a, i) => (
+                                <View key={a.description} style={i === r.allocation.length - 1 ? s.rowLast : s.row}>
+                                    <Text style={s.cellMuted}>{a.description}</Text>
+                                    <Text style={s.cell}>{formatKsh(a.amount)}</Text>
+                                </View>
+                            ))}
+                        </View>
                     </View>
-                    <View style={s.summaryRow}>
-                        <Text style={s.summaryLabel}>Total Paid to Date</Text>
-                        <Text style={s.summaryValue}>{formatKES(data.totalPaidToDate)}</Text>
-                    </View>
-                    <View style={s.summaryRow}>
-                        <Text style={s.summaryLabel}>Balance Remaining</Text>
-                        <Text style={s.summaryValue}>{formatKES(data.balance)}</Text>
+                ) : null}
+
+                <View wrap={false}>
+                    <Text style={s.heading}>Account after this payment</Text>
+                    <View style={s.table}>
+                        <View style={s.row}>
+                            <Text style={s.cellMuted}>{r.termName} fees</Text>
+                            <Text style={s.cell}>{formatKsh(r.termBilled)}</Text>
+                        </View>
+                        <View style={s.row}>
+                            <Text style={s.cellMuted}>Paid this term to date</Text>
+                            <Text style={[s.cell, { color: FEE_GOOD }]}>{formatKsh(r.termPaidToDate)}</Text>
+                        </View>
+                        <View style={arrears !== 0 ? s.row : s.rowLast}>
+                            <Text style={s.cellMuted}>{r.termName} balance</Text>
+                            <Text style={[s.cell, { color: tone(r.termBalance) }]}>{balanceText(r.termBalance)}</Text>
+                        </View>
+                        {arrears !== 0 ? (
+                            <View style={s.rowLast}>
+                                <Text style={s.cellMuted}>{arrears > 0 ? 'Arrears from earlier terms' : 'Credit from earlier terms'}</Text>
+                                <Text style={s.cell}>{balanceText(arrears)}</Text>
+                            </View>
+                        ) : null}
+                        <View style={s.rowStrong}>
+                            <Text style={s.cellStrong}>{balanceState(r.accountBalance) === 'credit' ? 'In credit' : 'Total balance due'}</Text>
+                            <Text style={[s.cellStrong, { color: tone(r.accountBalance) }]}>{balanceText(r.accountBalance)}</Text>
+                        </View>
                     </View>
                 </View>
 
-                {data.notes && (
-                    <View style={{ marginBottom: 14 }}>
-                        <Text style={s.label}>Notes</Text>
-                        <Text style={s.value}>{data.notes}</Text>
-                    </View>
-                )}
+                {r.notes ? <Text style={[s.cellMuted, { fontSize: 7.5, marginBottom: 10 }]}>Note: {r.notes}</Text> : null}
 
-                <View style={s.sigRow}>
-                    <View style={s.sigBlock}>
-                        <View style={s.sigLine} />
-                        <Text style={s.sigLabel}>{data.recordedByName || 'Bursar / Accounts'}</Text>
+                <View style={s.signRow} wrap={false}>
+                    <View style={s.sign}>
+                        <View style={s.signLine} />
+                        <Text style={s.signLabel}>Received by{r.recordedByName ? `: ${r.recordedByName}` : ' (bursar / accounts)'}</Text>
                     </View>
-                    <View style={s.sigBlock}>
-                        <View style={s.sigLine} />
-                        <Text style={s.sigLabel}>Official Stamp</Text>
+                    <View style={s.sign}>
+                        <View style={s.signLine} />
+                        <Text style={s.signLabel}>School stamp</Text>
                     </View>
                 </View>
 
-                <View style={s.footer}>
-                    <Text style={s.footerText}>This is a system-generated receipt and is valid without a physical signature.</Text>
-                    <Text style={s.footerText}>Generated by {data.schoolName} — Report Card</Text>
-                </View>
+                {r.status !== 'COMPLETED' ? <Text style={s.void} fixed>VOID</Text> : null}
+
+                <FeeFooter
+                    inset={INSET}
+                    qrDataUri={data.qrDataUri}
+                    lines={[
+                        'Official receipt produced by the school’s system; valid without a signature.',
+                        'Scan the code to check it is genuine, or open:',
+                        data.verifyUrl,
+                        `${school.name}${school.phone ? ` · ${school.phone}` : ''} · Skulbase`,
+                    ]}
+                />
             </Page>
         </Document>
     );
