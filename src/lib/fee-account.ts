@@ -229,3 +229,9 @@ export interface FeeReminderSummary {
     sent: number;
     failed: number;
 }
+
+/** GET /api/school/fees/accounts/[studentId]: the account, and how to pay it. */
+export interface FeeAccountResponse extends FeeAccount {
+    /** Paybill (the admission number as account) and bank accounts, as printed on statements. */
+    howToPay: string[];
+}
