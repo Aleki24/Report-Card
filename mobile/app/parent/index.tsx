@@ -4,7 +4,7 @@ import { Pressable, ScrollView, Text, View } from 'react-native';
 import { MODULES } from '@shared/platform/modules';
 import { date, dateTime, humanize, money, personName } from '@shared/ops/format';
 import {
-    ATTENDANCE_TONES, FEE_STATUS_TONES, absences, balanceLine, feeBalance, reportTermLabel, rideLine,
+    ATTENDANCE_TONES, absences, feeBalance, reportTermLabel, rideLine,
     type ChildLink, type ChildOverview,
 } from '@shared/ops/forms/platform';
 import { Bus, CalendarCheck, CalendarDays, GraduationCap, Users, Wallet } from 'lucide-react-native';
@@ -12,8 +12,10 @@ import { EmptyState, ErrorBanner, LoadingView, Screen } from '@/components/ui';
 import { HeroFrame } from '@/components/dashboard/Hero';
 import { InsightCard, KpiGrid, KpiTile, LegendItem, Meter, PressScale, Reveal } from '@/components/dashboard/kit';
 import { initials, scoreColor } from '@/lib/format';
-import { StatusPill } from '@/components/ops/bits';
 import { useOpsData } from '@/lib/ops';
+import { useApiQuery } from '@/lib/useApiQuery';
+import { ChildFees } from '@/components/fees/ChildFees';
+import type { PaymentSettingsStatus } from '@/lib/types';
 import { useCurrentUser } from '@/lib/UserContext';
 import { radius, spacing, fonts, makeStyles, useTheme } from '@/lib/theme';
 
@@ -47,7 +49,7 @@ function toneKey(tone: string): 'success' | 'warning' | 'info' | 'danger' | 'mut
 }
 
 /** One child: results, fees, report cards, attendance, events, the bus and notices. */
-function Overview({ childId }: { childId: string }) {
+function Overview({ childId, provider }: { childId: string; provider: PaymentSettingsStatus['provider'] }) {
     const { colors } = useTheme();
     const styles = useStyles();
     const { data, loading, error, reload } = useOpsData<ChildOverview>(`/api/parent/children/${childId}`);
@@ -103,13 +105,7 @@ function Overview({ childId }: { childId: string }) {
 
                 {data.fees.length > 0 ? (
                     <InsightCard title="Fees">
-                        {data.fees.map((f, n) => (
-                            <View key={f.id} style={[styles.row, n > 0 && styles.rowBorder]}>
-                                <Text style={[styles.title, { flex: 1 }]}>{f.term?.name ?? 'Term'}</Text>
-                                <Text style={styles.body}>{balanceLine(Number(f.total_fee) - Number(f.paid_amount))}</Text>
-                                <StatusPill status={f.status} tones={FEE_STATUS_TONES} />
-                            </View>
-                        ))}
+                        <ChildFees studentId={childId} provider={provider} onPaid={() => void reload()} />
                     </InsightCard>
                 ) : null}
 
@@ -176,10 +172,13 @@ export default function ParentHomeScreen() {
     const styles = useStyles();
     const { hasModule, role, profile } = useCurrentUser();
     const { data: children, loading, error, reload } = useOpsData<ChildLink[]>('/api/parent/children');
+    // Which online payment the school takes, for every child's Pay buttons.
+    const settings = useApiQuery<PaymentSettingsStatus>('/api/school/payment-settings/status');
     const [active, setActive] = useState<string | null>(null);
     const [signal, setSignal] = useState(0);
     const linked = (children ?? []).filter((c): c is ChildLink & { student: NonNullable<ChildLink['student']> } => c.student !== null);
     const current = active ?? linked[0]?.student.id ?? null;
+    const familyOwed = linked.reduce((sum, c) => sum + Math.max(0, c.balance ?? 0), 0);
 
     if (!hasModule('parent_portal')) {
         return (
@@ -190,7 +189,7 @@ export default function ParentHomeScreen() {
     }
 
     return (
-        <HomeScreen onRefresh={() => { void reload(); setSignal((n) => n + 1); }} refreshing={false}>
+        <HomeScreen onRefresh={() => { void reload(); settings.refresh(); setSignal((n) => n + 1); }} refreshing={false}>
             <Reveal index={0}>
                 <HeroFrame name={profile?.first_name ?? ''} gradient={scheme === 'dark' ? PARENT_HERO_DARK : PARENT_HERO}>
                     <Text style={styles.heroLine}>Results, fees, attendance, the bus and school news for {linked.length === 1 ? personName(linked[0].student.user) : 'each of your children'}.</Text>
@@ -206,12 +205,15 @@ export default function ParentHomeScreen() {
                                         </View>
                                         <View>
                                             <Text style={styles.childName} numberOfLines={1}>{name.split(' ')[0]}</Text>
-                                            <Text style={styles.childClass} numberOfLines={1}>{c.student.stream?.full_name}</Text>
+                                            <Text style={styles.childClass} numberOfLines={1}>{c.student.stream?.full_name}{c.balance && c.balance > 0 ? ` · owes ${money(c.balance)}` : ''}</Text>
                                         </View>
                                     </PressScale>
                                 );
                             })}
                         </ScrollView>
+                    ) : null}
+                    {linked.length > 1 && familyOwed > 0 ? (
+                        <Text style={styles.family}>Family fee balance: <Text style={{ fontFamily: fonts.bold }}>{money(familyOwed)}</Text> across {linked.length} children</Text>
                     ) : null}
                 </HeroFrame>
             </Reveal>
@@ -221,7 +223,7 @@ export default function ParentHomeScreen() {
                 <EmptyState icon={Users} title="No children linked yet" description="Ask the school to link your account to your child." />
             ) : current ? (
                 <View style={{ marginTop: spacing.md }}>
-                    <Overview key={`${current}-${signal}`} childId={current} />
+                    <Overview key={`${current}-${signal}`} childId={current} provider={settings.data?.provider ?? 'NONE'} />
                 </View>
             ) : null}
             <View style={{ height: 1, backgroundColor: colors.background }} />
@@ -251,4 +253,5 @@ const useStyles = makeStyles((colors) => ({
     childInitials: { fontSize: 13, fontFamily: fonts.bold, color: '#ffffff' },
     childName: { fontSize: 13, fontFamily: fonts.bold, color: '#ffffff' },
     childClass: { fontSize: 11, fontFamily: fonts.regular, color: 'rgba(255,255,255,0.8)' },
+    family: { fontSize: 13, fontFamily: fonts.medium, color: '#ffffff', marginTop: spacing.md },
 }));
