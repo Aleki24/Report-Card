@@ -4,7 +4,6 @@
  */
 import type { PersonName } from '../resource';
 import type { PillTone } from '../tones';
-import { money } from '../format';
 import { MODULES, type ModuleKey, type ModulePresetId } from '../../platform/modules';
 import type { DutyKey, ScopeType } from '../../platform/permissions';
 
@@ -53,11 +52,8 @@ export interface ChildOverview {
     bus: { status: string; last_seen_at: string | null; vehicle: { registration: string } | null; boarded: string | null } | null;
 }
 
-export const FEE_STATUS_TONES: Record<string, PillTone> = { PENDING: 'warn', PARTIAL: 'info', PAID: 'good', OVERPAID: 'violet' };
 export const ATTENDANCE_TONES: Record<string, PillTone> = { present: 'good', absent: 'bad', late: 'warn', excused: 'info' };
 
-/** A term's balance in words: an overpaid term is credit, not a negative amount owed. */
-export const balanceLine = (balance: number) => (balance < 0 ? `${money(-balance)} credit` : `${money(balance)} owed`);
 /** What the parent owes for the child: every term, owed only (an overpaid term doesn't hide arrears). */
 export const feeBalance = (o: ChildOverview) =>
     o.feeOwed ?? o.fees.reduce((n, f) => n + Math.max(0, Number(f.total_fee) - Number(f.paid_amount)), 0);
