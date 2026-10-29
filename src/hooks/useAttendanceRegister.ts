@@ -186,3 +186,6 @@ export function useAttendanceRegister() {
     loadStreams,
   };
 }
+
+/** The register's state and actions, as `useAttendanceRegister` returns them. */
+export type AttendanceRegister = ReturnType<typeof useAttendanceRegister>;
