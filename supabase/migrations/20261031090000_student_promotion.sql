@@ -15,19 +15,20 @@
 --
 -- One live run per school per academic year; an undone run frees the year.
 -- Server-only: RLS on, no policies, functions for the service role only.
+-- User and student ids are text (Clerk ids such as user_…), not uuid.
 
 CREATE TABLE IF NOT EXISTS public.student_promotion_runs (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     school_id uuid NOT NULL REFERENCES public.schools(id) ON DELETE CASCADE,
     academic_year_id uuid NOT NULL REFERENCES public.academic_years(id) ON DELETE CASCADE,
-    run_by uuid REFERENCES public.users(id) ON DELETE SET NULL,
+    run_by text REFERENCES public.users(id) ON DELETE SET NULL,
     promoted integer NOT NULL DEFAULT 0,
     repeated integer NOT NULL DEFAULT 0,
     graduated integer NOT NULL DEFAULT 0,
     transferred integer NOT NULL DEFAULT 0,
     created_at timestamptz NOT NULL DEFAULT now(),
     undone_at timestamptz,
-    undone_by uuid REFERENCES public.users(id) ON DELETE SET NULL
+    undone_by text REFERENCES public.users(id) ON DELETE SET NULL
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS uq_student_promotion_runs_live
@@ -39,7 +40,7 @@ CREATE TABLE IF NOT EXISTS public.student_promotions (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     run_id uuid NOT NULL REFERENCES public.student_promotion_runs(id) ON DELETE CASCADE,
     school_id uuid NOT NULL REFERENCES public.schools(id) ON DELETE CASCADE,
-    student_id uuid NOT NULL REFERENCES public.students(id) ON DELETE CASCADE,
+    student_id text NOT NULL REFERENCES public.students(id) ON DELETE CASCADE,
     outcome text NOT NULL CHECK (outcome IN ('PROMOTE', 'REPEAT', 'GRADUATE', 'TRANSFER')),
     from_stream_id uuid NOT NULL REFERENCES public.grade_streams(id) ON DELETE CASCADE,
     to_stream_id uuid REFERENCES public.grade_streams(id) ON DELETE CASCADE,
@@ -64,7 +65,7 @@ REVOKE ALL ON public.student_promotions FROM anon, authenticated;
 CREATE OR REPLACE FUNCTION public.run_student_promotion(
     p_school_id uuid,
     p_academic_year_id uuid,
-    p_actor uuid,
+    p_actor text,
     p_decisions jsonb
 ) RETURNS uuid
     LANGUAGE plpgsql
@@ -82,7 +83,7 @@ BEGIN
     IF to_regclass('pg_temp._decisions') IS NOT NULL THEN DROP TABLE pg_temp._decisions; END IF;
     CREATE TEMP TABLE _decisions ON COMMIT DROP AS
         SELECT d.student_id, d.from_stream_id, d.to_stream_id, d.outcome
-        FROM jsonb_to_recordset(p_decisions) AS d(student_id uuid, from_stream_id uuid, to_stream_id uuid, outcome text);
+        FROM jsonb_to_recordset(p_decisions) AS d(student_id text, from_stream_id uuid, to_stream_id uuid, outcome text);
 
     SELECT count(*), count(DISTINCT student_id) INTO v_wanted, v_matched FROM _decisions;
     IF v_wanted = 0 OR v_wanted <> v_matched THEN
@@ -142,7 +143,7 @@ $$;
 -- Undoes the school's latest live run: each learner goes back to the class
 -- and status they had before it. A learner changed since (moved by hand,
 -- re-admitted) is left alone and counted as skipped.
-CREATE OR REPLACE FUNCTION public.undo_student_promotion(p_school_id uuid, p_run_id uuid, p_actor uuid)
+CREATE OR REPLACE FUNCTION public.undo_student_promotion(p_school_id uuid, p_run_id uuid, p_actor text)
 RETURNS TABLE (restored integer, skipped integer)
     LANGUAGE plpgsql
     SET search_path = public
@@ -182,7 +183,7 @@ BEGIN
 END;
 $$;
 
-REVOKE EXECUTE ON FUNCTION public.run_student_promotion(uuid, uuid, uuid, jsonb) FROM public, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.undo_student_promotion(uuid, uuid, uuid) FROM public, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.run_student_promotion(uuid, uuid, uuid, jsonb) TO service_role;
-GRANT EXECUTE ON FUNCTION public.undo_student_promotion(uuid, uuid, uuid) TO service_role;
+REVOKE EXECUTE ON FUNCTION public.run_student_promotion(uuid, uuid, text, jsonb) FROM public, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.undo_student_promotion(uuid, uuid, text) FROM public, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.run_student_promotion(uuid, uuid, text, jsonb) TO service_role;
+GRANT EXECUTE ON FUNCTION public.undo_student_promotion(uuid, uuid, text) TO service_role;

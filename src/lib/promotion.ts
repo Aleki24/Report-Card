@@ -139,7 +139,8 @@ export function defaultTargetStream(from: StreamLike, nextStreams: readonly Stre
 // ── The plan ────────────────────────────────────────────────────────────
 
 export const decisionSchema = z.object({
-    student_id: z.guid(),
+    // Clerk ids (user_…) as well as uuids.
+    student_id: z.string().trim().min(1).max(64),
     from_stream_id: z.guid(),
     outcome: z.enum(PROMOTION_OUTCOMES),
     to_stream_id: z.guid().nullable(),
