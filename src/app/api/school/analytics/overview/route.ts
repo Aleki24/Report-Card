@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { auth } from '@clerk/nextjs/server';
-import { getSchoolPassMark } from '@/lib/pass-mark';
+import { getSchoolPassMark } from '@/lib/pass-mark-server';
 import { getActiveUserProfile } from '@/lib/auth-server';
 import { isUuid } from '@/lib/postgrest';
 

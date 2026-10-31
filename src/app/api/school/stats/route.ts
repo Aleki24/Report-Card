@@ -3,7 +3,7 @@ import { getCaller } from '@/lib/auth-server';
 import type { UserRole } from '@/types';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { aggregateStudentPerformance, isKCSEGradeLevel, rankingBasisFor, type ExamMarkWithDetails } from '@/lib/analytics';
-import { getSchoolPassMark } from '@/lib/pass-mark';
+import { getSchoolPassMark } from '@/lib/pass-mark-server';
 import { fetchAllRows } from '@/lib/postgrest';
 import { findActiveTermId } from '@/lib/term-calendar';
 import { getTeacherPermissions, isExamVisibleToTeacher } from '@/lib/teacher-utils';

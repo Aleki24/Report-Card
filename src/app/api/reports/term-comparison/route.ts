@@ -3,7 +3,7 @@ import { authorizeClassReport } from '@/lib/reports/report-access';
 import { termBelongsToSchool } from '@/lib/tenant-scope';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { internalError } from '@/lib/api-errors';
-import { getSchoolPassMark } from '@/lib/pass-mark';
+import { getSchoolPassMark } from '@/lib/pass-mark-server';
 
 export const runtime = 'nodejs';
 
