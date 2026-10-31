@@ -138,6 +138,28 @@ Invite Codes**, to hand each person their activation code in person:
 - Served by `GET /api/admin/invite-codes/pdf` (admin-only, school-scoped;
   params `category`, `status`, `format`).
 
+### Promoting students at the end of the year
+
+**Classes → Promote students** closes the current academic year for the whole
+school in one step. Each grade the school teaches takes one of three paths
+(`src/lib/promotion.ts`):
+
+- **Moves up**: the next grade is taught here, so learners move to its class
+  of the same stream name (7 East → 8 East), or a class the admin picks.
+- **Decide each learner** (Grade 9 → Senior School): learners are placed
+  nationally, so staying is never assumed. Only a school with a Grade 10
+  class can keep anyone; each learner is marked as staying (and given a
+  Grade 10 class) or leaving, and leavers are archived as graduated. A school
+  without Grade 10 archives every Grade 9.
+- **Candidates**: the last grade (Grade 12, Form 4), or one whose next grade
+  the school doesn't teach. Learners graduate and are archived.
+
+Any learner can instead repeat or be marked as transferred out. The plan is
+applied in one transaction (`run_student_promotion`), once per academic year,
+and can be undone (`undo_student_promotion`); learners edited by hand since are
+left alone. Archived learners keep their last class and lose any unused
+activation code.
+
 ### SMS notifications
 
 Attendance and results notifications are sent to parents via
