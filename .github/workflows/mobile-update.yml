@@ -1,22 +1,17 @@
 name: Mobile update
 
-# Every change to the phone app that reaches main goes out over the air
-# (EAS Update), so installed apps stay current without a new APK. The app
-# also imports the web's src/lib and src/types (`@shared/*`), so changes
-# there ship too. Native changes still need a new build: the fingerprint
+# Publishes the phone app over the air (EAS Update) to the preview and
+# production apps, so installed apps get changes without a new APK. Run it
+# by hand for now: Actions → Mobile update → Run workflow. To publish on
+# every merge instead, add back a `push` trigger on main for 'mobile/**',
+# 'src/lib/**' and 'src/types/**' (the app imports the last two as
+# `@shared/*`). Native changes still need a new build: the fingerprint
 # runtime policy (app.json) keeps an update off any build it would not run on.
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'mobile/**'
-      - 'src/lib/**'
-      - 'src/types/**'
-      - '.github/workflows/mobile-update.yml'
   workflow_dispatch:
 
-# One publish at a time, in order; a newer push waits rather than racing.
+# One publish at a time, in order; a second run waits rather than racing.
 concurrency:
   group: mobile-update
   cancel-in-progress: false

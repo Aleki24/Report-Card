@@ -1,31 +1,34 @@
 # Shipping app changes
 
 Most changes (screens, text, logic, styles, images) reach phones as an
-**over-the-air update**, with no new APK, and this now happens by itself:
+**over-the-air update**, with no new APK.
 
-- **On merge to `main`**, `.github/workflows/mobile-update.yml` type-checks
-  the app and publishes an update to both the `preview` and `production`
-  channels. It runs when anything under `mobile/` changes, or the web's
-  `src/lib/` or `src/types/` (the app imports them as `@shared/*`). It can
-  also be run by hand from the Actions tab (*Mobile update → Run workflow*).
-  It needs an `EXPO_TOKEN` repository secret (expo.dev → Account settings →
-  Access tokens).
-- **On the phone** (`lib/useLiveUpdates.ts`), the app checks at launch and
-  each time it comes back to the foreground (at most every 15 minutes), and
-  downloads quietly. An update found while the app is in use is offered with
-  a *Restart now* toast; otherwise it opens at the next start, or as soon as
-  someone returns after 5 minutes or more away. Profile → *Check for
-  updates* still fetches one on demand.
-
-Pull requests type-check the app in CI (`ci.yml`, job `mobile`), so a change
-that would break phones fails before it can merge.
-
-To publish by hand (e.g. from a branch for testing):
+**Publishing** is done by hand for now. From your computer:
 
 ```sh
 cd mobile
 npx eas-cli update --channel preview --environment preview --message "What changed"
+npx eas-cli update --channel production --environment production --message "What changed"
 ```
+
+The first goes to the preview (internal APK) app, the second to the Play
+Store app. Or, once an `EXPO_TOKEN` repository secret is set (expo.dev →
+Account settings → Access tokens), run *Actions → Mobile update → Run
+workflow* on GitHub, which type-checks the app and publishes to both. To
+publish on every merge instead, add a `push` trigger to
+`.github/workflows/mobile-update.yml` (its header says which paths).
+
+**On the phone**, people update themselves; the app never restarts on its
+own (`lib/useLiveUpdates.ts`):
+
+- It checks at launch and each time it comes back to the foreground (at most
+  every 15 minutes), and downloads a new update quietly.
+- It then offers it with a *Restart now* toast. Without that, the update
+  opens the next time the app is started.
+- Profile → *Check for updates* fetches and opens the latest at any time.
+
+Pull requests type-check the app in CI (`ci.yml`, job `mobile`), so a change
+that would break phones fails before it can merge.
 
 A **new build** is needed only when native code changes: adding or upgrading
 a package with native parts (camera, maps, notifications…), or changing
