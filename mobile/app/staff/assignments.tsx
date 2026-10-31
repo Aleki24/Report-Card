@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useLocalSearchParams } from 'expo-router';
 import { DateField } from '@/components/DateField';
 import { Pressable, Text, View } from 'react-native';
-import { ClipboardList, FileText, Paperclip, Upload, X } from 'lucide-react-native';
+import { ClipboardList, FileText, Paperclip, Upload, X, Plus } from 'lucide-react-native';
 import { FormSheet } from '@/components/ops/FormSheet';
 import { useToast } from '@/components/Toast';
 import { useCurrentUser } from '@/lib/UserContext';
@@ -82,7 +82,7 @@ function AssignmentsContent() {
             <ScreenHeader
                 title="Assignments"
                 description="Set homework for a class, attach worksheets, and grade what learners hand in."
-                action={tab === 'list' ? <Button size="sm" label="+ New" onPress={startDraft} /> : undefined}
+                action={tab === 'list' ? <Button size="sm" icon={Plus} label="New" onPress={startDraft} /> : undefined}
             />
             <SegmentedTabs
                 tabs={[
@@ -214,7 +214,7 @@ function AssignmentList({ draft, setDraft, startDraft }: { draft: Draft | null; 
                     icon={ClipboardList}
                     title={view === 'past' ? 'Nothing past due' : view === 'mine' ? 'You have not set any assignments' : 'No upcoming assignments'}
                     description="Set homework for a class; learners see it on their home screen and can hand work in."
-                    action={<Button label="+ New assignment" onPress={startDraft} />}
+                    action={<Button icon={Plus} label="New assignment" onPress={startDraft} />}
                 />
             ) : shown.map((a) => {
                 const due = getDueLabel(a.dueDate);

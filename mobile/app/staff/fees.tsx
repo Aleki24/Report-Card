@@ -1,6 +1,7 @@
 import { useDownload } from '@/lib/useDownload';
 import { DateField } from '@/components/DateField';
 import React, { useMemo, useState } from 'react';
+import { Plus } from 'lucide-react-native';
 import { Text, View } from 'react-native';
 import { useApi, withQuery } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
@@ -145,7 +146,7 @@ function Balances() {
             ) : (
                 <ButtonRow>
                     <Button variant="secondary" label="Export" onPress={exportXlsx} loading={exporting} />
-                    {can('fees.manage') ? <Button label="+ Bill learners" onPress={() => setBilling(true)} /> : null}
+                    {can('fees.manage') ? <Button icon={Plus} label="Bill learners" onPress={() => setBilling(true)} /> : null}
                 </ButtonRow>
             )}
 

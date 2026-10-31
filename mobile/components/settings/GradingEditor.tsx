@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Plus } from 'lucide-react-native';
 import { Text, View } from 'react-native';
 import { editRow, firstRow, gradingSystemPayload, nextRowFrom, type DraftRow, type SystemKind } from '@shared/grading/draft';
 import { Button, ButtonRow, Card, ChipSelect, ErrorBanner, TextField, ToggleRow } from '@/components/ui';
@@ -82,7 +83,7 @@ export function NewGradingSystemSheet({ levels, subjects, onClose, onSaved }: {
                     {rows.length > 1 ? <ButtonRow><Button size="sm" variant="ghost" label="Remove row" onPress={() => setRows((prev) => prev.filter((_, j) => j !== i))} /></ButtonRow> : null}
                 </Card>
             ))}
-            <Button size="sm" variant="secondary" label="+ Add grade" onPress={() => setRows((prev) => [...prev, nextRowFrom(prev[prev.length - 1])])} />
+            <Button size="sm" variant="secondary" icon={Plus} label="Add grade" onPress={() => setRows((prev) => [...prev, nextRowFrom(prev[prev.length - 1])])} />
 
             {!isOverall && levelId ? (
                 <View style={{ marginTop: spacing.md }}>

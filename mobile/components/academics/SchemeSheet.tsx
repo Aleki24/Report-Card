@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { Plus } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { personName } from '@shared/ops/format';
 import {
@@ -169,7 +170,7 @@ export function SchemeSheet({ schemeId, canReview, userId, onClose, onChanged }:
                         );
                     })}
                     {scheme.editable ? (
-                        <Button variant="secondary" size="sm" label="+ Add lesson" onPress={() => { setEntries((es) => [...es, nextSchemeEntry(es)]); setOpen(entries.length); setDirty(true); }} />
+                        <Button variant="secondary" size="sm" icon={Plus} label="Add lesson" onPress={() => { setEntries((es) => [...es, nextSchemeEntry(es)]); setOpen(entries.length); setDirty(true); }} />
                     ) : null}
 
                     {actions.length > 0 ? (

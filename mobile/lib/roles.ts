@@ -6,38 +6,8 @@
  * school runs. The tab bar mirrors the web's phone bar: a curated four per
  * role, duty pages filling any free slots, everything else under More.
  */
-import {
-    BedDouble,
-    Bell,
-    BookOpen,
-    Briefcase,
-    Bus,
-    CalendarCheck,
-    CalendarDays,
-    ChartLine,
-    CircleUser,
-    ClipboardList,
-    Clock,
-    DollarSign,
-    FileLock2,
-    FileText,
-    GraduationCap,
-    HeartHandshake,
-    HeartPulse,
-    LayoutDashboard,
-    Library,
-    NotebookPen,
-    Package,
-    Plane,
-    Receipt,
-    School,
-    Settings,
-    ShieldAlert,
-    Target,
-    Users,
-    Wallet,
-    type LucideIcon,
-} from 'lucide-react-native';
+import type { LucideIcon } from 'lucide-react-native';
+import { FEATURE_ICONS } from './featureIcons';
 import { PAGE_ACCESS, canViewPage, type PageAccess, type PageViewer, type UserRole as SharedUserRole } from '@shared/platform/pages';
 
 export const USER_ROLES = ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER', 'STAFF', 'STUDENT', 'PARENT', 'PENDING'] as const satisfies readonly SharedUserRole[];
@@ -122,35 +92,35 @@ export type StaffScreen =
 const STAFF_EVERYONE: PageAccess = { roles: STAFF_ROLES };
 
 export const STAFF_SCREENS: Record<StaffScreen, ScreenMeta<`/staff${string}`>> = {
-    index: { title: 'Dashboard', tabLabel: 'Home', icon: LayoutDashboard, description: 'Your school at a glance', href: '/staff', access: [PAGE_ACCESS.dashboard] },
-    exams: { title: 'Exams & Marks', tabLabel: 'Marks', icon: ClipboardList, description: 'Enter marks, view results, release them', href: '/staff/exams', access: [PAGE_ACCESS.examsMarks] },
-    reports: { title: 'Report Cards', tabLabel: 'Reports', icon: FileText, description: 'Download report cards and mark sheets', href: '/staff/reports', access: [PAGE_ACCESS.reports] },
-    attendance: { title: 'Attendance', tabLabel: 'Attendance', icon: CalendarCheck, description: 'Take the daily register', href: '/staff/attendance', access: [PAGE_ACCESS.attendance] },
-    analytics: { title: 'Analytics', tabLabel: 'Analytics', icon: ChartLine, description: 'How each class is doing', href: '/staff/analytics', access: [PAGE_ACCESS.analytics] },
-    calendar: { title: 'Calendar', tabLabel: 'Calendar', icon: CalendarDays, description: 'Term dates, exams, events and meetings', href: '/staff/calendar', access: [PAGE_ACCESS.calendar] },
-    timetable: { title: 'Timetable', tabLabel: 'Timetable', icon: Clock, description: 'Lessons by class, teacher and room', href: '/staff/timetable', access: [PAGE_ACCESS.timetable] },
-    'exam-papers': { title: 'Exam Papers', tabLabel: 'Papers', icon: FileLock2, description: 'Submit, moderate and print papers', href: '/staff/exam-papers', access: [PAGE_ACCESS.examPapers] },
-    'lesson-records': { title: 'Professional Records', tabLabel: 'Records', icon: NotebookPen, description: 'Schemes of work, lesson plans, records of work', href: '/staff/lesson-records', access: [PAGE_ACCESS.lessonRecords] },
-    cbc: { title: 'CBC Assessment', tabLabel: 'CBC', icon: Target, description: 'Rubric levels by strand', href: '/staff/cbc', access: [PAGE_ACCESS.cbc] },
-    'people/index': { title: 'People', tabLabel: 'People', icon: Users, description: 'Students and teachers', href: '/staff/people', access: [PAGE_ACCESS.people, PAGE_ACCESS.myStudents] },
-    'parent-accounts': { title: 'Parent accounts', tabLabel: 'Parents', icon: HeartHandshake, description: 'Link parents to their children', href: '/staff/parent-accounts', access: [PAGE_ACCESS.parentAccounts] },
-    classes: { title: 'Classes', tabLabel: 'Classes', icon: School, description: 'Streams, class teachers and rosters', href: '/staff/classes', access: [PAGE_ACCESS.classes] },
-    subjects: { title: 'Subjects', tabLabel: 'Subjects', icon: BookOpen, description: 'What the school offers and who teaches it', href: '/staff/subjects', access: [PAGE_ACCESS.subjects] },
-    fees: { title: 'Fees', tabLabel: 'Fees', icon: DollarSign, description: 'Balances and collections', href: '/staff/fees', access: [PAGE_ACCESS.fees] },
-    billing: { title: 'Billing', tabLabel: 'Billing', icon: Receipt, description: 'Vote heads, fee structures, invoices and bursaries', href: '/staff/billing', access: [PAGE_ACCESS.billing] },
-    expenses: { title: 'Expenses', tabLabel: 'Expenses', icon: Wallet, description: 'Requests, approvals and payments', href: '/staff/expenses', access: [PAGE_ACCESS.expenses] },
-    boarding: { title: 'Boarding', tabLabel: 'Boarding', icon: BedDouble, description: 'Dorms, roll calls, exeats and inspections', href: '/staff/boarding', access: [PAGE_ACCESS.boarding] },
-    health: { title: 'Health', tabLabel: 'Health', icon: HeartPulse, description: 'Sick bay, clinic visits and medicine', href: '/staff/health', access: [PAGE_ACCESS.health] },
-    discipline: { title: 'Discipline', tabLabel: 'Discipline', icon: ShieldAlert, description: 'Incidents and actions taken', href: '/staff/discipline', access: [PAGE_ACCESS.discipline] },
-    transport: { title: 'Transport', tabLabel: 'Transport', icon: Bus, description: 'Buses, routes, trips and the live map', href: '/staff/transport', access: [PAGE_ACCESS.transport] },
-    library: { title: 'Library', tabLabel: 'Library', icon: Library, description: 'Catalogue, loans and overdue books', href: '/staff/library', access: [PAGE_ACCESS.library] },
-    inventory: { title: 'Inventory', tabLabel: 'Stores', icon: Package, description: 'Stock, assets and requisitions', href: '/staff/inventory', access: [PAGE_ACCESS.inventory] },
-    leave: { title: 'Staff Leave', tabLabel: 'Leave', icon: Plane, description: 'Requests and approvals', href: '/staff/leave', access: [PAGE_ACCESS.leave] },
-    announcements: { title: 'Announcements', tabLabel: 'News', icon: Bell, description: 'School news and updates', href: '/staff/announcements', access: [PAGE_ACCESS.announcements] },
-    assignments: { title: 'Assignments', tabLabel: 'Work', icon: Briefcase, description: 'Homework for your classes', href: '/staff/assignments', access: [PAGE_ACCESS.assignments] },
-    users: { title: 'Users', tabLabel: 'Users', icon: CircleUser, description: 'Accounts, roles and access', href: '/staff/users', access: [PAGE_ACCESS.users] },
-    settings: { title: 'Settings', tabLabel: 'Settings', icon: Settings, description: 'School profile, terms, modules and duties', href: '/staff/settings', access: [PAGE_ACCESS.settings] },
-    profile: { title: 'Profile', tabLabel: 'Profile', icon: CircleUser, description: 'Your account', href: '/staff/profile', access: [STAFF_EVERYONE] },
+    index: { title: 'Dashboard', tabLabel: 'Home', icon: FEATURE_ICONS.dashboard, description: 'Your school at a glance', href: '/staff', access: [PAGE_ACCESS.dashboard] },
+    exams: { title: 'Exams & Marks', tabLabel: 'Marks', icon: FEATURE_ICONS.examsMarks, description: 'Enter marks, view results, release them', href: '/staff/exams', access: [PAGE_ACCESS.examsMarks] },
+    reports: { title: 'Report Cards', tabLabel: 'Reports', icon: FEATURE_ICONS.reports, description: 'Download report cards and mark sheets', href: '/staff/reports', access: [PAGE_ACCESS.reports] },
+    attendance: { title: 'Attendance', tabLabel: 'Attendance', icon: FEATURE_ICONS.attendance, description: 'Take the daily register', href: '/staff/attendance', access: [PAGE_ACCESS.attendance] },
+    analytics: { title: 'Analytics', tabLabel: 'Analytics', icon: FEATURE_ICONS.analytics, description: 'How each class is doing', href: '/staff/analytics', access: [PAGE_ACCESS.analytics] },
+    calendar: { title: 'Calendar', tabLabel: 'Calendar', icon: FEATURE_ICONS.calendar, description: 'Term dates, exams, events and meetings', href: '/staff/calendar', access: [PAGE_ACCESS.calendar] },
+    timetable: { title: 'Timetable', tabLabel: 'Timetable', icon: FEATURE_ICONS.timetable, description: 'Lessons by class, teacher and room', href: '/staff/timetable', access: [PAGE_ACCESS.timetable] },
+    'exam-papers': { title: 'Exam Papers', tabLabel: 'Papers', icon: FEATURE_ICONS.examPapers, description: 'Submit, moderate and print papers', href: '/staff/exam-papers', access: [PAGE_ACCESS.examPapers] },
+    'lesson-records': { title: 'Professional Records', tabLabel: 'Records', icon: FEATURE_ICONS.lessonRecords, description: 'Schemes of work, lesson plans, records of work', href: '/staff/lesson-records', access: [PAGE_ACCESS.lessonRecords] },
+    cbc: { title: 'CBC Assessment', tabLabel: 'CBC', icon: FEATURE_ICONS.cbc, description: 'Rubric levels by strand', href: '/staff/cbc', access: [PAGE_ACCESS.cbc] },
+    'people/index': { title: 'People', tabLabel: 'People', icon: FEATURE_ICONS.people, description: 'Students and teachers', href: '/staff/people', access: [PAGE_ACCESS.people, PAGE_ACCESS.myStudents] },
+    'parent-accounts': { title: 'Parent accounts', tabLabel: 'Parents', icon: FEATURE_ICONS.parents, description: 'Link parents to their children', href: '/staff/parent-accounts', access: [PAGE_ACCESS.parentAccounts] },
+    classes: { title: 'Classes', tabLabel: 'Classes', icon: FEATURE_ICONS.classes, description: 'Streams, class teachers and rosters', href: '/staff/classes', access: [PAGE_ACCESS.classes] },
+    subjects: { title: 'Subjects', tabLabel: 'Subjects', icon: FEATURE_ICONS.subjects, description: 'What the school offers and who teaches it', href: '/staff/subjects', access: [PAGE_ACCESS.subjects] },
+    fees: { title: 'Fees', tabLabel: 'Fees', icon: FEATURE_ICONS.fees, description: 'Balances and collections', href: '/staff/fees', access: [PAGE_ACCESS.fees] },
+    billing: { title: 'Billing', tabLabel: 'Billing', icon: FEATURE_ICONS.billing, description: 'Vote heads, fee structures, invoices and bursaries', href: '/staff/billing', access: [PAGE_ACCESS.billing] },
+    expenses: { title: 'Expenses', tabLabel: 'Expenses', icon: FEATURE_ICONS.expenses, description: 'Requests, approvals and payments', href: '/staff/expenses', access: [PAGE_ACCESS.expenses] },
+    boarding: { title: 'Boarding', tabLabel: 'Boarding', icon: FEATURE_ICONS.boarding, description: 'Dorms, roll calls, exeats and inspections', href: '/staff/boarding', access: [PAGE_ACCESS.boarding] },
+    health: { title: 'Health', tabLabel: 'Health', icon: FEATURE_ICONS.health, description: 'Sick bay, clinic visits and medicine', href: '/staff/health', access: [PAGE_ACCESS.health] },
+    discipline: { title: 'Discipline', tabLabel: 'Discipline', icon: FEATURE_ICONS.discipline, description: 'Incidents and actions taken', href: '/staff/discipline', access: [PAGE_ACCESS.discipline] },
+    transport: { title: 'Transport', tabLabel: 'Transport', icon: FEATURE_ICONS.transport, description: 'Buses, routes, trips and the live map', href: '/staff/transport', access: [PAGE_ACCESS.transport] },
+    library: { title: 'Library', tabLabel: 'Library', icon: FEATURE_ICONS.library, description: 'Catalogue, loans and overdue books', href: '/staff/library', access: [PAGE_ACCESS.library] },
+    inventory: { title: 'Inventory', tabLabel: 'Stores', icon: FEATURE_ICONS.inventory, description: 'Stock, assets and requisitions', href: '/staff/inventory', access: [PAGE_ACCESS.inventory] },
+    leave: { title: 'Staff Leave', tabLabel: 'Leave', icon: FEATURE_ICONS.leave, description: 'Requests and approvals', href: '/staff/leave', access: [PAGE_ACCESS.leave] },
+    announcements: { title: 'Announcements', tabLabel: 'News', icon: FEATURE_ICONS.announcements, description: 'School news and updates', href: '/staff/announcements', access: [PAGE_ACCESS.announcements] },
+    assignments: { title: 'Assignments', tabLabel: 'Work', icon: FEATURE_ICONS.assignments, description: 'Homework for your classes', href: '/staff/assignments', access: [PAGE_ACCESS.assignments] },
+    users: { title: 'Users', tabLabel: 'Users', icon: FEATURE_ICONS.users, description: 'Accounts, roles and access', href: '/staff/users', access: [PAGE_ACCESS.users] },
+    settings: { title: 'Settings', tabLabel: 'Settings', icon: FEATURE_ICONS.settings, description: 'School profile, terms, modules and duties', href: '/staff/settings', access: [PAGE_ACCESS.settings] },
+    profile: { title: 'Profile', tabLabel: 'Profile', icon: FEATURE_ICONS.profile, description: 'Your account', href: '/staff/profile', access: [STAFF_EVERYONE] },
 };
 
 /** The web menu's order: its groups top to bottom, then the pinned items. */
@@ -190,13 +160,13 @@ export function getStaffNav(viewer: Viewer): { primary: StaffScreen[]; overflow:
 export type StudentScreen = 'index' | 'results' | 'subjects/index' | 'timetable' | 'attendance' | 'fees' | 'profile';
 
 export const STUDENT_SCREENS: Record<StudentScreen, ScreenMeta<`/student${string}`>> = {
-    index: { title: 'Dashboard', tabLabel: 'Home', icon: LayoutDashboard, description: 'Your day at a glance', href: '/student', access: [PAGE_ACCESS.studentDashboard] },
-    results: { title: 'My Results', tabLabel: 'Results', icon: GraduationCap, description: 'Exam marks and report cards', href: '/student/results', access: [PAGE_ACCESS.myResults] },
-    'subjects/index': { title: 'My Subjects', tabLabel: 'Subjects', icon: BookOpen, description: 'Performance, homework and notes per subject', href: '/student/subjects', access: [PAGE_ACCESS.mySubjects] },
-    timetable: { title: 'Timetable', tabLabel: 'Timetable', icon: Clock, description: 'Your class timetable', href: '/student/timetable', access: [PAGE_ACCESS.myTimetable] },
-    fees: { title: 'Fees', tabLabel: 'Fees', icon: DollarSign, description: 'Balance, payments and paying online', href: '/student/fees', access: [PAGE_ACCESS.myFees] },
-    attendance: { title: 'Attendance', tabLabel: 'Attendance', icon: CalendarCheck, description: 'Your attendance history', href: '/student/attendance', access: [PAGE_ACCESS.myAttendance] },
-    profile: { title: 'My Profile', tabLabel: 'Profile', icon: CircleUser, description: 'Your details and account', href: '/student/profile', access: [PAGE_ACCESS.myProfile] },
+    index: { title: 'Dashboard', tabLabel: 'Home', icon: FEATURE_ICONS.dashboard, description: 'Your day at a glance', href: '/student', access: [PAGE_ACCESS.studentDashboard] },
+    results: { title: 'My Results', tabLabel: 'Results', icon: FEATURE_ICONS.results, description: 'Exam marks and report cards', href: '/student/results', access: [PAGE_ACCESS.myResults] },
+    'subjects/index': { title: 'My Subjects', tabLabel: 'Subjects', icon: FEATURE_ICONS.subjects, description: 'Performance, homework and notes per subject', href: '/student/subjects', access: [PAGE_ACCESS.mySubjects] },
+    timetable: { title: 'Timetable', tabLabel: 'Timetable', icon: FEATURE_ICONS.timetable, description: 'Your class timetable', href: '/student/timetable', access: [PAGE_ACCESS.myTimetable] },
+    fees: { title: 'Fees', tabLabel: 'Fees', icon: FEATURE_ICONS.fees, description: 'Balance, payments and paying online', href: '/student/fees', access: [PAGE_ACCESS.myFees] },
+    attendance: { title: 'Attendance', tabLabel: 'Attendance', icon: FEATURE_ICONS.attendance, description: 'Your attendance history', href: '/student/attendance', access: [PAGE_ACCESS.myAttendance] },
+    profile: { title: 'My Profile', tabLabel: 'Profile', icon: FEATURE_ICONS.profile, description: 'Your details and account', href: '/student/profile', access: [PAGE_ACCESS.myProfile] },
 };
 
 const STUDENT_ORDER: readonly StudentScreen[] = ['index', 'results', 'subjects/index', 'timetable', 'attendance', 'fees', 'profile'];
@@ -213,5 +183,11 @@ export function getStudentNav(viewer: Viewer): { primary: StudentScreen[]; overf
 /** The menu icon of the screen at this exact route, for its header. */
 export function screenIconFor(pathname: string): LucideIcon | null {
     const all: readonly ScreenMeta<string>[] = [...Object.values(STAFF_SCREENS), ...Object.values(STUDENT_SCREENS)];
-    return all.find((s) => s.href === pathname)?.icon ?? null;
+    // The parent app's two tabs have no screen table of their own.
+    return all.find((s) => s.href === pathname)?.icon ?? PARENT_SCREEN_ICONS[pathname] ?? null;
 }
+
+const PARENT_SCREEN_ICONS: Readonly<Record<string, LucideIcon>> = {
+    '/parent': FEATURE_ICONS.people,
+    '/parent/profile': FEATURE_ICONS.profile,
+};

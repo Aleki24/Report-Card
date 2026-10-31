@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { Plus } from 'lucide-react-native';
 import { StyleSheet, Text, View } from 'react-native';
 import { RESOURCES, type ResourceName } from '@shared/ops/registry';
 import { fromFormValues, missingRequired, toFormValues, type FieldDef, type FieldName, type FormValues } from '@shared/ops/form';
@@ -114,7 +115,7 @@ export function ResourceList<R extends ResourceName, T extends { id: string }>({
             {searchText ? <SearchField value={query} onChangeText={setQuery} placeholder={`Search ${def.label.plural.toLowerCase()}`} /> : null}
             {canCreate && fields ? (
                 <View style={{ marginBottom: spacing.md }}>
-                    <Button label={`+ ${addLabel ?? `Add ${singular}`}`} onPress={() => open('new')} block />
+                    <Button icon={Plus} label={addLabel ?? `Add ${singular}`} onPress={() => open('new')} block />
                 </View>
             ) : null}
 

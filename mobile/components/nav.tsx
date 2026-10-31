@@ -75,16 +75,19 @@ export function MoreList({ items, description }: { items: readonly MoreItem[]; d
     const [query, setQuery] = useState('');
     const columns = width >= 900 ? 6 : width >= 600 ? 4 : 3;
 
-    const sections = useMemo(() => {
+    // One grid in the web menu's section order, as the web's More sheet: no
+    // half-empty rows under a section with one or two pages.
+    const pages = useMemo(() => {
         const q = query.trim().toLowerCase();
-        const shown = items.filter((i) => !q || `${i.title} ${i.description}`.toLowerCase().includes(q));
-        const by = new Map<string, MoreItem[]>();
-        for (const item of shown) {
-            const name = pageIdentity(item.href)?.eyebrow ?? 'More';
-            by.set(name, [...(by.get(name) ?? []), item]);
-        }
-        const rank = (n: string) => { const i = SECTION_ORDER.indexOf(n); return i === -1 ? SECTION_ORDER.length : i; };
-        return [...by.entries()].sort(([a], [b]) => rank(a) - rank(b));
+        const rank = (item: MoreItem) => {
+            const i = SECTION_ORDER.indexOf(pageIdentity(item.href)?.eyebrow ?? '');
+            return i === -1 ? SECTION_ORDER.length : i;
+        };
+        return items
+            .filter((i) => !q || `${i.title} ${i.description}`.toLowerCase().includes(q))
+            .map((item, index) => ({ item, index }))
+            .sort((a, b) => rank(a.item) - rank(b.item) || a.index - b.index)
+            .map(({ item }) => item);
     }, [items, query]);
 
     return (
@@ -95,18 +98,17 @@ export function MoreList({ items, description }: { items: readonly MoreItem[]; d
                 <Search size={16} color={colors.muted} />
                 <TextInput value={query} onChangeText={setQuery} placeholder="Find a page…" placeholderTextColor={colors.placeholder} style={styles.searchInput} autoCorrect={false} accessibilityLabel="Find a page" />
             </View>
-            {sections.length === 0 ? <Text style={styles.none}>No page matches “{query.trim()}”.</Text> : null}
-            {sections.map(([name, list]) => (
-                <View key={name} style={styles.section}>
-                    <Text style={styles.sectionTitle}>{name.toUpperCase()}</Text>
+            {pages.length === 0 ? <Text style={styles.none}>No page matches “{query.trim()}”.</Text> : (
+                <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>PAGES</Text>
                     <View style={styles.grid}>
-                        {list.map((item) => {
+                        {pages.map((item) => {
                             const tone = tones[hueForHref(item.href)];
                             const Icon = item.icon;
                             return (
-                                <View key={item.key} style={{ width: `${100 / columns}%`, padding: 5 }}>
+                                <View key={item.key} style={{ width: `${100 / columns}%`, padding: 4 }}>
                                     <PressScale onPress={() => router.push(item.href as Href)} style={styles.tile} accessibilityRole="link" accessibilityLabel={`${item.title}. ${item.description}`}>
-                                        <View style={[styles.tileIcon, { backgroundColor: tone.bg }]}><Icon size={22} color={tone.fg} strokeWidth={2.1} /></View>
+                                        <View style={[styles.tileIcon, { backgroundColor: tone.bg }]}><Icon size={20} color={tone.fg} strokeWidth={2.1} /></View>
                                         <Text style={styles.tileTitle} numberOfLines={2}>{item.title}</Text>
                                     </PressScale>
                                 </View>
@@ -114,7 +116,7 @@ export function MoreList({ items, description }: { items: readonly MoreItem[]; d
                         })}
                     </View>
                 </View>
-            ))}
+            )}
             <ListCard style={{ marginTop: spacing.lg }}>
                 <ListRow
                     title="Help & guides"
@@ -140,8 +142,8 @@ const useStyles = makeStyles((colors) => ({
     none: { fontSize: 13, fontFamily: fonts.regular, color: colors.muted, textAlign: 'center', paddingVertical: spacing.lg },
     section: { marginTop: spacing.md },
     sectionTitle: { fontSize: 11, fontFamily: fonts.bold, color: colors.muted, letterSpacing: 1, marginBottom: 4, marginLeft: 2 },
-    grid: { flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -5 },
-    tile: { alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.md, paddingHorizontal: 6, borderRadius: radius.xxl, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, minHeight: 104, ...shadowFor(colors) },
-    tileIcon: { width: 46, height: 46, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+    grid: { flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -4 },
+    tile: { alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.md, paddingHorizontal: 6, borderRadius: radius.xxl, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, minHeight: 92, ...shadowFor(colors) },
+    tileIcon: { width: 40, height: 40, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
     tileTitle: { fontSize: 12, lineHeight: 15, fontFamily: fonts.semibold, color: colors.foreground, textAlign: 'center' },
 }));

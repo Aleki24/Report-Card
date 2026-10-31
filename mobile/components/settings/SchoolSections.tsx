@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Plus } from 'lucide-react-native';
 import { Text, View } from 'react-native';
 import type { CurriculumBand } from '@shared/curriculum-bands';
 import {
@@ -71,7 +72,7 @@ export function SchoolSections() {
                     </ButtonRow>
                 ) : (
                     <ButtonRow>
-                        <Button size="sm" variant="secondary" label="+ Add a section" onPress={() => setEditing('new')} disabled={busy} />
+                        <Button size="sm" variant="secondary" icon={Plus} label="Add a section" onPress={() => setEditing('new')} disabled={busy} />
                     </ButtonRow>
                 )}
                 {unplaced.length > 0 && sections.length > 0 ? (

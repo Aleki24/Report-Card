@@ -61,6 +61,7 @@ export function SetupChecklist({ data, schoolKey }: { data: DashboardData; schoo
     const router = useRouter();
     const key = `${DISMISS_KEY}.${schoolKey.replace(/[^\w.-]/g, '_')}`;
     const [dismissed, setDismissed] = useState(true);
+    const [showDone, setShowDone] = useState(false);
     useEffect(() => {
         SecureStore.getItemAsync(key).then((v) => setDismissed(v === '1')).catch(() => setDismissed(false));
     }, [key]);
@@ -84,7 +85,8 @@ export function SetupChecklist({ data, schoolKey }: { data: DashboardData; schoo
                 </Pressable>
             </View>
             <View style={{ marginBottom: spacing.sm }}><Meter value={(done / steps.length) * 100} color={colors.primary} height={6} /></View>
-            {steps.map((s) => (
+            {/* What is left leads; finished steps fold into one line instead of a struck-through list. */}
+            {(showDone ? steps : remaining).map((s) => (
                 <Pressable key={s.id} disabled={s.done} onPress={() => router.push(appHref(s.href))} style={({ pressed }) => [styles.step, pressed && { backgroundColor: colors.elevated }]} accessibilityRole="link">
                     <View style={[styles.stepCheck, s.done ? { backgroundColor: colors.primarySoft, borderColor: 'transparent' } : { borderColor: colors.border }]}>
                         {s.done ? <Check size={13} color={colors.primary} strokeWidth={3} /> : null}
@@ -96,6 +98,12 @@ export function SetupChecklist({ data, schoolKey }: { data: DashboardData; schoo
                     {!s.done ? <Text style={styles.stepCta}>{s.cta}</Text> : null}
                 </Pressable>
             ))}
+            {done > 0 ? (
+                <Pressable onPress={() => setShowDone((v) => !v)} hitSlop={8} style={styles.doneToggle} accessibilityRole="button" accessibilityState={{ expanded: showDone }}>
+                    <Check size={13} color={colors.primary} strokeWidth={3} />
+                    <Text style={styles.doneToggleText}>{showDone ? 'Hide finished steps' : `${done} finished ${done === 1 ? 'step' : 'steps'}`}</Text>
+                </Pressable>
+            ) : null}
         </View>
     );
 }
@@ -301,6 +309,8 @@ const useStyles = makeStyles((colors) => ({
     stepCheck: { width: 24, height: 24, borderRadius: 12, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
     stepLabel: { fontSize: 14, fontFamily: fonts.semibold, color: colors.foreground },
     stepDone: { color: colors.muted, textDecorationLine: 'line-through' },
+    doneToggle: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', paddingVertical: spacing.sm, paddingHorizontal: spacing.xs },
+    doneToggleText: { fontSize: 12, fontFamily: fonts.semibold, color: colors.muted },
     stepCta: { fontSize: 12, fontFamily: fonts.bold, color: colors.primary },
     emptyLine: { fontSize: 13, fontFamily: fonts.regular, color: colors.muted, textAlign: 'center', paddingVertical: spacing.md },
     leagueHead: { gap: 6, marginBottom: spacing.md },

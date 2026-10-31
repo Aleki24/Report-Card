@@ -2,10 +2,8 @@ import React, { useState } from 'react';
 import { HomeScreen } from './Hero';
 import { Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import {
-    ArrowRight, BarChart3, BookOpenCheck, CalendarCheck, ChevronDown, CircleCheck, ClipboardList, FileText, GraduationCap,
-    Inbox, Megaphone, NotebookPen, PenLine, Send, Users,
-} from 'lucide-react-native';
+import { ArrowRight, BookOpenCheck, CalendarCheck, ChevronDown, CircleCheck, ClipboardList, FileText, Inbox, Megaphone, PenLine, Send, Users } from 'lucide-react-native';
+import { FEATURE_ICONS } from '@/lib/featureIcons';
 import type { DashboardData } from '@shared/dashboard';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { hueForHref } from '@/lib/hues';
@@ -23,16 +21,16 @@ type Variant = 'class' | 'subject';
 const QUICK_LINKS: Record<Variant, readonly { label: string; desc: string; href: `/staff${string}`; icon: typeof PenLine }[]> = {
     class: [
         { label: 'Enter or correct marks', desc: 'Type, fix or remove marks', href: '/staff/exams', icon: PenLine },
-        { label: 'Class results', desc: 'Broadsheet and rankings', href: '/staff/exams?tab=results', icon: BarChart3 },
+        { label: 'Class results', desc: 'Broadsheet and rankings', href: '/staff/exams?tab=results', icon: FEATURE_ICONS.results },
         { label: 'Report cards', desc: 'Generate and send to parents', href: '/staff/reports', icon: FileText },
         { label: 'Attendance', desc: 'Mark today’s register', href: '/staff/attendance', icon: CalendarCheck },
         { label: 'My students', desc: 'Your class roster', href: '/staff/people', icon: Users },
     ],
     subject: [
         { label: 'Enter or correct marks', desc: 'Type, fix or remove marks', href: '/staff/exams', icon: PenLine },
-        { label: 'Results', desc: 'Broadsheet and subject averages', href: '/staff/exams?tab=results', icon: BarChart3 },
+        { label: 'Results', desc: 'Broadsheet and subject averages', href: '/staff/exams?tab=results', icon: FEATURE_ICONS.results },
         { label: 'Release results', desc: 'Let learners see their marks', href: '/staff/exams?tab=publish', icon: Send },
-        { label: 'Assignments', desc: 'Set work for your classes', href: '/staff/assignments', icon: NotebookPen },
+        { label: 'Assignments', desc: 'Set work for your classes', href: '/staff/assignments', icon: FEATURE_ICONS.assignments },
         { label: 'Announcements', desc: 'Post to your classes', href: '/staff/announcements', icon: Megaphone },
     ],
 };
@@ -97,7 +95,7 @@ export function TeacherHome({ name, variant }: { name: string; variant: Variant 
             : { label: 'Enter or correct marks', icon: PenLine, href: '/staff/exams', primary: true },
         variant === 'class'
             ? { label: 'Report cards', icon: FileText, href: '/staff/reports' }
-            : { label: 'View results', icon: BarChart3, href: '/staff/exams?tab=results' },
+            : { label: 'View results', icon: FEATURE_ICONS.results, href: '/staff/exams?tab=results' },
     ];
     const reportsPending = variant === 'class' ? stats.data?.reportsPending ?? 0 : 0;
     let i = 0;
@@ -120,12 +118,12 @@ export function TeacherHome({ name, variant }: { name: string; variant: Variant 
                     />
                     {variant === 'class' ? (
                         <>
-                            <KpiTile title={streamName ? `Learners in ${streamName}` : 'Learners'} value={stats.data?.studentCount ?? 0} icon={GraduationCap} hue="orange" href="/staff/people" />
-                            <KpiTile title="Class average" value={avgText} icon={BarChart3} hue="violet" href="/staff/exams?tab=results" />
+                            <KpiTile title={streamName ? `Learners in ${streamName}` : 'Learners'} value={stats.data?.studentCount ?? 0} icon={FEATURE_ICONS.people} hue="orange" href="/staff/people" />
+                            <KpiTile title="Class average" value={avgText} icon={FEATURE_ICONS.analytics} hue="violet" href="/staff/exams?tab=results" />
                         </>
                     ) : (
                         <>
-                            <KpiTile title="Subject average" value={avgText} icon={BarChart3} hue="violet" href="/staff/exams?tab=results" />
+                            <KpiTile title="Subject average" value={avgText} icon={FEATURE_ICONS.analytics} hue="violet" href="/staff/exams?tab=results" />
                             <KpiTile title="Work to grade" value={toGrade == null ? '…' : toGrade.toLocaleString()} icon={Inbox} hue="sky" href="/staff/assignments?tab=submissions" tone={toGrade ? 'warn' : undefined} />
                         </>
                     )}
