@@ -162,6 +162,7 @@ function ClassesContent() {
                 </Card>
             ) : (
                 <ButtonRow>
+                    {classes.length > 0 ? <Button variant="secondary" label="Promote students" onPress={() => router.push('/staff/promotion')} /> : null}
                     <Button label="+ Add class" onPress={() => setAdding(true)} />
                 </ButtonRow>
             )}

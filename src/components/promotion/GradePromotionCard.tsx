@@ -5,10 +5,10 @@ import { ArrowRight, ChevronDown, CircleAlert } from 'lucide-react';
 import { TONES } from '@/components/ui/tones';
 import { cn } from '@/lib/utils';
 import {
-    allowedOutcomes, decisionProblem, outcomeLabel,
+    OUTCOME_COPY, allowedOutcomes, choiceProblem, learnerMatches, outcomeLabel, stepCopy,
     type GradeStep, type PromotionClass, type PromotionGrade, type PromotionLearner, type PromotionOutcome,
 } from '@/lib/promotion';
-import { OUTCOME_META, stepMeta } from './promotionMeta';
+import { OUTCOME_ICONS, STEP_ICONS } from './promotionMeta';
 import type { PromotionPlanApi } from './usePromotionPlan';
 
 interface OutcomePickerProps {
@@ -26,8 +26,8 @@ function OutcomePicker({ step, value, onChange, label, size = 'sm' }: OutcomePic
     return (
         <div role={choosing ? 'radiogroup' : 'group'} aria-label={label} className="flex flex-wrap gap-1.5">
             {allowedOutcomes(step).map(outcome => {
-                const meta = OUTCOME_META[outcome];
-                const Icon = meta.icon;
+                const meta = OUTCOME_COPY[outcome];
+                const Icon = OUTCOME_ICONS[outcome];
                 const checked = value === outcome;
                 return (
                     <button
@@ -83,8 +83,7 @@ interface LearnerRowProps {
 
 function LearnerRow({ learner, classId, grade, plan }: LearnerRowProps) {
     const choice = plan.choices[learner.id];
-    const nextIds = new Set(grade.nextClasses.map(c => c.id));
-    const problem = choice.outcome ? decisionProblem(grade.step, { outcome: choice.outcome, to_stream_id: choice.to }, nextIds) : 'needs a decision';
+    const problem = choiceProblem(grade, choice);
     // A learner picks their own class only where the next grade has a choice of them.
     const picksClass = choice.outcome === 'PROMOTE' && grade.nextClasses.length > 1;
     return (
@@ -159,17 +158,14 @@ interface GradePromotionCardProps {
     query: string;
 }
 
-const matches = (l: PromotionLearner, query: string) =>
-    !query || l.name.toLowerCase().includes(query) || (l.admission_number ?? '').toLowerCase().includes(query);
-
 /** One grade: where its learners go, set for the whole grade, a class, or a learner. */
 export function GradePromotionCard({ grade, plan, query }: GradePromotionCardProps) {
-    const meta = stepMeta(grade.step, grade.name);
-    const StepIcon = meta.icon;
+    const meta = stepCopy(grade.step, grade.name);
+    const StepIcon = STEP_ICONS[meta.tone];
     const classIds = grade.classes.map(c => c.id);
     const learnerCount = grade.classes.reduce((n, c) => n + c.learners.length, 0);
-    const mustDecide = grade.step.kind === 'TRANSITION' && grade.step.canStay;
-    const visible = grade.classes.map(cls => ({ cls, learners: cls.learners.filter(l => matches(l, query)) }));
+    const mustDecide = meta.tone === 'DECIDE';
+    const visible = grade.classes.map(cls => ({ cls, learners: cls.learners.filter(l => learnerMatches(l, query)) }));
     if (query && visible.every(v => v.learners.length === 0)) return null;
 
     return (

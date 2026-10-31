@@ -5,7 +5,7 @@ import { STAFF_ROLES, STAFF_SCREENS, getStaffNav, type StaffScreen } from '@/lib
 import { RoleGroup, TabIcon, useTabScreenOptions } from '@/components/nav';
 
 /** Routes that exist in the tree but never get a tab of their own. */
-const DETAIL_ROUTES = ['people/[id]', 'pending-schools'] as const;
+const DETAIL_ROUTES = ['people/[id]', 'pending-schools', 'promotion'] as const;
 
 export default function StaffTabsLayout() {
     return <RoleGroup roles={STAFF_ROLES}><StaffTabs /></RoleGroup>;

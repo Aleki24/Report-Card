@@ -9,11 +9,13 @@ import EmptyState from '@/components/dashboard/EmptyState';
 import { LoadError, SearchBox, StatTile } from '@/components/ui';
 import { useConfirm } from '@/components/ui/ConfirmProvider';
 import { GradePromotionCard } from '@/components/promotion/GradePromotionCard';
-import { OUTCOME_META, OUTCOME_ORDER } from '@/components/promotion/promotionMeta';
+import { OUTCOME_ICONS } from '@/components/promotion/promotionMeta';
 import { usePromotionPlan } from '@/components/promotion/usePromotionPlan';
 import { apiErrorMessage, jsonBody } from '@/lib/api-error-message';
-import { isOfferedGrade } from '@/lib/classes-overview';
-import { PROMOTION_URL, type PromotionCounts, type PromotionOverview, type PromotionUndoResult } from '@/lib/promotion';
+import {
+  OUTCOME_COPY, OUTCOME_ORDER, PROMOTION_URL, archivesLearner, confirmCopy, hasSeniorStayers, missingSeniorGrade,
+  type PromotionCounts, type PromotionOverview, type PromotionUndoResult,
+} from '@/lib/promotion';
 
 async function call<T>(input: string, init?: RequestInit): Promise<T> {
   const res = await fetch(input, { cache: 'no-store', ...init });
@@ -31,8 +33,8 @@ function OutcomeTiles({ counts }: { counts: PromotionCounts }) {
   return (
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
       {OUTCOME_ORDER.map(o => {
-        const meta = OUTCOME_META[o];
-        return <StatTile key={o} icon={meta.icon} hue={meta.hue} label={meta.tally} value={counts[meta.count].toLocaleString()} hint={o === 'GRADUATE' || o === 'TRANSFER' ? 'archived' : 'stay active'} />;
+        const meta = OUTCOME_COPY[o];
+        return <StatTile key={o} icon={OUTCOME_ICONS[o]} hue={meta.hue} label={meta.tally} value={counts[meta.count].toLocaleString()} hint={archivesLearner(o) ? 'archived' : 'stay active'} />;
       })}
     </div>
   );
@@ -43,7 +45,7 @@ function PromotionDone({ data, onUndone }: { data: PromotionOverview; onUndone: 
   const confirm = useConfirm();
   const [busy, setBusy] = useState(false);
   const run = data.run!;
-  const seniorStayers = data.grades.some(g => g.step.kind === 'TRANSITION' && g.step.canStay);
+  const seniorStayers = hasSeniorStayers(data.grades);
 
   const undo = async () => {
     const ok = await confirm({
@@ -115,21 +117,14 @@ function PromotionPlanner({ data, onDone }: { data: PromotionOverview; onDone: (
   const plan = usePromotionPlan(data.grades);
   const [query, setQuery] = useState('');
   const [busy, setBusy] = useState(false);
-  const blocked = plan.undecided + plan.incomplete;
-  // Only worth offering when the next grade is one a school can still add.
-  const noSenior = data.grades.find(g => g.step.kind === 'TRANSITION' && !g.step.canStay && isOfferedGrade(g.step.nextGradeName));
+  const { blocked } = plan;
+  const noSenior = missingSeniorGrade(data.grades);
 
   const run = async () => {
-    const { promoted, repeated, graduated, transferred } = plan.counts;
+    const copy = confirmCopy(plan);
     const ok = await confirm({
-      title: `Promote ${plural(plan.total, 'learner')}?`,
-      message: (
-        <span className="grid gap-1">
-          <span>{promoted.toLocaleString()} move up a class and {repeated.toLocaleString()} repeat.</span>
-          <span>{(graduated + transferred).toLocaleString()} leave the school and are archived; their parents and they can no longer sign in with an unused code.</span>
-          <span>You can undo this afterwards if something is wrong.</span>
-        </span>
-      ),
+      title: copy.title,
+      message: <span className="grid gap-1">{copy.lines.map(line => <span key={line}>{line}</span>)}</span>,
       confirmText: 'Promote learners',
       variant: 'warning',
     });
@@ -150,7 +145,7 @@ function PromotionPlanner({ data, onDone }: { data: PromotionOverview; onDone: (
     <div className="grid gap-6">
       <OutcomeTiles counts={plan.counts} />
 
-      {noSenior && noSenior.step.kind === 'TRANSITION' && (
+      {noSenior && (
         <div className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-muted-foreground">
             <span className="font-semibold text-foreground">Do some {noSenior.name} learners stay for {noSenior.step.nextLevelName}?</span>{' '}

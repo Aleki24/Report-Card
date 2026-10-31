@@ -16,6 +16,7 @@
  */
 import { z } from 'zod';
 import { bandForGrade, type CurriculumBand, type GradeLike } from './curriculum-bands';
+import { isOfferedGrade } from './classes-overview';
 
 export const PROMOTION_URL = '/api/admin/promotion';
 
@@ -233,3 +234,165 @@ export interface PromotionUndoResult {
     restored: number;
     skipped: number;
 }
+
+// ── The plan being drawn up ─────────────────────────────────────────────
+// Pure state functions shared by the web page and the phone app; each wraps
+// them in its own small hook.
+
+export interface LearnerChoice {
+    outcome: PromotionOutcome | null;
+    /** The class a promoted learner moves into. */
+    to: string | null;
+}
+
+export interface PromotionPlanState {
+    choices: Readonly<Record<string, LearnerChoice>>;
+    /** Each class's default class to move into, set from the class row. */
+    classTargets: Readonly<Record<string, string | null>>;
+}
+
+const toFor = (outcome: PromotionOutcome | null, target: string | null): string | null => (outcome === 'PROMOTE' ? target : null);
+
+/** Every learner on their grade's usual step, each class moving to its matching class. */
+export function initialPlan(grades: readonly PromotionGrade[]): PromotionPlanState {
+    const choices: Record<string, LearnerChoice> = {};
+    const classTargets: Record<string, string | null> = {};
+    for (const grade of grades) {
+        const outcome = defaultOutcome(grade.step);
+        const canMove = nextGradeId(grade.step) !== null;
+        for (const cls of grade.classes) {
+            const target = canMove ? defaultTargetStream(cls, grade.nextClasses) : null;
+            classTargets[cls.id] = target;
+            for (const l of cls.learners) choices[l.id] = { outcome, to: toFor(outcome, target) };
+        }
+    }
+    return { choices, classTargets };
+}
+
+/** Changes one learner's outcome or class; a newly promoted learner takes their class's target. */
+export function withLearnerChoice(plan: PromotionPlanState, learnerId: string, classId: string, patch: Partial<LearnerChoice>): PromotionPlanState {
+    const current = plan.choices[learnerId];
+    const outcome = patch.outcome !== undefined ? patch.outcome : current.outcome;
+    const to = patch.to !== undefined ? patch.to : current.to ?? plan.classTargets[classId] ?? null;
+    return { ...plan, choices: { ...plan.choices, [learnerId]: { outcome, to: toFor(outcome, to) } } };
+}
+
+const learnersOf = (grades: readonly PromotionGrade[], classId: string): readonly PromotionLearner[] =>
+    grades.flatMap(g => g.classes).find(c => c.id === classId)?.learners ?? [];
+
+/** Gives every learner of these classes the same outcome. */
+export function withClassesOutcome(plan: PromotionPlanState, grades: readonly PromotionGrade[], classIds: readonly string[], outcome: PromotionOutcome): PromotionPlanState {
+    const choices = { ...plan.choices };
+    for (const classId of classIds) {
+        for (const l of learnersOf(grades, classId)) {
+            choices[l.id] = { outcome, to: toFor(outcome, choices[l.id]?.to ?? plan.classTargets[classId] ?? null) };
+        }
+    }
+    return { ...plan, choices };
+}
+
+/** Sets where a class moves to, for its learners being promoted. */
+export function withClassTarget(plan: PromotionPlanState, grades: readonly PromotionGrade[], classId: string, target: string | null): PromotionPlanState {
+    const choices = { ...plan.choices };
+    for (const l of learnersOf(grades, classId)) choices[l.id] = { ...choices[l.id], to: toFor(choices[l.id].outcome, target) };
+    return { choices, classTargets: { ...plan.classTargets, [classId]: target } };
+}
+
+/** Why a learner's choice can't be applied yet, or null. */
+export function choiceProblem(grade: PromotionGrade, choice: LearnerChoice): string | null {
+    if (!choice.outcome) return 'needs a decision';
+    return decisionProblem(grade.step, { outcome: choice.outcome, to_stream_id: choice.to }, new Set(grade.nextClasses.map(c => c.id)));
+}
+
+export interface PromotionPlanSummary {
+    counts: PromotionCounts;
+    /** Learners still needing something: a decision (Grade 9s) or a class to move into. */
+    blocked: number;
+    total: number;
+}
+
+export function planSummary(grades: readonly PromotionGrade[], plan: PromotionPlanState): PromotionPlanSummary {
+    let blocked = 0;
+    for (const grade of grades) {
+        for (const cls of grade.classes) for (const l of cls.learners) if (choiceProblem(grade, plan.choices[l.id])) blocked++;
+    }
+    const outcomes = Object.values(plan.choices).map(c => c.outcome);
+    return { counts: countOutcomes(outcomes), blocked, total: outcomes.length };
+}
+
+/** The plan as the server takes it: one decision per decided learner. */
+export function planDecisions(grades: readonly PromotionGrade[], plan: PromotionPlanState): PromotionDecision[] {
+    return grades.flatMap(g => g.classes.flatMap(cls => cls.learners.flatMap(l => {
+        const { outcome, to } = plan.choices[l.id];
+        return outcome ? [{ student_id: l.id, from_stream_id: cls.id, outcome, to_stream_id: to }] : [];
+    })));
+}
+
+// ── Wording and colour, the same on the web and the phone ───────────────
+
+/** Hues both apps' palettes define. */
+export type PromotionHue = 'emerald' | 'amber' | 'violet' | 'sky' | 'slate';
+
+export const OUTCOME_ORDER: readonly PromotionOutcome[] = ['PROMOTE', 'GRADUATE', 'REPEAT', 'TRANSFER'];
+
+export const OUTCOME_COPY: Record<PromotionOutcome, { hue: PromotionHue; count: keyof PromotionCounts; tally: string }> = {
+    PROMOTE: { hue: 'emerald', count: 'promoted', tally: 'Move up' },
+    GRADUATE: { hue: 'violet', count: 'graduated', tally: 'Graduate / leave' },
+    REPEAT: { hue: 'sky', count: 'repeated', tally: 'Repeat' },
+    TRANSFER: { hue: 'slate', count: 'transferred', tally: 'Transfer out' },
+};
+
+export type StepTone = 'MOVES_UP' | 'DECIDE' | 'LEAVES';
+
+/** How a grade's card reads: its badge, where it goes, and a one-line explanation. */
+export function stepCopy(step: GradeStep, gradeName: string): { tone: StepTone; hue: PromotionHue; badge: string; target: string; explain: string } {
+    switch (step.kind) {
+        case 'PROMOTE':
+            return { tone: 'MOVES_UP', hue: 'emerald', badge: 'Moves up', target: step.nextGradeName, explain: `Learners move up to ${step.nextGradeName}.` };
+        case 'TRANSITION':
+            return step.canStay
+                ? {
+                    tone: 'DECIDE', hue: 'amber', badge: 'Decide each learner', target: `${step.nextGradeName} or leave`,
+                    explain: `${gradeName} learners are placed into ${step.nextLevelName} nationally, so not all of them stay. Mark who joins your ${step.nextGradeName} and who leaves; leavers are archived as having completed ${gradeName}.`,
+                }
+                : {
+                    tone: 'LEAVES', hue: 'violet', badge: 'Completes here', target: 'Archived',
+                    explain: `Your school has no ${step.nextGradeName} class, so ${gradeName} learners complete here and leave for ${step.nextLevelName}. They are archived as having completed ${gradeName}.`,
+                };
+        case 'COMPLETE':
+            return {
+                tone: 'LEAVES', hue: 'violet', badge: 'Candidates', target: 'Graduated',
+                explain: step.reason === 'FINAL_GRADE'
+                    ? `${gradeName} is the last grade, so candidates graduate and are archived.`
+                    : `Your school has no ${step.nextGradeName} class, so ${gradeName} learners graduate and are archived. Add ${step.nextGradeName} on the Classes page if they should move up instead.`,
+            };
+    }
+}
+
+/** The confirmation before applying a plan, in plain sentences. */
+export function confirmCopy(summary: PromotionPlanSummary): { title: string; lines: string[] } {
+    const { promoted, repeated, graduated, transferred } = summary.counts;
+    const n = (v: number) => v.toLocaleString();
+    return {
+        title: `Promote ${n(summary.total)} learner${summary.total === 1 ? '' : 's'}?`,
+        lines: [
+            `${n(promoted)} move up a class and ${n(repeated)} repeat.`,
+            `${n(graduated + transferred)} leave the school and are archived; any unused sign-in codes stop working.`,
+            'You can undo this afterwards if something is wrong.',
+        ],
+    };
+}
+
+/** A grade whose Grade 9s can't stay because the next grade has no class yet, worth offering to add. */
+export function missingSeniorGrade(grades: readonly PromotionGrade[]): (PromotionGrade & { step: Extract<GradeStep, { kind: 'TRANSITION' }> }) | undefined {
+    return grades.find((g): g is PromotionGrade & { step: Extract<GradeStep, { kind: 'TRANSITION' }> } =>
+        g.step.kind === 'TRANSITION' && !g.step.canStay && isOfferedGrade(g.step.nextGradeName));
+}
+
+/** Whether anyone could stay for Senior School, so they will need placing in a pathway. */
+export const hasSeniorStayers = (grades: readonly PromotionGrade[]): boolean =>
+    grades.some(g => g.step.kind === 'TRANSITION' && g.step.canStay);
+
+/** Whether a learner matches a search by name or admission number; `query` is lowercased, empty matches all. */
+export const learnerMatches = (l: PromotionLearner, query: string): boolean =>
+    !query || l.name.toLowerCase().includes(query) || (l.admission_number ?? '').toLowerCase().includes(query);
