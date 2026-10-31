@@ -69,3 +69,16 @@ export function formatIsoDate(value: string, options: Intl.DateTimeFormatOptions
 export function latestDateAnywhere(): string {
   return isoDateInZone(new Date(), 'Pacific/Kiritimati');
 }
+
+/** Whether a `YYYY-MM-DD` date falls Monday to Friday. */
+export function isWeekday(value: string): boolean {
+  const day = parseIsoDate(value)?.getDay();
+  return day !== undefined && day !== 0 && day !== 6;
+}
+
+/** The nearest weekday `step` days on (1) or back (-1), skipping Saturday and Sunday. */
+export function addWeekdays(value: string, step: 1 | -1): string {
+  let next = addDays(value, step);
+  for (let i = 0; i < 6 && !isWeekday(next); i++) next = addDays(next, step);
+  return next;
+}

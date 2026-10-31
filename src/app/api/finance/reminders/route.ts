@@ -3,10 +3,10 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { route, parseBody, HttpError } from '@/lib/platform/access';
 import { audit } from '@/lib/platform/audit';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
-import { embedOne, fetchAllRows } from '@/lib/postgrest';
+import { embedOne, fetchAllRows, inChunks } from '@/lib/postgrest';
+import { guardianPhones } from '@/lib/parents/phones';
 import { sendBulkSMS } from '@/lib/africastalking';
 import { rateLimit } from '@/lib/rate-limit';
-import { normalizeMpesaPhone } from '@/lib/phone';
 import { formatKsh, type FeeReminderSummary } from '@/lib/fee-account';
 
 const bodySchema = z.object({
@@ -23,19 +23,6 @@ interface LearnerFee {
     student: One<{ admission_number: string | null; guardian_phone: string | null; current_grade_stream_id: string | null; user: One<{ first_name: string | null }> }>;
 }
 
-/** Ids per `.in()` filter, so the request URL stays short. */
-const CHUNK = 150;
-
-async function inChunks<T>(ids: readonly string[], read: (chunk: string[]) => PromiseLike<{ data: T[] | null; error: unknown }>): Promise<T[]> {
-    const out: T[] = [];
-    for (let i = 0; i < ids.length; i += CHUNK) {
-        const { data, error } = await read(ids.slice(i, i + CHUNK));
-        if (error) throw error;
-        out.push(...(data ?? []));
-    }
-    return out;
-}
-
 /** Each learner's balance across every term they were billed for. */
 async function balances(db: SupabaseClient, schoolId: string, studentIds: string[]): Promise<Map<string, number>> {
     const rows = await inChunks<{ student_id: string; total_fee: number | string; paid_amount: number | string }>(studentIds, chunk =>
@@ -43,21 +30,6 @@ async function balances(db: SupabaseClient, schoolId: string, studentIds: string
     const owed = new Map<string, number>();
     for (const r of rows) owed.set(r.student_id, (owed.get(r.student_id) ?? 0) + Number(r.total_fee) - Number(r.paid_amount));
     return owed;
-}
-
-/** Every number that should hear about each learner: linked parents, then the contact on their record. */
-async function phonesFor(db: SupabaseClient, schoolId: string, learners: Map<string, string | null>): Promise<Map<string, Set<string>>> {
-    const links = await inChunks<{ student_id: string; parent: One<{ phone: string | null }> }>([...learners.keys()], chunk =>
-        db.from('student_guardians').select('student_id, parent:users!student_guardians_parent_user_id_fkey ( phone )').eq('school_id', schoolId).in('student_id', chunk));
-    const phones = new Map<string, Set<string>>();
-    const add = (studentId: string, phone: string | null | undefined) => {
-        const n = phone ? normalizeMpesaPhone(phone) : null;
-        if (!n) return;
-        phones.set(studentId, (phones.get(studentId) ?? new Set()).add(n));
-    };
-    for (const l of links) add(l.student_id, embedOne(l.parent)?.phone);
-    for (const [id, recordPhone] of learners) add(id, recordPhone);
-    return phones;
 }
 
 /**
@@ -84,7 +56,7 @@ export const POST = route('fee reminders', { module: 'fees', permission: 'fees.m
     const ids = learners.map(l => l.id);
     const [owed, phones] = await Promise.all([
         balances(db, access.schoolId, ids),
-        phonesFor(db, access.schoolId, new Map(learners.map(l => [l.id, l.student?.guardian_phone ?? null]))),
+        guardianPhones(db, access.schoolId, new Map(learners.map(l => [l.id, l.student?.guardian_phone ?? null]))),
     ]);
 
     const paybill = settings?.active_provider === 'DARAJA' && settings.shortcode ? String(settings.shortcode) : null;

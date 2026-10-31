@@ -57,3 +57,17 @@ export async function fetchAllRows<T>(
 /** Whether a write failed on the unique constraint matching `key` (e.g. /users_username_key/). */
 export const isUniqueViolationOn = (error: { code?: string; message: string; details?: string | null }, key: RegExp): boolean =>
     error.code === '23505' && key.test(`${error.message} ${error.details ?? ''}`);
+
+/** Ids per `.in()` filter, so the request URL stays short. */
+export const IN_FILTER_CHUNK = 150;
+
+/** Runs `read` over `ids` in `.in()`-sized chunks and joins the rows; throws the first error. */
+export async function inChunks<T>(ids: readonly string[], read: (chunk: string[]) => PromiseLike<{ data: T[] | null; error: unknown }>): Promise<T[]> {
+    const out: T[] = [];
+    for (let i = 0; i < ids.length; i += IN_FILTER_CHUNK) {
+        const { data, error } = await read(ids.slice(i, i + IN_FILTER_CHUNK));
+        if (error) throw error;
+        out.push(...(data ?? []));
+    }
+    return out;
+}

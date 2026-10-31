@@ -5,11 +5,13 @@ import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { sendBulkSMS } from '@/lib/africastalking';
 import { internalError } from '@/lib/api-errors';
 import { embedOne } from '@/lib/postgrest';
+import { guardianPhones } from '@/lib/parents/phones';
 import type { NotifyResult } from '@/lib/attendance';
 import { formatIsoDate, isIsoDate, latestDateAnywhere, schoolToday } from '@/lib/dates';
 
 /**
- * Texts the guardians of students marked absent on a day. Registers are kept
+ * Texts the guardians of students marked absent on a day: every linked
+ * parent and the contact on the learner's record. Registers are kept
  * by admins and by each class's own teacher, so only they may send these.
  */
 async function getSession() {
@@ -117,41 +119,45 @@ export async function POST(request: NextRequest) {
     const dayText = date === schoolToday() ? 'today' : `on ${formatIsoDate(date, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}`;
 
     const studentById = new Map(students.map(s => [s.id, s]));
+    // Every linked parent, and the contact on the learner's record.
+    const phones = await guardianPhones(supabase, schoolId, new Map(toNotify.map(id => [id, studentById.get(id)?.guardian_phone ?? null])));
     const logRows: NotificationLog[] = [];
     const toSend: { studentId: string; phone: string; message: string }[] = [];
     let skipped = 0;
 
     for (const studentId of toNotify) {
-      const student = studentById.get(studentId);
-      const phone = student?.guardian_phone?.trim();
-      if (!phone) {
+      const numbers = phones.get(studentId);
+      if (!numbers) {
         skipped++;
         logRows.push({ student_id: studentId, school_id: schoolId, date, channel: 'sms', status: 'skipped', error: 'No guardian phone', sent_by: userId });
         continue;
       }
-      const user = embedOne(student?.users);
+      const user = embedOne(studentById.get(studentId)?.users);
       const studentName = `${user?.first_name ?? ''} ${user?.last_name ?? ''}`.trim() || 'Your child';
-      toSend.push({
-        studentId,
-        phone,
-        message: `${schoolName}: ${studentName} was marked ABSENT ${dayText}. Contact the school office if this is a mistake.`,
-      });
+      const message = `${schoolName}: ${studentName} was marked ABSENT ${dayText}. Contact the school office if this is a mistake.`;
+      for (const phone of numbers) toSend.push({ studentId, phone, message });
     }
 
-    let sent = 0;
-    let failed = 0;
+    // A learner counts as reached when any of their numbers got the text.
+    const outcome = new Map<string, string | null>();
     if (toSend.length > 0) {
       const { results } = await sendBulkSMS(toSend.map(({ phone, message }) => ({ phone, message })));
       results.forEach((result, i) => {
         const { studentId } = toSend[i];
-        if (result.success) {
-          sent++;
-          logRows.push({ student_id: studentId, school_id: schoolId, date, channel: 'sms', status: 'sent', sent_by: userId });
-        } else {
-          failed++;
-          logRows.push({ student_id: studentId, school_id: schoolId, date, channel: 'sms', status: 'failed', error: result.error || 'Unknown error', sent_by: userId });
-        }
+        if (result.success) outcome.set(studentId, null);
+        else if (outcome.get(studentId) !== null) outcome.set(studentId, result.error || 'Unknown error');
       });
+    }
+    let sent = 0;
+    let failed = 0;
+    for (const [studentId, error] of outcome) {
+      if (error === null) {
+        sent++;
+        logRows.push({ student_id: studentId, school_id: schoolId, date, channel: 'sms', status: 'sent', sent_by: userId });
+      } else {
+        failed++;
+        logRows.push({ student_id: studentId, school_id: schoolId, date, channel: 'sms', status: 'failed', error, sent_by: userId });
+      }
     }
 
     if (logRows.length > 0) {
