@@ -24,6 +24,7 @@ import { clearCache } from '@/lib/queryCache';
 import { radius, spacing, fonts, makeStyles, useTheme, ThemeProvider } from '@/lib/theme';
 import { STAFF_ROLES, isRoleIn } from '@/lib/roles';
 import { describeError } from '@/lib/fatalErrorAlert';
+import { useLiveUpdates } from '@/lib/useLiveUpdates';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -191,6 +192,12 @@ function ThemedStatusBar() {
     return <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} animated />;
 }
 
+/** Keeps the app on the latest published update (see useLiveUpdates). */
+function LiveUpdates() {
+    useLiveUpdates();
+    return null;
+}
+
 export default function RootLayout() {
     // A font that fails to load falls back to the system font rather than blocking the app.
     const [fontsLoaded, fontError] = useFonts(FONT_FILES);
@@ -205,6 +212,7 @@ export default function RootLayout() {
                 <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY} tokenCache={tokenCache} __experimental_resourceCache={resourceCache}>
                     <ThemedStatusBar />
                     <ToastProvider>
+                        <LiveUpdates />
                         <AuthGate />
                     </ToastProvider>
                 </ClerkProvider>

@@ -1,0 +1,68 @@
+name: Mobile update
+
+# Every change to the phone app that reaches main goes out over the air
+# (EAS Update), so installed apps stay current without a new APK. The app
+# also imports the web's src/lib and src/types (`@shared/*`), so changes
+# there ship too. Native changes still need a new build: the fingerprint
+# runtime policy (app.json) keeps an update off any build it would not run on.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'mobile/**'
+      - 'src/lib/**'
+      - 'src/types/**'
+      - '.github/workflows/mobile-update.yml'
+  workflow_dispatch:
+
+# One publish at a time, in order; a newer push waits rather than racing.
+concurrency:
+  group: mobile-update
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+    steps:
+      - name: Require the Expo token
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "::error::Add an EXPO_TOKEN repository secret (expo.dev → Account settings → Access tokens) so app updates can be published."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      # A broken update would reach every phone, so it must at least compile.
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Publish to the preview and production apps
+        run: |
+          message="$(git log -1 --pretty=%s)"
+          for channel in preview production; do
+            eas update --channel "$channel" --environment "$channel" --message "$message" --non-interactive
+          done
