@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Image,
@@ -120,17 +120,20 @@ export function ScreenHeader({ title, description, action, icon, hue, eyebrow }:
     const label = eyebrow ?? identity?.eyebrow;
     return (
         <View style={styles.header}>
-            {Icon ? (
-                <LinearGradient colors={tone.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.headerIcon}>
-                    <Icon size={22} color="#ffffff" strokeWidth={2.2} />
-                </LinearGradient>
-            ) : null}
-            <View style={{ flex: 1, minWidth: 0 }}>
-                {label ? <Text style={[styles.headerEyebrow, { color: tone.fg }]}>{label.toUpperCase()}</Text> : null}
-                <Text style={styles.headerTitle} accessibilityRole="header">{title}</Text>
-                {description ? <Text style={styles.headerDesc}>{description}</Text> : null}
+            <View style={styles.headerRow}>
+                {Icon ? (
+                    <LinearGradient colors={tone.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.headerIcon}>
+                        <Icon size={22} color="#ffffff" strokeWidth={2.2} />
+                    </LinearGradient>
+                ) : null}
+                <View style={{ flex: 1, minWidth: 0 }}>
+                    {label ? <Text style={[styles.headerEyebrow, { color: tone.fg }]}>{label.toUpperCase()}</Text> : null}
+                    <Text style={styles.headerTitle} accessibilityRole="header">{title}</Text>
+                </View>
+                {action}
             </View>
-            {action}
+            {/* Under the title at full width, so a header button doesn't squeeze it into a column. */}
+            {description ? <Text style={[styles.headerDesc, Icon ? styles.headerDescIndent : null]}>{description}</Text> : null}
         </View>
     );
 }
@@ -362,8 +365,11 @@ export function Button({
     disabled,
     block,
     size = 'md',
+    icon: Icon,
 }: {
     label: string;
+    /** Leads the label, as the web's buttons do (a plus to add, a download arrow…). */
+    icon?: LucideIcon;
     onPress: () => void;
     variant?: ButtonVariant;
     loading?: boolean;
@@ -391,14 +397,20 @@ export function Button({
             ]}
         >
             {loading ? <ActivityIndicator size="small" color={variant === 'primary' || variant === 'danger' ? colors.white : colors.primary} /> : null}
+            {Icon && !loading ? <Icon size={size === 'sm' ? 14 : 16} color={StyleSheet.flatten(buttonTextStyles[variant]).color as string} strokeWidth={2.4} /> : null}
             <Text style={[styles.buttonText, size === 'sm' && { fontSize: 12 }, buttonTextStyles[variant]]}>{label}</Text>
         </Pressable>
     );
 }
 
-export function ButtonRow({ children }: { children: React.ReactNode }) {
+/**
+ * Buttons side by side, wrapping when they don't fit. Actions sit at the end
+ * (Cancel · Save); `align="start"` for a set of choices (curriculum bands,
+ * timetable sections) so a wrapped row doesn't leave ragged gaps on the left.
+ */
+export function ButtonRow({ children, align = 'end' }: { children: React.ReactNode; align?: 'start' | 'end' }) {
     const styles = useStyles();
-    return <View style={styles.buttonRow}>{children}</View>;
+    return <View style={[styles.buttonRow, align === 'start' && { justifyContent: 'flex-start' }]}>{children}</View>;
 }
 
 export function TextField({
@@ -543,18 +555,37 @@ export function SegmentedTabs<T extends string>({ tabs, value, onChange }: { tab
     );
 }
 
-/** Many sections: text tabs on a sideways-scrolling bar, the chosen one underlined. */
+/**
+ * Many sections: the same pill track as SegmentedTabs, scrolling sideways
+ * when the tabs don't fit, as the web's PageTabs do on a phone.
+ */
 export function ScrollTabs<T extends string>({ tabs, value, onChange }: { tabs: readonly ChipOption<T>[]; value: T; onChange: (v: T) => void }) {
     const styles = useStyles();
+    const scroller = useRef<ScrollView>(null);
+    // Where each tab starts, so one opened by a link (`?tab=`) scrolls into view.
+    const offsets = useRef(new Map<T, number>());
+    const reveal = useCallback((x: number | undefined) => {
+        if (x !== undefined) scroller.current?.scrollTo({ x: Math.max(0, x - spacing.lg), animated: true });
+    }, []);
+    useEffect(() => { reveal(offsets.current.get(value)); }, [reveal, value]);
     return (
-        <View style={styles.scrollTabs}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.lg, paddingRight: spacing.lg }}>
+        <View style={[styles.segmented, styles.scrollTrack]}>
+            <ScrollView ref={scroller} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.scrollTabRow}>
                 {tabs.map((t) => {
                     const active = t.value === value;
                     return (
-                        <Pressable key={t.value} onPress={() => onChange(t.value)} accessibilityRole="tab" accessibilityState={{ selected: active }} style={styles.scrollTab}>
-                            <Text style={[styles.scrollTabText, active && styles.scrollTabTextActive]} numberOfLines={1}>{t.label}</Text>
-                            <View style={[styles.scrollTabBar, active && styles.scrollTabBarActive]} />
+                        <Pressable
+                            key={t.value}
+                            onPress={() => onChange(t.value)}
+                            onLayout={(e) => {
+                                offsets.current.set(t.value, e.nativeEvent.layout.x);
+                                if (active) reveal(e.nativeEvent.layout.x);
+                            }}
+                            accessibilityRole="tab"
+                            accessibilityState={{ selected: active }}
+                            style={[styles.segment, styles.scrollTab, active && styles.segmentActive]}
+                        >
+                            <Text style={[styles.segmentText, active && styles.segmentTextActive]} numberOfLines={1}>{t.label}</Text>
                         </Pressable>
                     );
                 })}
@@ -633,11 +664,14 @@ const useStyles = makeStyles((colors) => ({
     pinned: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm, backgroundColor: colors.background, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border, zIndex: 2 },
     pinnedInner: { width: '100%', maxWidth: 760, alignSelf: 'center' },
     footer: { padding: spacing.md, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.card },
-    header: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.lg },
-    headerIcon: { width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center', alignSelf: 'flex-start' },
+    header: { marginBottom: spacing.lg },
+    headerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+    headerIcon: { width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+    // The icon's width plus the gap: the description lines up under the title.
+    headerDescIndent: { marginLeft: 48 + spacing.md },
     headerEyebrow: { fontSize: 11, fontFamily: fonts.bold, letterSpacing: 1.2, marginBottom: 1 },
     headerTitle: { fontSize: 24, lineHeight: 30, fontFamily: fonts.display, color: colors.foreground, letterSpacing: -0.5 },
-    headerDesc: { fontFamily: fonts.regular, fontSize: 13, color: colors.muted, marginTop: 4 },
+    headerDesc: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18, color: colors.muted, marginTop: 2 },
     backLink: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: spacing.md, alignSelf: 'flex-start' },
     link: { color: colors.primary, fontFamily: fonts.bold, fontSize: 14 },
     sectionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.lg, marginBottom: spacing.sm },
@@ -660,7 +694,7 @@ const useStyles = makeStyles((colors) => ({
     statSub: { fontFamily: fonts.regular, fontSize: 11, color: colors.muted },
     badge: { paddingHorizontal: spacing.sm, paddingVertical: 3, borderRadius: radius.sm, alignSelf: 'flex-start' },
     badgeText: { fontSize: 11, fontFamily: fonts.bold },
-    empty: { alignItems: 'center', paddingVertical: spacing.xl * 1.5, paddingHorizontal: spacing.lg },
+    empty: { alignItems: 'center', paddingVertical: spacing.xl, paddingHorizontal: spacing.lg },
     emptyIcon: { width: 48, height: 48, borderRadius: 24, backgroundColor: colors.mutedBg, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.md },
     emptyTitle: { fontSize: 15, fontFamily: fonts.bold, color: colors.foreground, textAlign: 'center' },
     emptyDesc: { fontFamily: fonts.regular, fontSize: 13, color: colors.muted, marginTop: 4, textAlign: 'center' },
@@ -688,12 +722,11 @@ const useStyles = makeStyles((colors) => ({
     segmentActive: { backgroundColor: colors.card, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 2, shadowOffset: { width: 0, height: 1 }, elevation: 1 },
     segmentText: { fontSize: 13, fontFamily: fonts.semibold, color: colors.muted },
     segmentTextActive: { color: colors.foreground, fontFamily: fonts.bold },
-    scrollTabs: { borderBottomWidth: 1, borderBottomColor: colors.border, marginBottom: spacing.lg },
-    scrollTab: { paddingTop: spacing.sm },
-    scrollTabText: { fontSize: 14, fontFamily: fonts.semibold, color: colors.muted, paddingBottom: spacing.sm },
-    scrollTabTextActive: { color: colors.primary, fontFamily: fonts.bold },
-    scrollTabBar: { height: 3, borderTopLeftRadius: 3, borderTopRightRadius: 3, backgroundColor: 'transparent' },
-    scrollTabBarActive: { backgroundColor: colors.primary },
+    // A column, so the scroller takes the track's full width (a row would shrink it to nothing).
+    scrollTrack: { flexDirection: 'column', paddingHorizontal: 0 },
+    scrollTabRow: { gap: 4, paddingHorizontal: 4 },
+    // Each tab as wide as its label (SegmentedTabs share the width instead).
+    scrollTab: { flexGrow: 0, flexShrink: 0, flexBasis: 'auto', paddingHorizontal: spacing.md },
     dateRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.lg, marginBottom: spacing.md },
     dateArrow: { padding: spacing.sm },
     dateText: { fontSize: 14, fontFamily: fonts.bold, color: colors.foreground, minWidth: 160, textAlign: 'center' },

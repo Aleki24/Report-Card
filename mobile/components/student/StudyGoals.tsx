@@ -1,15 +1,16 @@
 import React, { useState } from 'react';
 import { DateField } from '@/components/DateField';
-import { Square, SquareCheck } from 'lucide-react-native';
+import { Square, SquareCheck, Plus } from 'lucide-react-native';
 import { Pressable, Text, View } from 'react-native';
 import { useApi } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { daysUntil, errorMessage } from '@/lib/format';
 import { spacing, useTheme } from '@/lib/theme';
-import { Badge, Button, ButtonRow, Card, ChipSelect, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView, TextField } from '@/components/ui';
+import { Badge, Button, ButtonRow, Card, ChipSelect, ErrorBanner, IconTile, ListCard, ListRow, LoadingView, TextField } from '@/components/ui';
 import { useToast } from '@/components/Toast';
 import { confirmAlert } from '@/lib/confirm';
 import type { Subject } from '@/lib/types';
+import { FEATURE_ICONS } from '@/lib/featureIcons';
 
 interface Goal {
     id: string;
@@ -103,7 +104,13 @@ export function StudyGoals() {
                 {loading && data == null ? (
                     <LoadingView />
                 ) : error && data == null ? null : goals.length === 0 ? (
-                    <EmptyState title="No goals yet" description="Set a target to work towards." />
+                    // One row, not a tall empty panel: what goals are, and the way to add one.
+                    <ListRow
+                        left={<IconTile icon={FEATURE_ICONS.cbc} hue="violet" />}
+                        title="Study goals"
+                        subtitle="Set a target to work towards, like 70% in Maths."
+                        right={!adding ? <Button size="sm" variant="secondary" icon={Plus} label="Goal" onPress={() => setAdding(true)} /> : undefined}
+                    />
                 ) : (
                     goals.map((g) => {
                         const dl = deadlineLabel(g.deadline);
@@ -130,10 +137,12 @@ export function StudyGoals() {
                     })
                 )}
             </ListCard>
-            <ButtonRow>
-                {goals.length > 0 ? <Text style={{ fontSize: 12, color: colors.muted, flex: 1, alignSelf: 'center' }}>{done} of {goals.length} done</Text> : null}
-                {!adding ? <Button size="sm" variant="secondary" label="+ Goal" onPress={() => setAdding(true)} /> : null}
-            </ButtonRow>
+            {goals.length > 0 ? (
+                <ButtonRow>
+                    <Text style={{ fontSize: 12, color: colors.muted, flex: 1, alignSelf: 'center' }}>{done} of {goals.length} done</Text>
+                    {!adding ? <Button size="sm" variant="secondary" icon={Plus} label="Goal" onPress={() => setAdding(true)} /> : null}
+                </ButtonRow>
+            ) : null}
         </View>
     );
 }

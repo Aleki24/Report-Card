@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { Plus } from 'lucide-react-native';
 import { Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { dateTime, personName } from '@shared/ops/format';
@@ -170,7 +171,7 @@ export default function ExamPapersScreen() {
                 screen="exam-papers"
                 title="Exam paper bank"
                 description="Upload papers securely, moderate them, print the right number of copies and release them after the exam."
-                action={can('exam_papers.upload') ? <Button size="sm" label="+ Upload" onPress={() => setUploading(true)} /> : undefined}
+                action={can('exam_papers.upload') ? <Button size="sm" icon={Plus} label="Upload" onPress={() => setUploading(true)} /> : undefined}
                 tabs={[
                     {
                         id: 'mine', label: 'My papers', visible: can('exam_papers.upload'),

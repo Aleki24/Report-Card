@@ -1,6 +1,6 @@
 import React from 'react';
 import { HomeScreen } from './Hero';
-import { Bell } from 'lucide-react-native';
+import { FEATURE_ICONS } from '@/lib/featureIcons';
 import type { StaffDashboardData } from '@shared/dashboard';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { OperationsOverview } from '@/components/OperationsOverview';
@@ -27,7 +27,7 @@ export function StaffHome({ name, jobTitle }: { name: string; jobTitle: string |
             <Reveal index={1}><OperationsOverview /></Reveal>
             <Reveal index={2} style={{ marginTop: 20 }}>
                 <InsightCard title="School news">
-                    <LinkRow label="Announcements" desc="Read the latest notices from the school" icon={Bell} hue="rose" href="/staff/announcements" last />
+                    <LinkRow label="Announcements" desc="Read the latest notices from the school" icon={FEATURE_ICONS.announcements} hue="rose" href="/staff/announcements" last />
                 </InsightCard>
             </Reveal>
         </HomeScreen>

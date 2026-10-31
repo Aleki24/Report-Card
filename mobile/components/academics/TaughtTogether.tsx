@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
-import { Link2, Trash2 } from 'lucide-react-native';
+import { Link2, Trash2, Plus } from 'lucide-react-native';
 import { BAND_LABELS, type CurriculumBand } from '@shared/curriculum-bands';
 import { TOGETHER_URL, levelsOf, ruleScope, subjectsAt, toggled, type TogetherRules } from '@shared/timetable/together';
 import { Button, ButtonRow, LoadingView, TextField } from '@/components/ui';
@@ -124,7 +124,7 @@ export function TaughtTogether({ onChange }: { onChange: () => void }) {
                 </View>
             ) : (
                 <ButtonRow>
-                    <Button size="sm" variant="secondary" label="+ Add a group" onPress={() => setAdding(true)} />
+                    <Button size="sm" variant="secondary" icon={Plus} label="Add a group" onPress={() => setAdding(true)} />
                 </ButtonRow>
             )}
         </View>

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Plus } from 'lucide-react-native';
 import { DateField } from '@/components/DateField';
 import { StyleSheet, Switch, Text, View } from 'react-native';
 import {
@@ -170,7 +171,7 @@ export function DutiesPanel() {
             <Card style={{ marginBottom: spacing.md }}>
                 <Text style={styles.title}>Roles & duties</Text>
                 <Text style={styles.muted}>Give staff the jobs they do: a teacher can also be DOS or a patron; a bursar or nurse signs in as Staff and gets their module.</Text>
-                <View style={{ marginTop: spacing.md }}><Button label="+ Assign duty" onPress={() => setOpen(true)} block /></View>
+                <View style={{ marginTop: spacing.md }}><Button icon={Plus} label="Assign duty" onPress={() => setOpen(true)} block /></View>
             </Card>
 
             {loading ? <LoadingView /> : rows.length === 0 ? (

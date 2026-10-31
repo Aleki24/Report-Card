@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Plus } from 'lucide-react-native';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { useApi } from '@/lib/api';
 import { errorMessage } from '@/lib/format';
@@ -85,7 +86,7 @@ export function PaperSetup({
             ))}
             <ButtonRow>
                 {papers.length > 2 ? <Button size="sm" variant="ghost" label="− Paper" onPress={() => setPapers((prev) => prev.slice(0, -1))} /> : null}
-                {papers.length < 6 ? <Button size="sm" variant="ghost" label="+ Paper" onPress={() => setPapers((prev) => [...prev, ...defaultPapers(prev.length + 1, maxScore).slice(prev.length)])} /> : null}
+                {papers.length < 6 ? <Button size="sm" variant="ghost" icon={Plus} label="Paper" onPress={() => setPapers((prev) => [...prev, ...defaultPapers(prev.length + 1, maxScore).slice(prev.length)])} /> : null}
             </ButtonRow>
             <ButtonRow>
                 <Button variant="secondary" label="Cancel" onPress={onCancel} />

@@ -3,10 +3,8 @@ import { whatsappNumber } from './PersonRow';
 import { Linking, Pressable, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Clipboard from 'expo-clipboard';
-import {
-    AtSign, Award, BookMarked, BookOpen, Cake, Camera, CalendarDays, ClipboardCheck, Copy, FileText, Hash, Layers, Mail,
-    MessageCircle, Pencil, Phone, School, Trash2, TrendingUp, UserRound, Users, type LucideIcon,
-} from 'lucide-react-native';
+import { AtSign, Award, BookMarked, BookOpen, Cake, Camera, CalendarDays, Copy, FileText, Hash, Layers, Mail, MessageCircle, Pencil, Phone, School, Trash2, TrendingUp, UserRound, Users, type LucideIcon } from 'lucide-react-native';
+import { FEATURE_ICONS } from '@/lib/featureIcons';
 import type { StudentProfileResponse, TermPerformance } from '@shared/user-profile';
 import { formatDate, gradeTone, initials } from '@/lib/format';
 import { fonts, makeStyles, radius, spacing, useTheme, shadowFor } from '@/lib/theme';
@@ -181,7 +179,7 @@ export function StudentProfile({ data, username, actions }: { data: StudentProfi
                             {latestReport?.position != null
                                 ? <KpiTile title={`Position · ${latestReport.term} report`} value={latestReport.position} icon={Award} hue="amber" />
                                 : <KpiTile title={latestReport ? `Report cards · latest ${latestReport.term}` : 'Report cards · none released yet'} value={reportHistory.length || '—'} icon={FileText} hue="amber" />}
-                            <KpiTile title={latestAttendance ? `Attendance · ${latestAttendance.term}` : 'Attendance · not recorded'} value={latestAttendance?.percentage != null ? `${latestAttendance.percentage}%` : '—'} icon={ClipboardCheck} hue="teal" />
+                            <KpiTile title={latestAttendance ? `Attendance · ${latestAttendance.term}` : 'Attendance · not recorded'} value={latestAttendance?.percentage != null ? `${latestAttendance.percentage}%` : '—'} icon={FEATURE_ICONS.attendance} hue="teal" />
                             <KpiTile title={p.enrolled_subjects.length ? 'Subjects · enrolled' : 'Subjects · with marks this term'} value={p.enrolled_subjects.length || latestTerm?.subjects.length || '—'} icon={BookOpen} hue="emerald" />
                         </KpiGrid>
                     </Reveal>

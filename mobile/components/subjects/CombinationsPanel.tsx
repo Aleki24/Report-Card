@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { Plus } from 'lucide-react-native';
 import { Text, View } from 'react-native';
 import { MINISTRY_COMBINATION_TEMPLATES, PATHWAYS, PATHWAY_ORDER, pathwayLabel, type CbcPathway } from '@shared/pathway-definitions';
 import {
@@ -131,7 +132,7 @@ export function CombinationsPanel({ structure, minGroupSize, onChanged }: { stru
         <View>
             <Text style={{ fontSize: 12, color: colors.muted, marginBottom: spacing.md }}>{combinationsHelp(minGroupSize)}</Text>
             <OfficialPicker offered={offered} existing={existing} onAdd={(codes) => void addOfficial(codes)} busy={busy} />
-            <Button variant="secondary" label="+ Custom combination" onPress={() => { setEditingId(null); setForm(emptyCombinationForm()); }} block />
+            <Button variant="secondary" icon={Plus} label="Custom combination" onPress={() => { setEditingId(null); setForm(emptyCombinationForm()); }} block />
 
             {combinations.length === 0 ? <EmptyState title="No combinations yet." description="Add official ones above, or a custom one." /> : combinations.map((c) => {
                 const count = c.student_count ?? 0;

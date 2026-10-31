@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Pressable, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { Platform, Pressable, Text, View, useWindowDimensions, type StyleProp, type ViewStyle } from 'react-native';
 import { useRouter, type Href } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import Animated, { FadeInDown, useAnimatedStyle, useSharedValue, withSpring, withTiming, Easing } from 'react-native-reanimated';
@@ -79,10 +79,13 @@ export function CountUp({ value, style, fit }: { value: number | string; style?:
         return () => cancelAnimationFrame(frame);
     }, [target]);
     const fitProps = fit ? { numberOfLines: 1, adjustsFontSizeToFit: true, minimumFontScale: 0.6 } : {};
-    if (!match || !Number.isFinite(target)) return <Text style={style} {...fitProps}>{text}</Text>;
+    // The browser has no adjustsFontSizeToFit: step a long figure down instead of cutting it off.
+    const webFit = fit && Platform.OS === 'web' && text.length > 7 ? { fontSize: text.length > 11 ? 13 : 16 } : null;
+    const textStyle = webFit ? [style, webFit] : style;
+    if (!match || !Number.isFinite(target)) return <Text style={textStyle} {...fitProps}>{text}</Text>;
     const decimals = match[1].includes('.') ? match[1].split('.')[1].length : 0;
     const body = shown.toLocaleString('en-KE', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
-    return <Text style={style} {...fitProps}>{body}{match[2]}</Text>;
+    return <Text style={textStyle} {...fitProps}>{body}{match[2]}</Text>;
 }
 
 /** A bar that fills to its value when shown. */
@@ -135,8 +138,9 @@ export function KpiTile({ title, value, icon: Icon, hue, tone, href }: {
             <Text style={styles.kpiTitle} numberOfLines={2}>{title}</Text>
         </>
     );
+    const columns = useContext(KpiColumns);
     return (
-        <View style={styles.kpiCell}>
+        <View style={[styles.kpiCell, { flexBasis: `${100 / columns}%` }]}>
             {href ? (
                 <PressScale onPress={() => router.push(href)} style={styles.kpi} accessibilityRole="link" accessibilityLabel={`${title}: ${value}`}>{body}</PressScale>
             ) : (
@@ -146,9 +150,34 @@ export function KpiTile({ title, value, icon: Icon, hue, tone, href }: {
     );
 }
 
+const KpiColumns = createContext(3);
+
+/**
+ * Tiles per row for this many: two or four as pairs, otherwise threes on a
+ * phone; one row on a tablet. Cells grow, so a short last row fills the
+ * width instead of leaving an empty slot.
+ */
+function kpiColumns(count: number, wide: boolean): number {
+    if (wide) return Math.max(1, Math.min(count, 6));
+    return count === 2 || count === 4 ? 2 : Math.max(1, Math.min(count, 3));
+}
+
+/** Tiles actually shown: nulls left out, fragments (a role's group of tiles) counted by what they hold. */
+function countTiles(children: React.ReactNode): number {
+    return React.Children.toArray(children).reduce<number>((n, child) => (
+        React.isValidElement<{ children?: React.ReactNode }>(child) && child.type === React.Fragment ? n + countTiles(child.props.children) : n + 1
+    ), 0);
+}
+
 export function KpiGrid({ children }: { children: React.ReactNode }) {
     const styles = useStyles();
-    return <View style={styles.kpiGrid}>{children}</View>;
+    const { width } = useWindowDimensions();
+    const count = countTiles(children);
+    return (
+        <KpiColumns.Provider value={kpiColumns(count, width >= 600)}>
+            <View style={styles.kpiGrid}>{children}</View>
+        </KpiColumns.Provider>
+    );
 }
 
 export interface QuickAction { label: string; icon: LucideIcon; hue: Hue; href: Href }
@@ -196,6 +225,32 @@ export function InsightCard({ title, meta, action, children }: { title: string; 
     );
 }
 
+export interface StillToComeItem { icon: LucideIcon; text: string }
+
+/**
+ * The sections of a home that have nothing in them yet, as one short card
+ * (a line each) rather than a stack of empty panels. `false` entries are
+ * sections that do have content; nothing renders when every one does.
+ */
+export function StillToCome({ items }: { items: readonly (StillToComeItem | false)[] }) {
+    const { colors } = useTheme();
+    const styles = useStyles();
+    const shown = items.filter((item): item is StillToComeItem => item !== false);
+    if (shown.length === 0) return null;
+    return (
+        <InsightCard title="Still to come" meta="Each appears here as it happens">
+            <View style={{ gap: spacing.sm }}>
+                {shown.map(({ icon: Icon, text }) => (
+                    <View key={text} style={styles.pendingRow}>
+                        <View style={styles.pendingIcon}><Icon size={14} color={colors.muted} /></View>
+                        <Text style={styles.pendingText}>{text}</Text>
+                    </View>
+                ))}
+            </View>
+        </InsightCard>
+    );
+}
+
 /** One line of a link list: tinted icon, label and description, arrow. */
 export function LinkRow({ label, desc, icon: Icon, hue, href, last }: { label: string; desc: string; icon: LucideIcon; hue: Hue; href: Href; last?: boolean }) {
     const { colors, tones } = useTheme();
@@ -231,7 +286,7 @@ const useStyles = makeStyles((colors) => ({
     sectionAction: { flexDirection: 'row', alignItems: 'center', gap: 2 },
     sectionActionText: { fontSize: 13, fontFamily: fonts.semibold, color: colors.primary },
     kpiGrid: { flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -4 },
-    kpiCell: { width: '33.333%', padding: 4 },
+    kpiCell: { flexGrow: 1, padding: 4 },
     kpi: { backgroundColor: colors.card, borderRadius: radius.xl, borderWidth: 1, borderColor: colors.border, padding: spacing.sm + 2, minHeight: 96, ...shadowFor(colors) },
     kpiIcon: { width: 30, height: 30, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
     kpiValue: { fontSize: 20, fontFamily: fonts.display, letterSpacing: -0.5 },
@@ -245,6 +300,9 @@ const useStyles = makeStyles((colors) => ({
     insightHead: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md, marginBottom: spacing.md },
     insightTitle: { fontSize: 15, fontFamily: fonts.bold, color: colors.foreground },
     insightMeta: { fontSize: 12, fontFamily: fonts.regular, color: colors.muted, marginTop: 1 },
+    pendingRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+    pendingIcon: { width: 28, height: 28, borderRadius: 9, backgroundColor: colors.mutedBg, alignItems: 'center', justifyContent: 'center' },
+    pendingText: { flex: 1, fontSize: 13, lineHeight: 18, fontFamily: fonts.regular, color: colors.muted },
     linkRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: 11, paddingHorizontal: spacing.md },
     linkRowBorder: { borderBottomWidth: 1, borderBottomColor: colors.border },
     linkIcon: { width: 36, height: 36, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },

@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { GraduationCap, Pencil, School, Search, UserRoundCog, UserRound, Users } from 'lucide-react-native';
+import { GraduationCap, Pencil, School, Search, UserRoundCog, UserRound, Users, Plus } from 'lucide-react-native';
 import { CLASSES_OVERVIEW_URL, classDeleteBlocker, type ClassSummary, type ClassesOverview } from '@shared/classes-overview';
 import { useApi, withQuery } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
@@ -163,7 +163,7 @@ function ClassesContent() {
             ) : (
                 <ButtonRow>
                     {classes.length > 0 ? <Button variant="secondary" label="Promote students" onPress={() => router.push('/staff/promotion')} /> : null}
-                    <Button label="+ Add class" onPress={() => setAdding(true)} />
+                    <Button icon={Plus} label="Add class" onPress={() => setAdding(true)} />
                 </ButtonRow>
             )}
 

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Plus } from 'lucide-react-native';
 import { StyleSheet, Text, View } from 'react-native';
 import { useApi } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
@@ -76,7 +77,7 @@ export default function AnnouncementsScreen() {
             <ScreenHeader
                 title="Announcements"
                 description="School-wide news and updates."
-                action={canPost && !draft ? <Button size="sm" label="+ New" onPress={() => setDraft(EMPTY)} /> : undefined}
+                action={canPost && !draft ? <Button size="sm" icon={Plus} label="New" onPress={() => setDraft(EMPTY)} /> : undefined}
             />
             {error ? <ErrorBanner message={error} onRetry={refresh} /> : null}
             {message ? <Notice tone={message.tone} message={message.text} onDismiss={() => setMessage(null)} /> : null}

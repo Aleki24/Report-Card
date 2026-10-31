@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { Plus } from 'lucide-react-native';
 import { DateField } from '@/components/DateField';
 import { Text, View } from 'react-native';
 import { date as fmtDate, personName, today } from '@shared/ops/format';
@@ -287,9 +288,9 @@ function PeriodsEditor({ periods, onChange }: { periods: readonly TimetablePerio
                     </ButtonRow>
                 </Card>
             ))}
-            <ButtonRow>
-                <Button size="sm" variant="secondary" label="+ Lesson period" onPress={() => onChange(withAddedPeriodTo(periods, false))} />
-                <Button size="sm" variant="secondary" label="+ Break" onPress={() => onChange(withAddedPeriodTo(periods, true))} />
+            <ButtonRow align="start">
+                <Button size="sm" variant="secondary" icon={Plus} label="Lesson period" onPress={() => onChange(withAddedPeriodTo(periods, false))} />
+                <Button size="sm" variant="secondary" icon={Plus} label="Break" onPress={() => onChange(withAddedPeriodTo(periods, true))} />
             </ButtonRow>
         </View>
     );
@@ -360,9 +361,9 @@ export function DayStructureEditor({ onSaved }: { onSaved?: () => void } = {}) {
                     </ButtonRow>
                 </Card>
             ))}
-            <ButtonRow>
-                {openSectionPresets(config).map((p) => <Button key={p.key} size="sm" variant="secondary" label={`+ ${p.name}`} onPress={() => update((c) => withSectionAdded(c, p.key))} />)}
-                <Button size="sm" variant="ghost" label="+ Custom section" onPress={() => update((c) => withSectionAdded(c, null))} />
+            <ButtonRow align="start">
+                {openSectionPresets(config).map((p) => <Button key={p.key} size="sm" variant="secondary" icon={Plus} label={p.name} onPress={() => update((c) => withSectionAdded(c, p.key))} />)}
+                <Button size="sm" variant="ghost" icon={Plus} label="Custom section" onPress={() => update((c) => withSectionAdded(c, null))} />
             </ButtonRow>
 
             <View style={{ marginTop: spacing.md }}>

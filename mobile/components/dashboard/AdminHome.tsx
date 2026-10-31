@@ -1,9 +1,9 @@
 import React from 'react';
 import { HomeScreen } from './Hero';
 import {
-    BarChart3, BookOpen, Briefcase, CalendarCheck, CircleCheck, ClipboardList, FileText, GraduationCap, Megaphone,
-    UserPlus, Users, Wallet,
+    CalendarCheck, CircleCheck, ClipboardList, FileText, Megaphone, UserPlus, Users,
 } from 'lucide-react-native';
+import { FEATURE_ICONS } from '@/lib/featureIcons';
 import type { DashboardData } from '@shared/dashboard';
 import { totalAttendanceCount } from '@shared/dashboard';
 import { useApiQuery } from '@/lib/useApiQuery';
@@ -25,10 +25,10 @@ const QUICK_ACTIONS: readonly QuickAction[] = ([
     { label: 'Report cards', href: '/staff/reports', icon: FileText },
     { label: 'Attendance', href: '/staff/attendance', icon: CalendarCheck },
     { label: 'Add learner', href: '/staff/people', icon: UserPlus },
-    { label: 'Add staff', href: '/staff/people?tab=teachers', icon: GraduationCap },
+    { label: 'Add staff', href: '/staff/people?tab=teachers', icon: FEATURE_ICONS.teachers },
     { label: 'Announce', href: '/staff/announcements', icon: Megaphone },
-    { label: 'Assignment', href: '/staff/assignments', icon: Briefcase },
-    { label: 'Record payment', href: '/staff/fees', icon: Wallet },
+    { label: 'Assignment', href: '/staff/assignments', icon: FEATURE_ICONS.assignments },
+    { label: 'Record payment', href: '/staff/fees', icon: FEATURE_ICONS.fees },
 ] as const).map((a) => ({ ...a, hue: hueForHref(a.href) }));
 
 /**
@@ -74,16 +74,16 @@ export function AdminHome({ name }: { name: string }) {
                     <Reveal index={i++}>
                         <OperationsOverview>
                             <KpiTile title="Learners" value={data.totalStudents.toLocaleString()} icon={Users} hue="blue" href="/staff/people" />
-                            <KpiTile title="Teachers" value={data.totalTeachers} icon={GraduationCap} hue="violet" href="/staff/people?tab=teachers" />
-                            <KpiTile title="Classes" value={data.totalClasses} icon={BookOpen} hue="amber" href="/staff/classes" />
+                            <KpiTile title="Teachers" value={data.totalTeachers} icon={FEATURE_ICONS.teachers} hue="violet" href="/staff/people?tab=teachers" />
+                            <KpiTile title="Classes" value={data.totalClasses} icon={FEATURE_ICONS.classes} hue="amber" href="/staff/classes" />
                             {passRate != null ? (
-                                <KpiTile title={`Pass rate (≥${passMark}%)`} value={`${passRate}%`} icon={BarChart3} hue="sky" href="/staff/analytics" tone={passRate >= 70 ? 'good' : passRate >= 40 ? 'warn' : 'bad'} />
+                                <KpiTile title={`Pass rate (≥${passMark}%)`} value={`${passRate}%`} icon={FEATURE_ICONS.analytics} hue="sky" href="/staff/analytics" tone={passRate >= 70 ? 'good' : passRate >= 40 ? 'warn' : 'bad'} />
                             ) : null}
                             {data.hasAttendanceData && presentRate != null ? (
                                 <KpiTile title="Present today" value={`${presentRate}%`} icon={CircleCheck} hue="teal" href="/staff/attendance" tone="good" />
                             ) : null}
                             {data.hasFeeData && collectedRate != null ? (
-                                <KpiTile title="Fees collected" value={`${collectedRate}%`} icon={Wallet} hue="emerald" href="/staff/fees" tone={collectedRate >= 80 ? 'good' : 'warn'} />
+                                <KpiTile title="Fees collected" value={`${collectedRate}%`} icon={FEATURE_ICONS.fees} hue="emerald" href="/staff/fees" tone={collectedRate >= 80 ? 'good' : 'warn'} />
                             ) : null}
                         </OperationsOverview>
                     </Reveal>

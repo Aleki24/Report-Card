@@ -7,7 +7,8 @@ import {
     ATTENDANCE_TONES, absences, feeBalance, reportTermLabel, rideLine,
     type ChildLink, type ChildOverview,
 } from '@shared/ops/forms/platform';
-import { Bus, CalendarCheck, CalendarDays, GraduationCap, Users, Wallet } from 'lucide-react-native';
+import { Bus, CalendarCheck, CalendarDays, Users } from 'lucide-react-native';
+import { FEATURE_ICONS } from '@/lib/featureIcons';
 import { EmptyState, ErrorBanner, LoadingView, Screen } from '@/components/ui';
 import { HeroFrame } from '@/components/dashboard/Hero';
 import { InsightCard, KpiGrid, KpiTile, LegendItem, Meter, PressScale, Reveal } from '@/components/dashboard/kit';
@@ -65,9 +66,9 @@ function Overview({ childId, provider }: { childId: string; provider: PaymentSet
         <View>
             <Reveal index={i++}>
                 <KpiGrid>
-                    {data.summary ? <KpiTile title={data.summary.stats.averageTerm ? `Average · ${data.summary.stats.averageTerm}` : 'Average score'} value={data.summary.stats.examsTaken ? `${data.summary.stats.averageScore}%` : '—'} icon={GraduationCap} hue="blue" /> : null}
+                    {data.summary ? <KpiTile title={data.summary.stats.averageTerm ? `Average · ${data.summary.stats.averageTerm}` : 'Average score'} value={data.summary.stats.examsTaken ? `${data.summary.stats.averageScore}%` : '—'} icon={FEATURE_ICONS.results} hue="blue" /> : null}
                     {data.attendance.length > 0 ? <KpiTile title="Absent (30 days)" value={absent} icon={CalendarCheck} hue="teal" tone={absent > 2 ? 'warn' : 'good'} /> : null}
-                    {data.fees.length > 0 ? <KpiTile title="Fee balance" value={money(balance)} icon={Wallet} hue="emerald" tone={balance > 0 ? 'warn' : 'good'} /> : null}
+                    {data.fees.length > 0 ? <KpiTile title="Fee balance" value={money(balance)} icon={FEATURE_ICONS.fees} hue="emerald" tone={balance > 0 ? 'warn' : 'good'} /> : null}
                 </KpiGrid>
             </Reveal>
 

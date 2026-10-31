@@ -16,6 +16,7 @@ import { confirmAlert } from '@/lib/confirm';
 import { errorMessage } from '@/lib/format';
 import { opsGet } from '@/lib/ops';
 import { spacing, useTheme } from '@/lib/theme';
+import { FEATURE_ICONS } from '@/lib/featureIcons';
 
 /** Link parents to learners; new parents get an invite code by SMS. */
 function ParentLinks() {
@@ -100,7 +101,13 @@ function ParentLinks() {
                     </Card>
                     {code ? <View style={{ marginTop: spacing.md }}><Notice tone="info" message={`Invite code: ${code} — the parent activates at the sign-in page with this code.`} /></View> : null}
                 </>
-            ) : null}
+            ) : (
+                <EmptyState
+                    icon={FEATURE_ICONS.parents}
+                    title="Pick a learner"
+                    description="See the parents linked to them and add another. A new parent gets an invite code by SMS to set up their own sign-in."
+                />
+            )}
         </View>
     );
 }

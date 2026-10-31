@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { Plus } from 'lucide-react-native';
 import { Text } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCurrentUser } from '@/lib/UserContext';
@@ -168,7 +169,7 @@ function StudentsSection() {
                         <Button variant="secondary" label="Pathways" onPress={() => setAssigning(true)} />
                     ) : null}
                     <Button variant="secondary" label="Import CSV / Excel" onPress={() => setImporting(true)} />
-                    <Button label="+ Add student" onPress={() => setAdding(true)} />
+                    <Button icon={Plus} label="Add student" onPress={() => setAdding(true)} />
                 </ButtonRow>
             )}
             {pathwayNotice ? <Notice tone="success" message={pathwayNotice} onDismiss={() => setPathwayNotice(null)} /> : null}

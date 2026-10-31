@@ -4,8 +4,8 @@ import React, { useMemo, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
-    ArrowDownRight, ArrowUpRight, BookOpen, CalendarCheck, Clock3, DownloadCloud, FileText, GraduationCap,
-    Megaphone, Minus, TrendingUp, Wallet,
+    ArrowDownRight, ArrowUpRight, BookOpen, CalendarCheck, Clock3, DownloadCloud, FileText,
+    Megaphone, Minus, TrendingUp,
 } from 'lucide-react-native';
 import { localToday, type StudentAssignment } from '@shared/assignments';
 import { withQuery } from '@/lib/api';
@@ -24,7 +24,8 @@ import { StudyGoals } from '@/components/student/StudyGoals';
 import { HeroActions, HeroChip, HeroFrame, type HeroAction } from './Hero';
 import { DashboardSkeleton } from './Skeleton';
 import { ScoreRing, TrendChart } from './charts';
-import { InsightCard, KpiGrid, KpiTile, Meter, Reveal, SectionTitle } from './kit';
+import { InsightCard, KpiGrid, KpiTile, Meter, Reveal, SectionTitle, StillToCome } from './kit';
+import { FEATURE_ICONS } from '@/lib/featureIcons';
 import { totalOwed } from '@shared/fees';
 
 const STUDENT_HERO = ['#2563eb', '#4f46e5', '#7c3aed'] as const;
@@ -47,7 +48,7 @@ function HomeworkPanel({ assignments, onChanged }: { assignments: readonly Stude
     const shown = showAll ? sorted : sorted.slice(0, HOMEWORK_PREVIEW);
     return (
         <InsightCard title="Homework" meta={sorted.length ? `${pluralize(sorted.filter((a) => !a.submission).length, 'piece')} to hand in · tap one to read it` : undefined}>
-            {sorted.length === 0 ? <Text style={styles.quiet}>No homework set for you right now.</Text> : shown.map((a, i) => (
+            {shown.map((a, i) => (
                 <AssignmentItem key={a.id} assignment={a} divider={i > 0} onChanged={onChanged} />
             ))}
             {sorted.length > HOMEWORK_PREVIEW ? (
@@ -86,6 +87,8 @@ export function StudentHome() {
     const trends = data?.trends ?? [];
     const latest = data?.latestResults ?? [];
     const exams = data?.upcomingExams ?? [];
+    const assignments = data?.assignments ?? [];
+    const announcements = data?.announcements ?? [];
     const feeRows = fees.data ?? [];
     const feesBalance = totalOwed(feeRows);
     const hasResults = (stats?.examsTaken ?? 0) > 0;
@@ -116,7 +119,7 @@ export function StudentHome() {
     };
 
     const actions: HeroAction[] = [
-        { label: 'My results', icon: GraduationCap, href: '/student/results', primary: true },
+        { label: 'My results', icon: FEATURE_ICONS.results, href: '/student/results', primary: true },
         report && studentId
             ? { label: downloading ? 'Downloading…' : `${report.terms?.name ?? 'Latest'} report card`, icon: DownloadCloud, href: '/student/results', onPress: () => void downloadReport() }
             : { label: 'My subjects', icon: BookOpen, href: '/student/subjects' },
@@ -160,23 +163,23 @@ export function StudentHome() {
                 <KpiGrid>
                     <KpiTile title={stats?.averageTerm ? `${stats.averageTerm} average` : 'Average score'} value={average != null ? `${average}%` : '—'} icon={TrendingUp} hue="blue" href="/student/results" />
                     <KpiTile title="Subjects" value={stats?.subjectsCount ?? 0} icon={BookOpen} hue="emerald" href="/student/subjects" />
-                    <KpiTile title="Results released" value={stats?.examsTaken ?? 0} icon={GraduationCap} hue="violet" href="/student/results" />
+                    <KpiTile title="Results released" value={stats?.examsTaken ?? 0} icon={FEATURE_ICONS.results} hue="violet" href="/student/results" />
                     {(stats?.attendanceRecords ?? 0) > 0 ? (
                         <KpiTile title="Attendance" value={`${stats?.attendanceRate ?? 0}%`} icon={CalendarCheck} hue="teal" href="/student/attendance" tone="good" />
                     ) : null}
                     {feeRows.length > 0 ? (
-                        <KpiTile title="Fees balance" value={formatCurrency(feesBalance)} icon={Wallet} hue="emerald" href="/student/fees" tone={feesBalance > 0 ? 'bad' : 'good'} />
+                        <KpiTile title="Fees balance" value={formatCurrency(feesBalance)} icon={FEATURE_ICONS.fees} hue="emerald" href="/student/fees" tone={feesBalance > 0 ? 'bad' : 'good'} />
                     ) : null}
                 </KpiGrid>
             </Reveal>
 
             <Reveal index={i++} style={{ marginTop: spacing.xl }}>
-                <InsightCard
-                    title="Latest results"
-                    meta={latest.length > 0 ? 'Your most recent released marks' : undefined}
-                    action={{ label: 'All results', href: '/student/results' }}
-                >
-                    {latest.length === 0 ? <Text style={styles.quiet}>Your results will appear here once your teachers release them.</Text> : (
+                {latest.length > 0 ? (
+                    <InsightCard
+                        title="Latest results"
+                        meta="Your most recent released marks"
+                        action={{ label: 'All results', href: '/student/results' }}
+                    >
                         <View style={{ gap: spacing.md }}>
                             {latest.map((r) => {
                                 const pct = Math.round(Number(r.percentage) || 0);
@@ -197,17 +200,17 @@ export function StudentHome() {
                                 );
                             })}
                         </View>
-                    )}
-                </InsightCard>
+                    </InsightCard>
+                ) : null}
 
-                <InsightCard title="Progress over time" meta={trends.length > 1 ? 'Your average each term' : undefined}>
-                    {trends.length > 1 ? (
+                {trends.length > 1 ? (
+                    <InsightCard title="Progress over time" meta="Your average each term">
                         <TrendChart passMark={passMark} points={trends.map((t) => ({ label: `${t.termName} ${t.yearName}`.trim(), value: t.overallAverage }))} />
-                    ) : <Text style={styles.quiet}>Your progress chart appears after your second term of results.</Text>}
-                </InsightCard>
+                    </InsightCard>
+                ) : null}
 
-                <InsightCard title="Coming up" meta="Exams in the next 30 days">
-                    {exams.length === 0 ? <Text style={styles.quiet}>No exams scheduled yet.</Text> : (
+                {exams.length > 0 ? (
+                    <InsightCard title="Coming up" meta="Exams in the next 30 days">
                         <View style={{ gap: spacing.sm }}>
                             {exams.slice(0, 5).map((e) => {
                                 const days = daysUntil(e.exam_date);
@@ -228,31 +231,42 @@ export function StudentHome() {
                                 );
                             })}
                         </View>
-                    )}
-                </InsightCard>
+                    </InsightCard>
+                ) : null}
 
-                <HomeworkPanel assignments={data?.assignments ?? []} onChanged={refresh} />
+                {assignments.length > 0 ? <HomeworkPanel assignments={assignments} onChanged={refresh} /> : null}
 
-                <InsightCard title="Announcements">
-                    {(data?.announcements ?? []).length === 0 ? <Text style={styles.quiet}>No announcements from school yet.</Text> : (data?.announcements ?? []).slice(0, 4).map((a, n) => (
-                        <Pressable
-                            key={a.id}
-                            onPress={() => setOpenNotice(openNotice === a.id ? null : a.id)}
-                            accessibilityRole="button"
-                            accessibilityState={{ expanded: openNotice === a.id }}
-                            style={[styles.news, n > 0 && styles.hwBorder]}
-                        >
-                            <View style={[styles.newsIcon, { backgroundColor: a.isImportant ? colors.dangerBg : colors.primarySoft }]}>
-                                <Megaphone size={16} color={a.isImportant ? colors.danger : colors.primary} />
-                            </View>
-                            <View style={{ flex: 1, minWidth: 0 }}>
-                                <Text style={styles.resultName}>{a.title}{a.isImportant ? <Text style={[styles.important, { color: colors.danger }]}>  IMPORTANT</Text> : null}</Text>
-                                <Text style={styles.hwMeta} numberOfLines={openNotice === a.id ? undefined : 2}>{a.content}</Text>
-                                <Text style={styles.when}>{getTimeAgo(a.createdAt)}{openNotice === a.id ? '' : ' · tap to read'}</Text>
-                            </View>
-                        </Pressable>
-                    ))}
-                </InsightCard>
+                {announcements.length > 0 ? (
+                    <InsightCard title="Announcements">
+                        {announcements.slice(0, 4).map((a, n) => (
+                            <Pressable
+                                key={a.id}
+                                onPress={() => setOpenNotice(openNotice === a.id ? null : a.id)}
+                                accessibilityRole="button"
+                                accessibilityState={{ expanded: openNotice === a.id }}
+                                style={[styles.news, n > 0 && styles.hwBorder]}
+                            >
+                                <View style={[styles.newsIcon, { backgroundColor: a.isImportant ? colors.dangerBg : colors.primarySoft }]}>
+                                    <Megaphone size={16} color={a.isImportant ? colors.danger : colors.primary} />
+                                </View>
+                                <View style={{ flex: 1, minWidth: 0 }}>
+                                    <Text style={styles.resultName}>{a.title}{a.isImportant ? <Text style={[styles.important, { color: colors.danger }]}>  IMPORTANT</Text> : null}</Text>
+                                    <Text style={styles.hwMeta} numberOfLines={openNotice === a.id ? undefined : 2}>{a.content}</Text>
+                                    <Text style={styles.when}>{getTimeAgo(a.createdAt)}{openNotice === a.id ? '' : ' · tap to read'}</Text>
+                                </View>
+                            </Pressable>
+                        ))}
+                    </InsightCard>
+                ) : null}
+
+                {/* Sections with nothing in them yet fold into one card instead of a stack of empty ones. */}
+                <StillToCome items={[
+                    latest.length === 0 && { icon: FEATURE_ICONS.results, text: 'Your results, once your teachers release them' },
+                    trends.length <= 1 && { icon: TrendingUp, text: 'A progress chart, after your second term of results' },
+                    exams.length === 0 && { icon: FEATURE_ICONS.calendar, text: 'Exams in the next 30 days' },
+                    assignments.length === 0 && { icon: FEATURE_ICONS.assignments, text: 'Homework your teachers set' },
+                    announcements.length === 0 && { icon: FEATURE_ICONS.announcements, text: 'Announcements from school' },
+                ]} />
 
                 <View style={{ marginBottom: spacing.md }}><StudyGoals /></View>
 
@@ -280,7 +294,6 @@ const useStyles = makeStyles((colors) => ({
     deltaText: { fontSize: 13, fontFamily: fonts.bold, color: '#ffffff' },
     deltaVs: { fontSize: 11, fontFamily: fonts.regular, color: 'rgba(255,255,255,0.75)' },
     chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.md },
-    quiet: { fontSize: 13, lineHeight: 19, fontFamily: fonts.regular, color: colors.muted, borderWidth: 1, borderStyle: 'dashed', borderColor: colors.border, borderRadius: radius.xl, padding: spacing.md },
     result: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
     resultHead: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: spacing.sm, marginBottom: 6 },
     resultName: { flexShrink: 1, fontSize: 14, fontFamily: fonts.semibold, color: colors.foreground },

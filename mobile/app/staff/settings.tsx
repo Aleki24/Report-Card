@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { Plus } from 'lucide-react-native';
 import { DateField } from '@/components/DateField';
 import { useTabParam } from '@/lib/useTabParam';
 import { Image, Text, View } from 'react-native';
@@ -285,8 +286,8 @@ function CalendarTab() {
 
             {!yearDraft && !termDraft ? (
                 <ButtonRow>
-                    <Button variant="secondary" label="+ Year" onPress={() => setYearDraft({ name: '', start: '', end: '' })} />
-                    <Button label="+ Term" onPress={() => setTermDraft({ id: null, yearId: years[0]?.id ?? null, name: '', start: '', end: '', midtermClose: '', midterm: '', reopening: '', current: false })} disabled={years.length === 0} />
+                    <Button variant="secondary" icon={Plus} label="Year" onPress={() => setYearDraft({ name: '', start: '', end: '' })} />
+                    <Button icon={Plus} label="Term" onPress={() => setTermDraft({ id: null, yearId: years[0]?.id ?? null, name: '', start: '', end: '', midtermClose: '', midterm: '', reopening: '', current: false })} disabled={years.length === 0} />
                 </ButtonRow>
             ) : null}
 
@@ -389,7 +390,7 @@ function GradingTab() {
                 );
             })}
             <View style={{ marginTop: spacing.md }}>
-                <Button label="+ New grading system" onPress={() => setCreating(true)} block />
+                <Button icon={Plus} label="New grading system" onPress={() => setCreating(true)} block />
                 <Text style={{ fontSize: 12, color: colors.muted, marginTop: spacing.sm }}>Built-in systems are shared templates; make your own to change the bands.</Text>
             </View>
             {creating ? <NewGradingSystemSheet levels={levels} subjects={subjects} onClose={() => setCreating(false)} onSaved={() => { setCreating(false); structure.reload(); }} /> : null}

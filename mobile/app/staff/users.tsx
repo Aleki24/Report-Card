@@ -1,5 +1,6 @@
 import { useDownload } from '@/lib/useDownload';
 import React, { useMemo, useState } from 'react';
+import { Plus } from 'lucide-react-native';
 import { Text, View } from 'react-native';
 import { useApi } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
@@ -137,7 +138,7 @@ function UsersContent() {
             ) : (
                 <ButtonRow>
                     <Button variant="secondary" label="Print invite codes" onPress={printCodes} loading={busy === 'print'} />
-                    <Button label="+ Invite user" onPress={() => setInviting(true)} />
+                    <Button icon={Plus} label="Invite user" onPress={() => setInviting(true)} />
                 </ButtonRow>
             )}
 

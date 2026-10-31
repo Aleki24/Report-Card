@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { Plus } from 'lucide-react-native';
 import { DateField } from '@/components/DateField';
 import { Text } from 'react-native';
 import { useApi } from '@/lib/api';
@@ -26,7 +27,7 @@ export function CreateExamToggle({ term, structure, onCreated }: { term: Term; s
             <>
                 {done ? <Notice message={done} onDismiss={() => setDone(null)} /> : null}
                 <ButtonRow>
-                    <Button size="sm" variant="secondary" label="+ New exam" onPress={() => setOpen(true)} />
+                    <Button size="sm" variant="secondary" icon={Plus} label="New exam" onPress={() => setOpen(true)} />
                 </ButtonRow>
             </>
         );
