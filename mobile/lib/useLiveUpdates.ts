@@ -5,8 +5,6 @@ import { useToast } from '@/components/Toast';
 
 /** Checking more often than this only spends data: updates are published a few times a day at most. */
 const CHECK_EVERY_MS = 15 * 60 * 1000;
-/** Away at least this long, nobody is mid-task: a waiting update is applied as they come back. */
-const RESTART_AFTER_AWAY_MS = 5 * 60 * 1000;
 
 /** Updates work in release builds only; in development and Expo Go every call rejects. */
 const live = !__DEV__ && Updates.isEnabled;
@@ -21,22 +19,20 @@ async function downloadIfNew(): Promise<void> {
 }
 
 /**
- * Keeps the app on the latest published update without a new install.
+ * Finds published updates without a new install, and leaves applying them to
+ * the person: the app never restarts by itself.
  *
  * Expo checks once at launch and applies what it found on the launch after,
  * so a phone that stays open for days ran last week's app. Here:
  *   - it also checks whenever the app comes back to the foreground;
- *   - an update downloaded while the app is in use is offered with a
- *     "Restart now" toast, and otherwise applies at the next start;
- *   - an update waiting when someone returns after a while away is applied
- *     straight away, since they are not in the middle of anything. Mark
- *     entry keeps its drafts on the device, so typed marks survive.
+ *   - a downloaded update is offered with a "Restart now" toast, and
+ *     otherwise opens at the next start. Profile → Check for updates still
+ *     fetches one on demand.
  */
 export function useLiveUpdates(): void {
     const toast = useToast();
     const { isUpdatePending } = Updates.useUpdates();
     const lastCheck = useRef(Date.now());
-    const leftAt = useRef<number | null>(null);
     const offered = useRef(false);
 
     useEffect(() => {
@@ -51,17 +47,8 @@ export function useLiveUpdates(): void {
     useEffect(() => {
         if (!live) return;
         const onChange = (state: AppStateStatus) => {
-            if (state === 'background') {
-                leftAt.current = Date.now();
-                return;
-            }
-            if (state !== 'active') return;
-            const awayFor = leftAt.current === null ? 0 : Date.now() - leftAt.current;
-            leftAt.current = null;
-            if (isUpdatePending && awayFor >= RESTART_AFTER_AWAY_MS) {
-                void Updates.reloadAsync().catch(() => undefined);
-                return;
-            }
+            // One waiting update is enough; the next start opens it.
+            if (state !== 'active' || isUpdatePending) return;
             if (Date.now() - lastCheck.current >= CHECK_EVERY_MS) {
                 lastCheck.current = Date.now();
                 void downloadIfNew();
