@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
-import { AlertTriangle, ArrowRight, BookOpen, Layers, Plus, RotateCcw, School, UserRoundX, Users } from 'lucide-react';
+import { AlertTriangle, ArrowRight, ArrowUpRight, BookOpen, Layers, Plus, RotateCcw, School, UserRoundX, Users } from 'lucide-react';
 import PageHeader from '@/components/dashboard/PageHeader';
 import EmptyState from '@/components/dashboard/EmptyState';
 import { CardHeading, ConfirmDialog, Modal, StatTile } from '@/components/ui';
@@ -96,9 +96,16 @@ export default function ClassesPage() {
         hue="amber"
         description="Every grade you teach and its classes. Students, teachers, mark sheets and report cards all hang off a class."
         action={data && (
-          <button type="button" className="btn-primary" onClick={() => setAddingGrade(true)}>
-            <Plus className="size-4" aria-hidden />Add grade
-          </button>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            {data.classes.length > 0 && (
+              <Link href="/dashboard/classes/promotion" className="btn-secondary justify-center">
+                <ArrowUpRight className="size-4" aria-hidden />Promote students
+              </Link>
+            )}
+            <button type="button" className="btn-primary justify-center" onClick={() => setAddingGrade(true)}>
+              <Plus className="size-4" aria-hidden />Add grade
+            </button>
+          </div>
         )}
       />
 
