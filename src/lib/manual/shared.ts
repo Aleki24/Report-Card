@@ -54,12 +54,14 @@ export const navigationSection: ManualSection = {
 export const phoneSection = (name: string, caption: string): ManualSection => ({
     id: 'on-your-phone',
     title: 'Using Skulbase on a phone',
-    summary: 'Every page works on a phone. Tables turn into cards, and the menu moves to the bottom of the screen.',
+    summary: 'Every page works on a phone, in the browser or in the Skulbase app. Tables turn into cards, the main pages sit in a bar along the bottom, and everything else is under More.',
     figure: phoneShot(name, 'Skulbase on a phone, with the menu bar at the bottom', caption),
     points: [
-        'Use a current version of Chrome, Safari or Samsung Internet.',
+        'In the browser, use a current version of Chrome, Safari or Samsung Internet, and save skulbase.com to your home screen.',
+        'The Skulbase app signs in with the same account and shows the same pages. More lists every other page in one grid, with a search box to find one by name.',
+        'The app updates itself in the background. When an update is ready it offers “Restart now”; otherwise it opens the next time you start the app. Profile → “Check for updates” fetches the latest at any time.',
         'Mark entry keeps your work on the phone if the network drops, and saves it when you are back online.',
-        'Downloads such as report cards open in your phone’s PDF viewer, ready to share on WhatsApp or print.',
+        'Downloads such as report cards, receipts and statements open in your phone’s PDF viewer, ready to share on WhatsApp or print.',
     ],
 });
 
@@ -68,14 +70,17 @@ export const phoneSection = (name: string, caption: string): ManualSection => ({
 export const enterMarksSection: ManualSection = {
     id: 'enter-marks',
     title: 'Enter or correct marks',
-    summary: 'Marks go in on Exams & Marks, on the “Enter & Correct Marks” tab. You pick the term, the exam, the class and the subject, and a mark sheet opens with every learner in the class.',
-    figure: shot('marks-choose', 'The Exams & Marks page with Term, Exam and Class steps', 'Choose the term (the current one is marked NOW), then the exam, then the class and subject.'),
+    summary: 'Marks go in on Exams & Marks, on the “Enter & Correct Marks” tab. The school chooses which exam each class is marking, so you only pick the class and subject: the mark sheet opens on the right exam and your marks cannot land in the wrong one.',
     steps: [
         { title: 'Open Exams & Marks', body: 'Choose Exams & Marks in the menu. The “Enter & Correct Marks” tab is open.' },
-        { title: 'Choose the term', body: 'The current term is selected for you and marked NOW. Pick another term to correct older marks.' },
-        { title: 'Choose the exam', body: 'Tap the exam, for example Midterm or Endterm. Only exams your school has set up for that term are shown.' },
-        { title: 'Choose the class and subject', body: 'Pick the class, then the subject. Teachers only see the classes and subjects they teach.' },
-        { title: 'Open the mark sheet', body: 'Press “Open mark sheet”. Saved marks are already filled in.' },
+        { title: 'Pick up where you left off', body: 'If you were part-way through a sheet, “Pick up where you left off” at the top opens it again.' },
+        { title: 'Choose the class and subject', body: '“Marking now” lists each of your classes with the exam it is on (for example End-Term) and your subjects there. Pick the class, then the subject. You only see the classes and subjects you teach.' },
+        { title: 'Open the mark sheet', body: 'The sheet opens on the exam your school is marking, with a badge naming it. Saved marks are already filled in.' },
+    ],
+    points: [
+        'No exam open for a class yet? It shows “No exam open yet”. Press “Ask for the exam”: your administrator, principal or DOS sees the request and opens the right one.',
+        'To mark a CAT, correct an earlier exam or work in another term, press “Mark a CAT, correct an earlier exam or open another term” and choose the term, exam, class and subject yourself. A sheet also lists “Other exams for this class” to jump between them.',
+        'If you open an empty sheet for an exam the school is not marking, Skulbase asks you to check which exam the marks are from before you start.',
     ],
 };
 
@@ -94,6 +99,9 @@ export const markSheetSection: ManualSection = {
         '“Online” at the top right shows the sheet is connected. If the network drops, your typing is kept on this device and saved when you are back online.',
         'Scores are out of the exam’s maximum (shown at the top, for example “Out of 100”).',
         'A subject with several papers can be split with “Split into papers”; each paper then gets its own column and the final mark is worked out for you.',
+        'Once every learner on the sheet has a saved mark, the sheet offers to release the results there and then, so learners and parents can see them. You can still correct a mark afterwards.',
+        '“Change history” at the bottom lists every mark entered, changed or removed on the sheet: the old and new score, who saved it and when. The search box narrows it to one learner.',
+        'When the school locks a finished term, its sheets say so and cannot be saved. Ask whoever runs exams to unlock it for a correction.',
     ],
 };
 
@@ -115,13 +123,14 @@ export const releaseSection: ManualSection = {
     summary: 'Marks stay private to staff until they are released. Releasing a subject lets learners see its marks in their portal and on the report card’s QR check.',
     figure: shot('marks-release', 'The Release Results tab listing subjects and their release status', 'Release Results: each subject shows how many learners are marked and whether learners can see it.'),
     steps: [
-        { title: 'Open the Release Results tab', body: 'On Exams & Marks choose “Release Results”.' },
+        { title: 'Open the Release Results tab', body: 'On Exams & Marks choose “Release Results”. “Ready to release” at the top lists every paper this term that has its marks in and is not yet released, grouped by class and exam, each group one click from released.' },
         { title: 'Choose the class, term and exam', body: 'The list shows every subject for that exam and how many learners have marks.' },
         { title: 'Check the ranking preview', body: 'Scroll down to see the class ranking the release would produce, and any learners with missing papers (a missing paper counts as 0).' },
         { title: 'Release', body: 'Release a single subject, or all of them at once. Released subjects show “Learners can see”.' },
     ],
     points: [
         'You can still correct marks after releasing; learners see the corrected mark.',
+        'A finished mark sheet also offers to release its subject on the spot.',
         '“Withdraw” hides a subject from learners again at any time.',
     ],
 };
@@ -132,16 +141,55 @@ export const resultsTabSection: ManualSection = {
     summary: 'The “Results & Reports” tab on Exams & Marks shows how a class did: every subject side by side, one exam at a time, the analysis, and individual report cards.',
     figure: shot('marks-results', 'The Results & Reports tab for a class', 'Results & Reports: choose a class, then an exam, to see its results.'),
     points: [
-        'Choose a class, then an exam, to see the broadsheet and rankings.',
-        'Click a learner to download their PDF report card, or generate the whole class at once.',
+        'Choose a class. “All subjects” is the broadsheet and rankings, with its own term and exam choice.',
+        'For one subject, choose the term (the current one is selected), the exam and the subject. It opens on the exam the school is marking for that class, and each subject shows whether it is released.',
+        '“Correct marks” opens that paper’s mark sheet on Enter & Correct Marks.',
+        'Click a learner to download their PDF report card. Whole-class report cards are on the Report Cards page.',
     ],
 };
 
-export const marksChapter = (intro: string): ManualChapter => ({
+export const examBeingMarkedSection: ManualSection = {
+    id: 'exam-being-marked',
+    title: 'Choose the exam being marked',
+    summary: '“Exam being marked” on Enter & Correct Marks decides which exam each class is marking. Teachers then go straight to it, so Mid-Term marks never land in End-Term. Administrators, and staff with the Principal, Deputy Principal, DOS or Exams Officer duty, see it.',
+    steps: [
+        { title: 'Pick each level’s exam', body: 'Each level (for example Junior School) has a card. Choose the exam it is sitting, and every class in the level moves to it. A class sitting something different, such as a Form 4 mock, can be set on its own.' },
+        { title: 'Set the exam dates', body: 'Under a level’s “Exam dates”, pick the day each exam starts. Every paper of that exam for the level’s classes moves to that date, so Skulbase knows which exam is due.' },
+        { title: 'Move on when it changes', body: 'Once an exam is over, the card offers “Mid-Term done? Move on to End-Term”. Earlier exams stay open for corrections. “Stop marking” closes a level’s exam.' },
+        { title: 'Answer requests', body: 'When a teacher presses “Ask for the exam”, their class shows “Asked by” with their name until you choose one.' },
+    ],
+    points: [
+        'The heading says how many classes still have no exam chosen. Teachers there pick an exam themselves until you choose one.',
+        'CATs and topical tests are always open; teachers reach them from “Mark a CAT, correct an earlier exam or open another term”.',
+    ],
+};
+
+export const markingProgressSection: ManualSection = {
+    id: 'marking-progress',
+    title: 'See who is behind on marking',
+    summary: '“Marking progress” on Enter & Correct Marks lists, for the exam each class is marking, every subject in every stream as marks entered out of expected, with the teacher assigned. Unfinished sheets come first, so you can nudge the right teacher before report-card day. Tap a cell to open that mark sheet.',
+};
+
+export const termLockSection: ManualSection = {
+    id: 'lock-term',
+    title: 'Lock a finished term',
+    summary: 'Once report cards are out, lock the term so nobody changes a mark by mistake. The lock card is on Enter & Correct Marks for those who choose the exam being marked.',
+    steps: [
+        { title: 'Lock it', body: 'Press “Lock term” on the card and confirm. Nobody can enter, change or remove a mark in that term until it is unlocked. Releasing results still works.' },
+        { title: 'Unlock for a correction', body: 'Press Unlock, let the teacher fix the mark, then lock the term again.' },
+    ],
+};
+
+/** The marks chapter; `leaders` adds choosing the exam, marking progress and the term lock. */
+export const marksChapter = (intro: string, leaders = false): ManualChapter => ({
     id: 'marks',
     title: 'Exams and marks',
     intro,
-    sections: [enterMarksSection, markSheetSection, uploadMarksSection, releaseSection, resultsTabSection],
+    sections: [
+        ...(leaders ? [examBeingMarkedSection, markingProgressSection] : []),
+        enterMarksSection, markSheetSection, uploadMarksSection, releaseSection, resultsTabSection,
+        ...(leaders ? [termLockSection] : []),
+    ],
 });
 
 // ── Attendance ──────────────────────────────────────────────────
@@ -149,17 +197,41 @@ export const marksChapter = (intro: string): ManualChapter => ({
 export const attendanceSection: ManualSection = {
     id: 'attendance',
     title: 'Take the daily register',
-    summary: 'Attendance holds one register per class per day. Mark each learner Present, Absent, Late or Excused, add a reason if you like, and let guardians of absent learners know by SMS.',
+    summary: 'Attendance holds one register per class per day. On the Register tab, mark each learner Present, Absent, Late or Excused, add a reason if you like, and let the parents of absent learners know by SMS.',
     figure: shot('attendance', 'The attendance register for a class with Present, Absent, Late and Excused buttons', 'The register: totals at the top, one row per learner, and a Save bar at the bottom.'),
     steps: [
-        { title: 'Open Attendance', body: 'Choose Attendance in the menu. A class teacher’s own class opens straight away; otherwise pick the class.' },
-        { title: 'Check the day', body: 'Today is selected. Use the arrows or the date box to fill in an earlier day.' },
+        { title: 'Open Attendance', body: 'Choose Attendance in the menu. The Register tab is open. A class teacher’s own class opens straight away; otherwise pick the class.' },
+        { title: 'Check the day', body: 'Today is selected. The arrows step to the previous or next school day, skipping weekends; the date box picks any day. A weekend day is flagged if you choose one.' },
         { title: 'Mark each learner', body: 'Tap Present, Absent, Late or Excused on each row. To save time, press “Mark N unmarked present” and then change only the exceptions.' },
         { title: 'Add a reason (optional)', body: 'The note icon at the end of a row adds a reason, such as “Unwell”. It shows under the learner’s name.' },
         { title: 'Save', body: 'Press Save at the bottom. Unsaved changes are kept if you switch class or day by mistake: you are asked first.' },
-        { title: 'Tell guardians', body: 'Press “Notify guardians” to text the guardian of every learner marked absent. You see who will be texted before anything is sent.' },
+        { title: 'Tell parents', body: 'Press “Notify guardians” to text the parents of every learner marked absent: every linked parent and the number on the learner’s record. You see who will be texted before anything is sent, and nobody is texted twice for the same day.' },
     ],
     tip: 'PDF downloads the day’s register for printing or filing.',
+};
+
+export const attendanceSchoolSection: ManualSection = {
+    id: 'attendance-school',
+    title: 'The whole school on one day',
+    summary: 'The Whole school tab (administrators) shows any school day across every class: how many registers have been taken out of all classes, how many learners are absent and late, and the school’s attendance rate.',
+    points: [
+        'Classes whose register has not been taken come first, marked “Not taken”, so you can remind their teachers.',
+        'Each class shows a colour bar for the day (present, late, excused, absent), its rate and how many are absent.',
+        'Tap a class to open its register for that day.',
+        'The arrows move between school days, skipping weekends.',
+    ],
+};
+
+export const attendanceReportsSection: ManualSection = {
+    id: 'attendance-reports',
+    title: 'Attendance reports',
+    summary: 'The Reports tab shows one class over a period: the class’s attendance rate, how many registers were taken, and which learners attend less than 85% of the time. Administrators can choose any class; class teachers see their own.',
+    steps: [
+        { title: 'Choose the class and period', body: 'Pick the class, then This week, This month, Last 30 days or Last 90 days, or set your own dates (up to 120 days).' },
+        { title: 'Read it', body: 'Learners are listed lowest attendance first, each with their rate, absent, late and excused days, and a small square for every day the register was taken. Tick “Only below 85%” to see just the learners to follow up.' },
+        { title: 'Export', body: '“Excel” downloads the same grid: one column per day with P, A, L or E, the totals and each learner’s rate.' },
+    ],
+    tip: 'A day counts only if the class’s register was taken that day. A learner left unmarked on a day the register was taken counts as not marked, not absent.',
 };
 
 // ── Communication ───────────────────────────────────────────────

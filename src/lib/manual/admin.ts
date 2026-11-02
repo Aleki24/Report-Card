@@ -1,8 +1,9 @@
 import { shot } from './figures';
 import {
-    activateSection, announcementsSection, assignmentsSection, attendanceSection, helpChapter,
-    marksChapter, navigationSection, phoneSection, signInSection,
+    activateSection, announcementsSection, assignmentsSection, attendanceReportsSection, attendanceSchoolSection,
+    attendanceSection, helpChapter, marksChapter, navigationSection, phoneSection, signInSection,
 } from './shared';
+import { feesChapter } from './fees';
 import { parentAccountsSection } from './modules';
 import type { Manual } from './types';
 
@@ -10,7 +11,7 @@ export const adminManual: Manual = {
     slug: 'admin',
     title: 'Administrator guide',
     audience: 'Principals, deputy principals, directors of studies and school administrators',
-    summary: 'Everything needed to set a school up on Skulbase and run it through the term: the school’s calendar and grading, the modules it runs and the duties staff hold, classes and subjects, staff, learner and parent accounts, marks and report cards, attendance, fees, and messages to parents.',
+    summary: 'Everything needed to set a school up on Skulbase and run it through the year: the school’s calendar and grading, the modules it runs and the duties staff hold, classes and subjects, staff, learner and parent accounts, choosing the exam being marked, marks and report cards, attendance and its reports, fees and who owes, messages to parents, and promoting learners at the end of the year.',
     chapters: [
         {
             id: 'start',
@@ -195,6 +196,7 @@ export const adminManual: Manual = {
                     points: [
                         'Filter by class, status (active, transferred, graduated), pathway or subject combination, or search by name, admission number or guardian.',
                         '“Pathways” sets Senior School pathways for several learners at once.',
+                        'Open a learner to see their profile: their details, term-by-term performance, attendance for each term from the daily register, and every term with released results as a report card you can open.',
                     ],
                 },
                 {
@@ -235,7 +237,7 @@ export const adminManual: Manual = {
                 },
             ],
         },
-        marksChapter('Marks are entered by teachers (and administrators) on Exams & Marks, checked, and then released so learners can see them. As administrator you can do everything a teacher can, for every class and subject, and you also add exams to the term.'),
+        marksChapter('Marks are entered by teachers (and administrators) on Exams & Marks, checked, and then released so learners and parents can see them. As administrator you can do everything a teacher can, for every class and subject. You also choose which exam each class is marking, follow who is behind, and lock a term once its report cards are out.', true),
         {
             id: 'exams',
             title: 'Setting up exams',
@@ -299,55 +301,10 @@ export const adminManual: Manual = {
         {
             id: 'attendance-chapter',
             title: 'Attendance',
-            intro: 'Class teachers usually take the register; administrators can take or correct it for any class.',
-            sections: [attendanceSection],
+            intro: 'Class teachers usually take the register; administrators can take or correct it for any class, see the whole school on any day, and run reports for any class.',
+            sections: [attendanceSection, attendanceSchoolSection, attendanceReportsSection],
         },
-        {
-            id: 'fees-chapter',
-            title: 'Fees',
-            intro: 'Fees tracks what each learner has been billed for the term, what they have paid, and what is still owed. Administrators, and staff given the Bursar or Accountant duty, see the Fees page; learners see their own fees in their portal. Billing from fee structures, bursaries and expenses are in the Bursar and finance guide.',
-            sections: [
-                {
-                    id: 'fee-records',
-                    title: 'Fee records',
-                    summary: 'The Fee records tab shows the term’s totals (expected, collected, outstanding, overdue), a collection progress bar, and one row per learner.',
-                    figure: shot('fees', 'The Fees page with totals and fee records', 'Fees → Fee records for the chosen term.'),
-                    points: [
-                        'Choose the term at the top. Search by learner or admission number, or filter by status and class.',
-                        '“Add record” bills one learner. “Export” downloads the list as a spreadsheet.',
-                        'Each row has Pay (record a payment), payment history (with receipts), edit and delete.',
-                    ],
-                },
-                {
-                    id: 'batch-fees',
-                    title: 'Bill a whole class at once',
-                    summary: 'The Batch entry tab bills every learner in a class for the term in one go.',
-                    figure: shot('fees-batch', 'The Batch entry tab', 'Fees → Batch entry.'),
-                    steps: [
-                        { title: 'Choose the class and term', body: 'Every active learner in the class is listed.' },
-                        { title: 'Set the fee', body: 'Type the fee once and press Apply to fill it for everyone, and set one due date. Change any learner’s fee individually if needed.' },
-                        { title: 'Record payments now (optional)', body: 'Enter any payment already received in “Payment now”; “Balance after” updates as you type.' },
-                        { title: 'Save all', body: 'Press “Save all”. Learners already billed for the term keep their record and are updated rather than billed twice.' },
-                    ],
-                },
-                {
-                    id: 'record-payment',
-                    title: 'Record a payment',
-                    summary: 'For cash, cheques, bank deposits and M-Pesa messages you receive yourself. Online payments made through the learner’s portal are recorded automatically.',
-                    figure: shot('fees-payment', 'The Record payment dialog', 'Record payment: the amount is filled with the balance; change it for a part payment.'),
-                    steps: [
-                        { title: 'Press Pay', body: 'On the learner’s row, press Pay.' },
-                        { title: 'Enter the payment', body: 'Type the amount, the date paid (change it when recording an older slip), the method and, optionally, who paid and a note.' },
-                        { title: 'Save', body: 'The balance updates straight away, and a receipt is available from the payment history.' },
-                    ],
-                },
-                {
-                    id: 'payments-log',
-                    title: 'The payments log',
-                    summary: 'The Payments tab lists every payment received, filtered by date, method (automatic or manual) and status. Unmatched online payments appear here too, with a button to assign them to the right learner.',
-                },
-            ],
-        },
+        feesChapter('Fees tracks what each learner has been billed, what they have paid and what is still owed, across every term. Administrators, and staff given the Bursar or Accountant duty, see the Fees page; learners and linked parents see their own fees and can pay online. Billing from fee structures, bursaries and expenses are in the Bursar and finance guide.'),
         {
             id: 'communication',
             title: 'Announcements and homework',
@@ -392,6 +349,27 @@ export const adminManual: Manual = {
                     'Library, inventory and staff leave: the Library, stores and HR guide.',
                     'The parent portal: the Parent guide.',
                 ],
+            }],
+        },
+        {
+            id: 'end-of-year',
+            title: 'End of the year',
+            intro: 'When the academic year is over, promote learners in one step, then set up the new year.',
+            sections: [{
+                id: 'promote',
+                title: 'Promote learners',
+                summary: 'Classes → “Promote students” moves every grade up a class, decides who leaves, and archives learners who complete the school, all at once. It works the same on the website and in the phone app.',
+                steps: [
+                    { title: 'Open it', body: 'On Classes, press “Promote students”. Each grade has a card saying what happens to it: “Moves up” (to the next grade), “Decide each learner” (Grade 9, whose learners are placed into Senior School nationally), or “Completes here” (your last grade, for example Grade 12 or Form 4).' },
+                    { title: 'Choose where each class goes', body: 'For a grade that moves up, choose the class each stream moves into, for example Grade 7 East to Grade 8 East.' },
+                    { title: 'Decide the exceptions', body: 'Any learner can instead repeat the year or be marked as transferred out. For Grade 9, decide every learner: only a school that teaches Grade 10 can keep them; the rest leave.' },
+                    { title: 'Promote', body: 'When every learner is decided, press “Promote learners” and confirm. Nothing changes until you do. Learners who complete or leave are archived as graduated or transferred.' },
+                    { title: 'Set up the new year', body: 'Follow “Next: set up the new year”: add the new academic year and its terms in Settings, make Term 1 current, and enrol new learners on People.' },
+                ],
+                points: [
+                    'Promotion runs once per academic year. “Undo promotion” puts everyone back if something was wrong.',
+                ],
+                caution: 'Promote only after report cards for the last term are out: learners’ classes change straight away.',
             }],
         },
         {

@@ -142,15 +142,17 @@ export const teachingRecordsChapter: ManualChapter = {
 export const parentAccountsSection: ManualSection = {
     id: 'parent-accounts',
     title: 'Give parents their own login',
-    summary: 'With the Parent Portal module on, parents can sign in to follow each of their children. You link a parent to a learner on the Parent accounts page, and the parent activates their account with the invite code.',
+    summary: 'With the Parent Portal module on, parents sign in to follow each of their children: results, report cards, fees (and paying them), attendance and the school bus. You link a parent to a learner on the Parent accounts page, and the parent activates their account with the invite code they are texted.',
     figure: shot('parent-accounts', 'The Parent accounts page with a linked parent and the Link a parent form', 'Parent accounts: choose a learner, see who is linked, and link another parent.'),
     steps: [
-        { title: 'Choose the learner', body: 'Pick the learner. Parents already linked to them are listed with their relationship, phone and whether their account is active.' },
-        { title: 'Link a parent', body: 'Enter the parent’s first and last name, phone number and relationship (mother, father, guardian, sponsor), and press “Link parent”.' },
-        { title: 'Give them the code', body: 'Skulbase shows an invite code. The parent activates their account with it on the activation page, exactly like a teacher or learner.' },
+        { title: 'One learner (Parents tab)', body: 'Pick the learner. Parents already linked are listed with their relationship, phone and whether their account is active. Under “Link a parent”, enter the parent’s first and last name, phone number and relationship (mother, father, guardian, sponsor), and press “Link parent”.' },
+        { title: 'A whole class (Whole class tab)', body: 'Pick a class. Every learner not yet linked gets a row, started from the contact on their record. Check or fill in each parent and press “Link N parents”. Each row succeeds or fails on its own and says so; fix any marked row and link again.' },
+        { title: 'From a fee account', body: 'When a learner’s fee account shows no linked parent, link one there without leaving Fees.' },
+        { title: 'The parent activates', body: 'A new parent gets an invite code by SMS (Skulbase also shows it). They activate their account with it on the activation page, exactly like a teacher or learner.' },
     ],
     points: [
-        'A parent with several children at the school is matched by phone number, so they get one login that shows all their children.',
+        'A parent is matched by phone number however it is typed (07…, 254… or +254…), so a parent of three children has one login that shows all of them.',
+        'Linked parents receive absence texts and fee reminders as well as the number on the learner’s record.',
         'Unlinking a parent stops them seeing that child.',
     ],
 };
