@@ -37,5 +37,12 @@ uses the `fingerprint` policy, so an update is only ever offered to builds
 whose native code matches it; an update can't crash an older build, but
 phones on an older build won't get it until they install the new one.
 
+The fingerprint also covers `package.json` **scripts**: adding or renaming
+one (even `lint`) gives a new runtime, and installed builds stop receiving
+updates until a new build is installed. Leave the scripts alone unless a new
+build is going out anyway. To check, `npx expo-updates fingerprint:generate
+--platform android` in `mobile/` must print the same hash as the installed
+build's runtime version (shown on expo.dev under the build).
+
 Builds: `npx eas-cli build -p android --profile preview` on EAS, or add
 `--local` to build on this machine (see the build notes in the session log).
