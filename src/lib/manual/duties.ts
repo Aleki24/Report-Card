@@ -1,5 +1,6 @@
 import { phoneShot, shot } from './figures';
-import { activateSection, helpChapter, navigationSection, signInSection } from './shared';
+import { activateSection, examBeingMarkedSection, helpChapter, markingProgressSection, navigationSection, signInSection, termLockSection } from './shared';
+import { feesChapter } from './fees';
 import {
     calendarSection, cbcSection, everydayToolsChapter, leaveSection, moduleNote, reportIncidentSection, uploadPaperSection,
 } from './modules';
@@ -31,18 +32,18 @@ export const leadershipManual: Manual = {
     slug: 'leadership',
     title: 'Academic leadership guide',
     audience: 'Principals, deputy principals, directors of studies, heads of department, timetablers and exams officers',
-    summary: 'Running the academic side of the school: the calendar, the timetable and lesson cover, the exam paper bank from moderation to release, professional records and syllabus coverage, CBC assessment, and approvals.',
+    summary: 'Running the academic side of the school: choosing the exam each class is marking and following the marking, the calendar, the timetable and lesson cover, the exam paper bank from moderation to release, professional records and syllabus coverage, CBC assessment, and approvals.',
     chapters: [
         {
             ...startChapter('Leaders'),
             sections: [
                 dutyTable([
                     ['Principal / Head teacher', 'every module page and approval. Setting up classes, users and settings stays with Admin accounts.'],
-                    ['Deputy Principal', 'calendar, papers, timetable, professional records, CBC and discipline; sees boarding and health; approves leave and expenses.'],
-                    ['Director of Studies (DOS)', 'exams, the paper bank, the timetable, professional records and the academic calendar.'],
+                    ['Deputy Principal', 'the exam being marked, calendar, papers, timetable, professional records, CBC and discipline; sees boarding and health; approves leave and expenses.'],
+                    ['Director of Studies (DOS)', 'exams and which one is being marked, the paper bank, the timetable, professional records and the academic calendar.'],
                     ['Head of Department (HOD)', 'moderates exam papers and reviews schemes of work and coverage.'],
                     ['Timetabler', 'builds and publishes the timetable and arranges lesson cover.'],
-                    ['Exams Officer', 'runs the paper bank: printing, packing and release.'],
+                    ['Exams Officer', 'runs the paper bank (printing, packing and release) and chooses the exam being marked.'],
                 ]),
                 activateSection, signInSection, navigationSection,
             ],
@@ -57,6 +58,12 @@ export const leadershipManual: Manual = {
                 summary: '“Across the school” shows one tile per thing that needs a leader’s eye: learners in the sick bay, learners out on exeat, vouchers waiting for approval, buses on the road, papers awaiting moderation and leave requests. Tap a tile to open its page.',
                 figure: shot('admin-operations', 'The dashboard with operations tiles across the top', 'The dashboard with “Across the school” tiles above the usual academic figures.'),
             }],
+        },
+        {
+            id: 'marking',
+            title: 'Running exams and marking',
+            intro: 'The Principal, Deputy Principal, DOS and Exams Officer decide which exam each class is marking, follow the marking until every sheet is in, and lock the term once report cards are out. All of it is on Exams & Marks → Enter & Correct Marks. How teachers enter and release marks is in the teacher guides.',
+            sections: [examBeingMarkedSection, markingProgressSection, termLockSection],
         },
         {
             id: 'calendar-chapter',
@@ -181,7 +188,7 @@ export const financeManual: Manual = {
     slug: 'finance',
     title: 'Bursar and finance guide',
     audience: 'Bursars and accountants',
-    summary: 'Billing the term from fee structures and vote heads, recording payments and receipts, bursaries and waivers, fee reminders, and spending through payment vouchers.',
+    summary: 'Billing the term from fee structures and vote heads, bursaries and waivers, each learner’s fee account and statement, recording payments and receipts, who owes and fee reminders, the collections report, and spending through payment vouchers.',
     chapters: [
         {
             ...startChapter('Bursars and accountants'),
@@ -233,44 +240,11 @@ export const financeManual: Manual = {
                 {
                     id: 'statement',
                     title: 'Vote-head statement and reminders',
-                    summary: 'The vote-head statement shows, for a term, what was billed and collected under each vote head. “Balance reminders” texts the guardians of learners who owe at least an amount you choose.',
+                    summary: 'The vote-head statement shows, for a term, what was billed and collected under each vote head. “Balance reminders” texts the parents of learners who owe at least an amount you choose: every linked parent and the number on the learner’s record. Fees → Who owes sends the same reminders after a preview.',
                 },
             ],
         },
-        {
-            id: 'fees',
-            title: 'Fees and payments',
-            intro: 'The Fees page is where each learner’s balance lives and where payments are recorded.',
-            sections: [
-                {
-                    id: 'fee-records',
-                    title: 'Fee records',
-                    summary: 'Choose the term to see what is expected, collected, outstanding and overdue, with a collection progress bar and one row per learner.',
-                    figure: shot('bursar-fees', 'The Fees page for a bursar', 'Fees → Fee records.'),
-                    points: [
-                        'Pay records a payment; the clock icon shows a learner’s payment history with receipts.',
-                        '“Batch entry” bills or records payments for a whole class at once.',
-                        '“Export” downloads the term as a spreadsheet.',
-                    ],
-                },
-                {
-                    id: 'record-payment',
-                    title: 'Record a payment',
-                    summary: 'For cash, cheques, bank deposits and M-Pesa messages you receive yourself. Online payments made from the learner’s or parent’s Fees page are recorded automatically.',
-                    figure: shot('fees-payment', 'The Record payment dialog', 'Record payment.'),
-                    steps: [
-                        { title: 'Press Pay', body: 'On the learner’s row.' },
-                        { title: 'Enter it', body: 'The amount (filled with the balance; change it for a part payment), the date paid, the method and, optionally, who paid and a note.' },
-                        { title: 'Save and give a receipt', body: 'The balance updates at once and the receipt is in the payment history.' },
-                    ],
-                },
-                {
-                    id: 'payments-log',
-                    title: 'The payments log and unmatched payments',
-                    summary: 'The Payments tab lists every payment, filtered by date, method and status. M-Pesa or bank payments that could not be matched to a learner (for example a wrong account number) appear with a button to assign them.',
-                },
-            ],
-        },
+        feesChapter('The Fees page is where each learner’s balance lives: their fee account and statement, payments and receipts, who owes, and what came in.'),
         {
             id: 'expenses',
             title: 'Expenses',

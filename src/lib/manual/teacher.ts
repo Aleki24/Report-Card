@@ -1,6 +1,6 @@
 import { shot } from './figures';
 import {
-    activateSection, announcementsSection, assignmentsSection, attendanceSection, helpChapter,
+    activateSection, announcementsSection, assignmentsSection, attendanceReportsSection, attendanceSection, helpChapter,
     marksChapter, navigationSection, phoneSection, signInSection,
 } from './shared';
 import { everydayToolsChapter, teachingRecordsChapter } from './modules';
@@ -13,7 +13,7 @@ const startChapter: ManualChapter = {
     sections: [activateSection, signInSection, navigationSection],
 };
 
-const marksIntro = 'Entering marks is the main job in Skulbase. You only see the classes and subjects your administrator has assigned to you; if one is missing, ask them to add it on the Subjects page.';
+const marksIntro = 'Entering marks is the main job in Skulbase. Your school chooses which exam each class is marking, so you pick the class and subject and the right mark sheet opens. You only see the classes and subjects your administrator has assigned to you; if one is missing, ask them to add it on the Subjects page.';
 
 const everydayTools = everydayToolsChapter('Tools every teacher has: the school calendar, your timetable, leave, and requests to the store and the bursar.');
 
@@ -28,7 +28,7 @@ export const classTeacherManual: Manual = {
     slug: 'class-teacher',
     title: 'Class teacher guide',
     audience: 'Teachers who are responsible for a class',
-    summary: 'How to enter and correct marks, keep your class’s register, look after your class list, produce report cards, set homework, upload exam papers, keep schemes of work, assess CBC strands, and use the calendar, timetable, leave and store requests.',
+    summary: 'How to enter and correct marks, keep your class’s register and follow its attendance, look after your class list, produce report cards, set homework, upload exam papers, keep schemes of work, assess CBC strands, and use the calendar, timetable, leave and store requests.',
     chapters: [
         startChapter,
         {
@@ -53,9 +53,10 @@ export const classTeacherManual: Manual = {
         {
             id: 'class',
             title: 'Your class',
-            intro: 'As class teacher you keep the register and the class list, and produce your class’s report cards.',
+            intro: 'As class teacher you keep the register and the class list, follow up learners who are often away, and produce your class’s report cards.',
             sections: [
                 attendanceSection,
+                attendanceReportsSection,
                 {
                     id: 'my-students',
                     title: 'My Students',
