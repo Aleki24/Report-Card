@@ -28,7 +28,9 @@ jobs:
     env:
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
     steps:
+      # Runs before checkout, so not in mobile/ (the job default), which doesn't exist yet.
       - name: Require the Expo token
+        working-directory: ${{ github.workspace }}
         run: |
           if [ -z "$EXPO_TOKEN" ]; then
             echo "::error::Add an EXPO_TOKEN repository secret (expo.dev → Account settings → Access tokens) so app updates can be published."
