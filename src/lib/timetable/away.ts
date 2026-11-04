@@ -3,7 +3,7 @@
  * times: the whole day, the morning (until lunch) or the afternoon (after
  * it). Shared by the studio on the web and in the app. Client-safe.
  */
-import { hhmmOf, minutesOf, type TeacherOff, type TimetableConfig, type TimetablePeriod } from './config';
+import { WEEKDAY_NAMES, hhmmOf, minutesOf, type TeacherOff, type TimetableConfig, type TimetablePeriod } from './config';
 
 export type DayPart = 'day' | 'morning' | 'afternoon' | 'custom';
 
@@ -42,4 +42,15 @@ export function offLabel(config: TimetableConfig, off: Pick<TeacherOff, 'start' 
     if (fromStart) return off.end === parts.morning.end ? 'Morning' : `Until ${off.end}`;
     if (toEnd) return off.start === parts.afternoon.start ? 'Afternoon' : `From ${off.start}`;
     return `${off.start}–${off.end}`;
+}
+
+/** "Monday, all day", "Monday morning, until 12:40", "Friday from 13:00": a time away in a sentence. */
+export function offPhrase(config: TimetableConfig, off: Pick<TeacherOff, 'day' | 'start' | 'end'>): string {
+    const parts = dayParts(config);
+    const label = offLabel(config, off);
+    const day = WEEKDAY_NAMES[off.day] ?? '';
+    if (label === 'Whole day') return `${day}, all day`;
+    if (label === 'Morning') return `${day} morning, until ${parts.morning.end}`;
+    if (label === 'Afternoon') return `${day} afternoon, from ${parts.afternoon.start}`;
+    return `${day} ${label.charAt(0).toLowerCase()}${label.slice(1)}`;
 }

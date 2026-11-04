@@ -240,8 +240,10 @@ export function TimetableWizard() {
                 {step === 'rooms' && <Rooms />}
                 {step === 'drafts' && <TimetableBuilder key={builderKey} plan={plan} onGenerated={() => void refresh()} />}
                 <footer className="mt-5 flex items-center justify-between gap-2 border-t border-border/60 pt-4">
-                    {prev ? <Button variant="ghost" onClick={() => show(prev.id)}><ArrowLeft />{prev.title}</Button> : <span />}
-                    {next && <Button variant="outline" onClick={() => show(next.id)}>Next: {next.title}<ArrowRight /></Button>}
+                    {prev
+                        ? <Button variant="ghost" onClick={() => show(prev.id)} aria-label={`Back: ${prev.title}`}><ArrowLeft /><span className="sm:hidden">Back</span><span className="hidden sm:inline">{prev.title}</span></Button>
+                        : <span />}
+                    {next && <Button variant="outline" onClick={() => show(next.id)} className="min-w-0"><span className="truncate">Next: {next.title}</span><ArrowRight /></Button>}
                 </footer>
             </section>
         </div>

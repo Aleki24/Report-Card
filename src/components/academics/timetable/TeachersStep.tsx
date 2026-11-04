@@ -8,7 +8,7 @@ import { FormField, InputField, SelectField } from '@/components/ui/FormField';
 import { errorText, opsFetch } from '@/lib/ops/client';
 import { WEEKDAY_LABELS, WEEKDAY_NAMES, type TeacherOff, type TimetableConfig } from '@/lib/timetable/config';
 import { LIGHT_LOAD, isLightLoad, type TimetablePlan } from '@/lib/timetable/readiness';
-import { dayParts, offLabel, schoolDaySpan, type DayPart } from '@/lib/timetable/away';
+import { dayParts, offLabel, offPhrase, schoolDaySpan, type DayPart } from '@/lib/timetable/away';
 import { cn } from '@/lib/utils';
 
 const CONFIG_URL = '/api/academics/timetable/config';
@@ -28,7 +28,7 @@ function AddAway({ config, onAdd, onCancel }: { config: TimetableConfig; onAdd: 
                 <FormField label="Day" htmlFor="away-day"><SelectField id="away-day" value={day} placeholder={null} onChange={setDay} options={config.days.map(d => ({ id: String(d), label: WEEKDAY_NAMES[d] }))} /></FormField>
                 <FormField label="When" htmlFor="away-part">
                     <SelectField id="away-part" value={part} placeholder={null} onChange={v => setPart(v as DayPart)} options={[
-                        { id: 'day', label: 'The whole day' }, { id: 'morning', label: `Morning (to ${parts.morning.end})` }, { id: 'afternoon', label: `Afternoon (from ${parts.afternoon.start})` }, { id: 'custom', label: 'Set the times' },
+                        { id: 'day', label: 'Whole day' }, { id: 'morning', label: 'Morning' }, { id: 'afternoon', label: 'Afternoon' }, { id: 'custom', label: 'Set times' },
                     ]} />
                 </FormField>
                 {part === 'custom' && <>
@@ -36,6 +36,7 @@ function AddAway({ config, onAdd, onCancel }: { config: TimetableConfig; onAdd: 
                     <FormField label="To" htmlFor="away-to"><InputField id="away-to" type="time" value={end} onChange={e => setEnd(e.target.value)} /></FormField>
                 </>}
             </div>
+            <p className="text-xs text-muted-foreground">Not timetabled on {offPhrase(config, { day: Number(day), ...range })}.</p>
             <div className="flex justify-end gap-2">
                 <Button size="sm" variant="ghost" onClick={onCancel}>Cancel</Button>
                 <Button size="sm" disabled={range.end <= range.start} onClick={() => onAdd({ day: Number(day), start: range.start, end: range.end })}>Add</Button>
@@ -119,7 +120,7 @@ export function TeachersStep({ plan, config, onChange }: { plan: TimetablePlan; 
                             </div>
                             {adding === t.id && (
                                 <AddAway config={config} onCancel={() => setAdding(null)}
-                                    onAdd={a => void saveAway(t.id, [...away, a], `${t.name} will not be timetabled ${WEEKDAY_NAMES[a.day]} ${offLabel(config, a).toLowerCase()}.`)} />
+                                    onAdd={a => void saveAway(t.id, [...away, a], `${t.name} will not be timetabled on ${offPhrase(config, a)}.`)} />
                             )}
                         </li>
                     );

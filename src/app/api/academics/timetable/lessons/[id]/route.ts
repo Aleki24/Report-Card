@@ -1,9 +1,10 @@
 import { z } from 'zod';
 import { route, parseBody, HttpError, assertInSchool } from '@/lib/platform/access';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { fetchAllRows } from '@/lib/postgrest';
 import { LESSON_SELECT, type TimetableLesson } from '@/lib/timetable/config';
 import { loadConfig } from '@/lib/timetable/server';
-import { checkMove } from '@/lib/timetable/moves';
+import { checkMove, roomChangeClash } from '@/lib/timetable/moves';
 
 type Params = { id: string };
 
@@ -38,19 +39,31 @@ export const PATCH = route<Params>('timetable lesson update', { module: 'timetab
     const roomId = body.room_id === undefined ? a.room_id : body.room_id;
     const moving = day !== a.day || period !== a.period;
 
+    // The school's day and every lesson of this draft on these days, read page
+    // by page: a large school's days pass PostgREST's 1,000-row page, and a
+    // missed lesson could hide a clash.
+    const loadPool = async (days: readonly number[]) => {
+        const [config, { rows, error: poolError }] = await Promise.all([
+            loadConfig(access.schoolId),
+            fetchAllRows(() => db.from('timetable_lessons').select(LESSON_SELECT).eq('version_id', a.version_id).in('day', [...new Set(days)]).order('id')),
+        ]);
+        if (poolError) throw poolError;
+        return { config, pool: rows as unknown as TimetableLesson[] };
+    };
+
     if (!moving) {
+        if (roomId && roomId !== a.room_id) {
+            const { config, pool } = await loadPool([a.day]);
+            const why = roomChangeClash(config, pool, a, roomId);
+            if (why) throw new HttpError(409, why);
+        }
         const locked = body.locked !== undefined ? { locked: body.locked } : {};
         const { error: e } = await db.from('timetable_lessons').update({ room_id: roomId, ...locked }).eq('id', a.id);
         if (e) throw e;
         return { swapped: false };
     }
 
-    const [config, { data: sameDays, error: poolError }] = await Promise.all([
-        loadConfig(access.schoolId),
-        db.from('timetable_lessons').select(LESSON_SELECT).eq('version_id', a.version_id).in('day', [...new Set([day, a.day])]),
-    ]);
-    if (poolError) throw poolError;
-    const pool = (sameDays ?? []) as unknown as TimetableLesson[];
+    const { config, pool } = await loadPool([day, a.day]);
     const check = checkMove(config, pool, { ...a, room_id: roomId }, day, period);
     if (!check.ok) throw new HttpError(409, check.reason);
     const group = pool.filter(o => o.grade_stream_id === a.grade_stream_id && o.day === a.day && o.period === a.period);

@@ -6,11 +6,10 @@ import { cn } from '@/lib/utils';
 import { WEEKDAY_LABELS, WEEKDAY_NAMES, type TimetableConfig, type TimetableLesson } from '@/lib/timetable/config';
 import { slotLines, type GridMode } from '@/lib/ops/forms/academics';
 import { gridRows, lessonsAt, rowRunsOn, type GridRow } from '@/lib/timetable/layout';
+import type { CellHint } from '@/lib/timetable/moves';
 
 export type { GridMode };
 
-/** Where a picked lesson could go: free to move into, a swap with what is there, or not possible (and why). */
-export interface CellHint { state: 'free' | 'swap' | 'blocked'; reason?: string }
 
 interface Props {
     config: TimetableConfig;

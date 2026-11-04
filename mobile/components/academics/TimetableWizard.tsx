@@ -1,15 +1,20 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
-import { AlertTriangle, CalendarClock, CheckCircle2, ChevronDown, FlaskConical, Info, Layers, Users, type LucideIcon } from 'lucide-react-native';
+import { AlertTriangle, BookOpenCheck, CalendarClock, CalendarOff, CheckCircle2, ChevronDown, FlaskConical, Info, Layers, Plus, Users, type LucideIcon } from 'lucide-react-native';
 import { humanize, personName } from '@shared/ops/format';
-import { basisLine, unfitTitle, daySummary, firstCard, isLightLoad, loadsSummary, overloadMessage, type Blocker, type StudioCard as StudioCardId, type TimetablePlan } from '@shared/timetable/readiness';
-import type { TimetableConfig } from '@shared/timetable/config';
-import { longerDayLines } from '@shared/timetable/fit';
+import {
+    LIGHT_LOAD, basisLine, unfitTitle, daySummary, firstCard, isLightLoad, loadsSummary, subjectTimeRows,
+    type Blocker, type StudioCard as StudioCardId, type SubjectTimeRow, type TimetablePlan,
+} from '@shared/timetable/readiness';
+import { SUBJECT_TIMES, WEEKDAY_LABELS, WEEKDAY_NAMES, type SubjectTime, type TeacherOff, type TimetableConfig } from '@shared/timetable/config';
+import { fewerGroupsLines, longerDayLines } from '@shared/timetable/fit';
+import { SUBJECT_TIME_LABELS } from '@shared/timetable/checks';
+import { dayParts, offLabel, offPhrase, type DayPart } from '@shared/timetable/away';
 import {
     IMPORT_LOADS_NOTE, LOAD_DEFAULTS, LOAD_FIELDS, MINISTRY_LOADS_NOTE, ROOM_DEFAULTS, ROOM_FIELDS, importLoadsMessage, loadLessonsLabel, newDraftName, withBreaksFixed,
     type ImportLoadsResult, type Room, type TeachingLoad,
 } from '@shared/ops/forms/academics';
-import { Button, ButtonRow, Card, LoadingView, ProgressBar, TextField, useScrollToView } from '@/components/ui';
+import { Button, ButtonRow, Card, ChipSelect, LoadingView, ProgressBar, TextField, useScrollToView } from '@/components/ui';
 import { useRefreshSignal } from '@/components/ops/bits';
 import { ResourceList } from '@/components/ops/ResourceList';
 import { useToast } from '@/components/Toast';
@@ -94,7 +99,9 @@ export function Rooms() {
     );
 }
 
-type FitFix = 'longer-day' | 'fewer-lessons';
+type FitFix = 'longer-day' | 'fewer-lessons' | 'fewer-groups';
+
+const CONFIG_URL = '/api/academics/timetable/config';
 
 type CardState = 'done' | 'attention' | 'optional' | 'todo';
 const STATE_LABEL: Record<CardState, string> = { done: 'Done', attention: 'Needs attention', optional: 'Optional', todo: 'To do' };
@@ -135,7 +142,7 @@ function FitOption({ title, recommended, lines, busy, onUse }: { title: string; 
                 <Text style={styles.fitOptionTitle}>{title}</Text>
                 {recommended ? <View style={[styles.pill, { backgroundColor: colors.primarySoft }]}><Text style={[styles.pillText, { color: colors.primary }]}>Recommended</Text></View> : null}
             </View>
-            {lines.map((l) => <Text key={l} style={styles.fitLine}>{l}</Text>)}
+            {lines.map((l, i) => <Text key={i} style={styles.fitLine}>{l}</Text>)}
             <ButtonRow>
                 <Button size="sm" variant={recommended ? 'primary' : 'secondary'} label="Use this" onPress={onUse} loading={busy} />
             </ButtonRow>
@@ -144,9 +151,10 @@ function FitOption({ title, recommended, lines, busy, onUse }: { title: string; 
 }
 
 /**
- * A class with more lessons than its week, put as a simple choice: two
- * ready-made fixes worked out from the school's own day and loads, applied
- * with one tap. Why it does not fit is there for whoever wants it.
+ * A class with more lessons than its week, put as a simple choice between
+ * ready-made fixes worked out from the school's own day, loads and learners'
+ * choices, applied with one tap. Why it does not fit is there for whoever
+ * wants it.
  */
 function FitChooser({ c, onApplied, onEditLoads }: { c: TimetablePlan['classes'][number]; onApplied: () => void; onEditLoads: () => void }) {
     const styles = useStyles();
@@ -154,9 +162,11 @@ function FitChooser({ c, onApplied, onEditLoads }: { c: TimetablePlan['classes']
     const toast = useToast();
     const [busy, setBusy] = useState<FitFix | null>(null);
     const [why, setWhy] = useState(false);
+    const [who, setWho] = useState(false);
     const over = c.needed - c.capacity;
     const day = c.fixes?.longerDay ?? null;
     const cuts = c.fixes?.fewerLessons ?? null;
+    const groups = c.fixes?.fewerGroups ?? null;
 
     const apply = (fix: FitFix, title: string, detail: string) => confirmAlert(title, detail, [
         { text: 'Cancel', style: 'cancel' },
@@ -185,6 +195,20 @@ function FitChooser({ c, onApplied, onEditLoads }: { c: TimetablePlan['classes']
                     onUse={() => apply('longer-day', 'Make the day longer?', `${day.level}: ${day.changes.join('; ')}.`)}
                 />
             ) : null}
+            {groups ? (
+                <FitOption
+                    title="Fewer elective groups"
+                    lines={fewerGroupsLines(groups)}
+                    busy={busy === 'fewer-groups'}
+                    onUse={() => apply('fewer-groups', `Run ${c.name}’s electives in ${groups.groups.length} groups?`, `${groups.unfit.length} learner${groups.unfit.length === 1 ? '' : 's'} would change a subject.`)}
+                />
+            ) : null}
+            {groups && groups.unfit.length > 0 ? (
+                <Pressable onPress={() => setWho((v) => !v)} accessibilityRole="button" accessibilityState={{ expanded: who }}>
+                    <Text style={styles.link}>{who ? 'Hide who would change' : `Who would change a subject (${groups.unfit.length})`}</Text>
+                </Pressable>
+            ) : null}
+            {who && groups ? groups.unfit.map((u, i) => <Text key={i} style={styles.fitLine}>{u.name}: {u.subjects.join(' and ')}</Text>) : null}
             {cuts ? (
                 <FitOption
                     title="Teach fewer lessons a week"
@@ -220,6 +244,11 @@ function ClassFit({ plan, onApplied, onEditLoads }: { plan: TimetablePlan; onApp
                         <Text style={[styles.fitCount, !c.fits && { color: colors.danger, fontFamily: fonts.bold }]}>{c.needed} / {c.capacity} periods</Text>
                     </View>
                     <ProgressBar value={(c.needed / Math.max(1, c.capacity)) * 100} color={c.fits ? colors.success : colors.danger} />
+                    <Text style={[styles.fitLine, { color: c.offMinistry.length === 0 ? colors.successText : colors.warningText }]}>
+                        {c.offMinistry.length === 0
+                            ? '✓ Every subject matches the Ministry’s lessons a week'
+                            : `Differs from the Ministry: ${c.offMinistry.map((o) => `${o.subject} ${o.lessons} (KICD ${o.ministry})`).join(' · ')}`}
+                    </Text>
                     <Text style={styles.fitLine}>Whole class: {c.core.map((l) => `${l.subject} ${l.lessons}`).join(' · ') || '—'}</Text>
                     {c.fits && basisLine(c) ? <Text style={styles.fitLine}>{basisLine(c)}</Text> : null}
                     {!c.fits ? <FitChooser c={c} onApplied={onApplied} onEditLoads={() => onEditLoads(c.name)} /> : null}
@@ -243,26 +272,156 @@ function ClassFit({ plan, onApplied, onEditLoads }: { plan: TimetablePlan; onApp
     );
 }
 
-/** Every teacher's week across all their classes and levels, light and over-full loads marked. */
-function TeacherLoads({ plan }: { plan: TimetablePlan }) {
+const TIME_OPTIONS = SUBJECT_TIMES.map((t) => ({ value: t, label: SUBJECT_TIME_LABELS[t] }));
+
+/** When each subject is best taught, across every class: the school's choice, else the usual for its kind. */
+function SubjectTimes({ plan, onChange }: { plan: TimetablePlan; onChange: () => void }) {
     const { colors } = useTheme();
     const styles = useStyles();
-    if (plan.teachers.length === 0) return null;
+    const api = useApi();
+    const toast = useToast();
+    const rows = useMemo(() => subjectTimeRows(plan), [plan]);
+    const [shown, setShown] = useState(false);
+    const choose = async (row: SubjectTimeRow, time: SubjectTime) => {
+        try {
+            await api.patch(CONFIG_URL, { subject_times: Object.fromEntries(row.ids.map((id) => [id, time])) });
+            onChange();
+        } catch (err) { toast.error(errorMessage(err, 'Could not save')); }
+    };
+    if (rows.length === 0) return null;
     return (
-        <View style={{ marginTop: spacing.md }}>
-            <Text style={styles.blockTitle}>Teacher loads · lessons a week across every class</Text>
+        <View style={styles.fit}>
+            <Pressable onPress={() => setShown((v) => !v)} style={styles.fitHead} accessibilityRole="button" accessibilityState={{ expanded: shown }}>
+                <Text style={[styles.fitName, { flex: 1 }]}>When subjects are best taught</Text>
+                <ChevronDown size={18} color={colors.muted} style={shown ? { transform: [{ rotate: '180deg' }] } : undefined} />
+            </Pressable>
+            <Text style={styles.fitLine}>Mathematics and sciences go before lunch and PE and the arts later, unless you choose otherwise. The timetable follows these where it can.</Text>
+            {shown ? rows.map((row) => (
+                <ChipSelect key={row.key} label={row.name} options={TIME_OPTIONS} value={row.time} onChange={(t) => { if (row.time !== t) void choose(row, t); }} />
+            )) : null}
+        </View>
+    );
+}
+
+const AWAY_PARTS: readonly { value: DayPart; label: string }[] = [
+    { value: 'day', label: 'Whole day' }, { value: 'morning', label: 'Morning' }, { value: 'afternoon', label: 'Afternoon' }, { value: 'custom', label: 'Times' },
+];
+const HHMM = /^\d{2}:\d{2}$/;
+
+/** A time a teacher cannot teach, added in a few taps: the day and which part of it. */
+function AddAway({ config, busy, onAdd, onCancel }: { config: TimetableConfig; busy: boolean; onAdd: (t: Omit<TeacherOff, 'teacher_id'>) => void; onCancel: () => void }) {
+    const styles = useStyles();
+    const parts = dayParts(config);
+    const [day, setDay] = useState(String(config.days[0] ?? 1));
+    const [part, setPart] = useState<DayPart>('day');
+    const [start, setStart] = useState(parts.afternoon.start);
+    const [end, setEnd] = useState('16:00');
+    const range = part === 'custom' ? { start, end } : parts[part];
+    const valid = HHMM.test(range.start) && HHMM.test(range.end) && range.end > range.start;
+    return (
+        <View style={styles.awayForm}>
+            <ChipSelect label="Day" wrap options={config.days.map((d) => ({ value: String(d), label: WEEKDAY_LABELS[d] }))} value={day} onChange={setDay} />
+            <ChipSelect label="When" options={AWAY_PARTS} value={part} onChange={setPart} />
+            {part === 'custom' ? (
+                <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+                    <View style={{ flex: 1 }}><TextField label="From" value={start} onChangeText={setStart} placeholder="HH:MM" keyboardType="numbers-and-punctuation" /></View>
+                    <View style={{ flex: 1 }}><TextField label="To" value={end} onChangeText={setEnd} placeholder="HH:MM" keyboardType="numbers-and-punctuation" /></View>
+                </View>
+            ) : null}
+            {valid ? <Text style={styles.fitLine}>Not timetabled on {offPhrase(config, { day: Number(day), ...range })}.</Text> : <Text style={styles.fitLine}>Set the times as HH:MM, the end after the start.</Text>}
+            <ButtonRow>
+                <Button size="sm" variant="ghost" label="Cancel" onPress={onCancel} />
+                <Button size="sm" label="Add" disabled={!valid} loading={busy} onPress={() => onAdd({ day: Number(day), start: range.start, end: range.end })} />
+            </ButtonRow>
+        </View>
+    );
+}
+
+/**
+ * Teachers: each one's week across every class and level against the periods
+ * they can teach, and the times they cannot (a part-time teacher, a shared
+ * BOM teacher, a deputy's admin morning). The generator never books a
+ * teacher then; a move or a cover that would is refused.
+ */
+function TeachersPanel({ plan, config, onChange }: { plan: TimetablePlan; config: TimetableConfig; onChange: () => void }) {
+    const { colors } = useTheme();
+    const styles = useStyles();
+    const api = useApi();
+    const toast = useToast();
+    const [adding, setAdding] = useState<string | null>(null);
+    const [saving, setSaving] = useState<string | null>(null);
+    const [run, setRun] = useState(String(config.rules.max_consecutive));
+    const awayOf = (id: string) => config.rules.teacher_off.filter((o) => o.teacher_id === id);
+
+    const saveAway = async (teacherId: string, times: readonly Omit<TeacherOff, 'teacher_id'>[], message: string) => {
+        setSaving(teacherId);
+        try {
+            await api.patch(CONFIG_URL, { teacher_off: { teacher_ids: [teacherId], times: times.map((t) => ({ day: t.day, start: t.start, end: t.end, teacher_id: teacherId })) } });
+            toast.success(message);
+            setAdding(null);
+            onChange();
+        } catch (err) { toast.error(errorMessage(err, 'Could not save')); }
+        finally { setSaving(null); }
+    };
+    const saveRun = async () => {
+        try {
+            await api.patch(CONFIG_URL, { max_consecutive: Math.max(1, Math.min(12, Number(run) || 4)) });
+            toast.success('Saved.');
+            onChange();
+        } catch (err) { toast.error(errorMessage(err, 'Could not save')); }
+    };
+
+    if (plan.teachers.length === 0) return <Text style={styles.fitLine}>No teacher has a teaching load yet. Import loads in Subjects & hours first.</Text>;
+    return (
+        <View>
+            <View style={styles.explain}>
+                <Text style={styles.blockTitle}>No teacher is ever booked twice</Text>
+                <Text style={styles.fitLine}>Each teacher’s lessons are counted across every class and level they teach. Add the times a teacher cannot teach and they stay free then.</Text>
+                <TextField label="Most lessons in a row" value={run} onChangeText={setRun} keyboardType="number-pad" />
+                <ButtonRow>
+                    <Button size="sm" variant="secondary" label="Save" disabled={Number(run) === config.rules.max_consecutive} onPress={() => void saveRun()} />
+                </ButtonRow>
+            </View>
             {plan.teachers.map((t) => {
                 const over = t.lessons > t.capacity;
                 const light = isLightLoad(t);
                 const tone = over ? colors.danger : light ? colors.warning : colors.success;
+                const away = awayOf(t.id);
                 return (
-                    <View key={t.name} style={[styles.fit, { borderColor: over || light ? tone : colors.border }]}>
+                    <View key={t.id} style={[styles.fit, { borderColor: over || light ? tone : colors.border }]}>
                         <View style={styles.fitHead}>
-                            <Text style={styles.fitName} numberOfLines={1}>{t.name}</Text>
+                            <Text style={[styles.fitName, { flex: 1 }]} numberOfLines={1}>{t.name}</Text>
                             <Text style={[styles.fitCount, (over || light) && { color: tone }]}>{t.lessons} / {t.capacity}</Text>
                         </View>
                         <ProgressBar value={(t.lessons / Math.max(1, t.capacity)) * 100} color={tone} />
-                        <Text style={styles.fitLine} numberOfLines={1}>{t.classes.join(' · ')}</Text>
+                        <Text style={styles.fitLine}>
+                            {over ? `${t.lessons - t.capacity} lessons more than they can teach` : light ? `A light week (under ${LIGHT_LOAD} lessons)` : `${t.capacity - t.lessons} free periods a week`}
+                            {t.away > 0 ? ` · ${t.away} periods away` : ''}
+                        </Text>
+                        <Text style={styles.fitLine} numberOfLines={2}>{t.classes.join(' · ')}</Text>
+                        <View style={styles.awayChips}>
+                            {away.map((a, i) => (
+                                <Pressable
+                                    key={i}
+                                    disabled={saving === t.id}
+                                    accessibilityRole="button"
+                                    accessibilityLabel={`Remove ${WEEKDAY_NAMES[a.day]} ${offLabel(config, a)}`}
+                                    onPress={() => confirmAlert('Remove this time away?', `${t.name} can then be timetabled on ${offPhrase(config, a)}.`, [
+                                        { text: 'Cancel', style: 'cancel' },
+                                        { text: 'Remove', style: 'destructive', onPress: () => void saveAway(t.id, away.filter((_, j) => j !== i), `${t.name} can be timetabled then again.`) },
+                                    ])}
+                                    style={styles.awayChip}
+                                >
+                                    <CalendarOff size={12} color={colors.warningText} />
+                                    <Text style={styles.awayChipText}>{WEEKDAY_LABELS[a.day]} · {offLabel(config, a)}  ✕</Text>
+                                </Pressable>
+                            ))}
+                            {adding !== t.id ? <Button size="sm" variant="ghost" icon={Plus} label="Time away" onPress={() => setAdding(t.id)} /> : null}
+                        </View>
+                        {adding === t.id ? (
+                            <AddAway config={config} busy={saving === t.id} onCancel={() => setAdding(null)}
+                                onAdd={(a) => void saveAway(t.id, [...away, a], `${t.name} will not be timetabled on ${offPhrase(config, a)}.`)} />
+                        ) : null}
                     </View>
                 );
             })}
@@ -305,7 +464,7 @@ function Notes({ notes, onOpen }: { notes: readonly Blocker[]; onOpen: (n: Block
             {shown ? notes.map((n, i) => (
                 <Pressable key={i} onPress={() => onOpen(n)} style={styles.note} accessibilityRole="button">
                     <Text style={styles.noteText}>{n.message}</Text>
-                    {n.details?.map((d) => <Text key={d} style={styles.noteDetail}>• {d}</Text>)}
+                    {n.details?.map((d, j) => <Text key={j} style={styles.noteDetail}>• {d}</Text>)}
                 </Pressable>
             )) : null}
         </View>
@@ -323,6 +482,7 @@ export function TimetableWizard() {
     const api = useApi();
     const toast = useToast();
     const [plan, setPlan] = useState<TimetablePlan | null>(null);
+    const [config, setConfig] = useState<TimetableConfig | null>(null);
     const [open, setOpen] = useState<StudioCardId | null>(null);
     const [generating, setGenerating] = useState(false);
     const [builderKey, setBuilderKey] = useState(0);
@@ -336,8 +496,12 @@ export function TimetableWizard() {
 
     const refresh = useCallback(async () => {
         try {
-            const next = await opsGet<TimetablePlan>(api, '/api/academics/timetable/plan');
+            const [next, cfg] = await Promise.all([
+                opsGet<TimetablePlan>(api, '/api/academics/timetable/plan'),
+                opsGet<TimetableConfig>(api, CONFIG_URL),
+            ]);
             setPlan(next);
+            setConfig(cfg);
             setOpen((o) => o ?? firstCard(next));
         } catch (err) { toast.error(errorMessage(err, 'Could not load the timetable setup')); }
     }, [api, toast]);
@@ -365,8 +529,8 @@ export function TimetableWizard() {
     const setBreaks = async () => {
         setFixing(true);
         try {
-            const config = await opsGet<TimetableConfig>(api, '/api/academics/timetable/config');
-            await api.put('/api/academics/timetable/config', withBreaksFixed(config));
+            const current = await opsGet<TimetableConfig>(api, CONFIG_URL);
+            await api.put(CONFIG_URL, withBreaksFixed(current));
             toast.success('Breaks set. No lessons will be put in them.');
             setDayKey((k) => k + 1);
             await refresh();
@@ -374,16 +538,17 @@ export function TimetableWizard() {
         finally { setFixing(false); }
     };
 
-    if (!plan) return <LoadingView />;
+    if (!plan || !config) return <LoadingView />;
     const ready = plan.blockers.length === 0;
     const stateOf = (card: StudioCardId): CardState => {
         if (plan.blockers.some((b) => b.card === card)) return 'attention';
-        if (card === 'day') return 'done';
-        if (card === 'loads') return plan.loads > 0 ? 'done' : 'todo';
+        if (card === 'day') return plan.day.days > 0 && plan.day.lessonsPerDay > 0 ? 'done' : 'todo';
+        if (card === 'loads' || card === 'teachers') return plan.loads > 0 ? 'done' : 'todo';
         if (card === 'rooms') return plan.rooms > 0 ? 'done' : 'optional';
         return plan.published ? 'done' : 'todo';
     };
     const toggle = (card: StudioCardId) => setOpen((o) => (o === card ? null : card));
+    const away = config.rules.teacher_off.length;
 
     return (
         <View>
@@ -411,27 +576,30 @@ export function TimetableWizard() {
             <StudioCard viewRef={cardRef('day')} icon={CalendarClock} title="School day" summary={daySummary(plan.day)} state={stateOf('day')} open={open === 'day'} onToggle={() => toggle('day')}>
                 <DayStructureEditor key={dayKey} onSaved={() => { void refresh(); setOpen('loads'); }} />
             </StudioCard>
-            <StudioCard viewRef={cardRef('loads')} icon={Users} title="Classes & teaching loads" summary={loadsSummary(plan)} state={stateOf('loads')} open={open === 'loads'} onToggle={() => toggle('loads')}>
+            <StudioCard viewRef={cardRef('loads')} icon={BookOpenCheck} title="Subjects & hours" summary={loadsSummary(plan)} state={stateOf('loads')} open={open === 'loads'} onToggle={() => toggle('loads')}>
                 <View style={styles.explain}>
-                    <Text style={styles.blockTitle}>How electives fit: option blocks</Text>
-                    <Text style={styles.fitLine}>Electives in one block run at the same time, each learner in the subject they chose. When a class has more subjects than periods, blocks are worked out for you; set a load’s Option block to choose them yourself.</Text>
+                    <Text style={styles.blockTitle}>Lessons a week, checked against the Ministry (KICD)</Text>
+                    <Text style={styles.fitLine}>Each class’s subjects and lessons a week. Electives in one group run at the same time, each learner in the subject they chose; groups are worked out from learners’ choices when a class has more subjects than periods.</Text>
                 </View>
-                <TaughtTogether onChange={() => void refresh()} />
                 <ClassFit
                     plan={plan}
                     onApplied={() => { setDayKey((k) => k + 1); void refresh(); }}
                     onEditLoads={(name) => { setLoadsFilter(name); setTimeout(() => scrollToView(loadsListRef.current), 120); }}
                 />
-                <TeacherLoads plan={plan} />
+                <SubjectTimes plan={plan} onChange={() => void refresh()} />
+                <TaughtTogether onChange={() => void refresh()} />
                 <View ref={loadsListRef} collapsable={false}>
                     <Loads filter={loadsFilter} onChange={() => void refresh()} />
                 </View>
             </StudioCard>
-            <StudioCard viewRef={cardRef('rooms')} icon={FlaskConical} title="Labs & special rooms" summary={plan.rooms > 0 ? `${plan.rooms} room${plan.rooms === 1 ? '' : 's'}` : 'Optional — skip if lessons stay in class'} state={stateOf('rooms')} open={open === 'rooms'} onToggle={() => toggle('rooms')}>
+            <StudioCard viewRef={cardRef('teachers')} icon={Users} title="Teachers" summary={plan.teachers.length === 0 ? 'No teachers with loads yet' : `${plan.teachers.length} teachers${away ? ` · ${away} time${away === 1 ? '' : 's'} away` : ''}`} state={stateOf('teachers')} open={open === 'teachers'} onToggle={() => toggle('teachers')}>
+                <TeachersPanel plan={plan} config={config} onChange={() => void refresh()} />
+            </StudioCard>
+            <StudioCard viewRef={cardRef('rooms')} icon={FlaskConical} title="Labs & rooms" summary={plan.rooms > 0 ? `${plan.rooms} room${plan.rooms === 1 ? '' : 's'}` : 'Optional — skip if lessons stay in class'} state={stateOf('rooms')} open={open === 'rooms'} onToggle={() => toggle('rooms')}>
                 <Rooms />
             </StudioCard>
-            <StudioCard viewRef={cardRef('drafts')} icon={Layers} title="Drafts & publish" summary={plan.published ? `Published: ${plan.published}` : plan.drafts > 0 ? `${plan.drafts} draft${plan.drafts === 1 ? '' : 's'} — check one and publish` : 'Generate your first draft above'} state={stateOf('drafts')} open={open === 'drafts'} onToggle={() => toggle('drafts')}>
-                <TimetableBuilder key={builderKey} />
+            <StudioCard viewRef={cardRef('drafts')} icon={Layers} title="Generate & publish" summary={plan.published ? `Live: ${plan.published}` : plan.drafts > 0 ? `${plan.drafts} draft${plan.drafts === 1 ? '' : 's'} to check` : 'Generate your first draft above'} state={stateOf('drafts')} open={open === 'drafts'} onToggle={() => toggle('drafts')}>
+                <TimetableBuilder key={builderKey} plan={plan} onChanged={() => void refresh()} />
             </StudioCard>
         </View>
     );
@@ -476,4 +644,8 @@ const useStyles = makeStyles((colors) => ({
     fitOptionTitle: { fontSize: 14, fontFamily: fonts.bold, color: colors.foreground },
     link: { fontSize: 13, fontFamily: fonts.semibold, color: colors.primary },
     blockTitle: { fontSize: 12, fontFamily: fonts.bold, color: colors.primary },
+    awayChips: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.xs, marginTop: 2 },
+    awayChip: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: radius.sm, paddingHorizontal: 8, paddingVertical: 4, backgroundColor: colors.warningBg },
+    awayChipText: { fontSize: 11, fontFamily: fonts.semibold, color: colors.warningText },
+    awayForm: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, backgroundColor: colors.mutedBg, padding: spacing.sm, marginTop: spacing.xs },
 }));

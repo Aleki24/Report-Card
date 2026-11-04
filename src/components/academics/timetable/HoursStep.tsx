@@ -14,7 +14,7 @@ import {
     IMPORT_LOADS_NOTE, LOAD_DEFAULTS, LOAD_FIELDS, MINISTRY_LOADS_NOTE, importLoadsMessage, loadLessonsLabel,
     type ImportLoadsResult, type TeachingLoad as Load,
 } from '@/lib/ops/forms/academics';
-import { basisLine, overloadMessage, type PlanClass, type PlanLoad, type TimetablePlan } from '@/lib/timetable/readiness';
+import { basisLine, overloadMessage, subjectTimeRows, type PlanClass, type PlanLoad, type SubjectTimeRow, type TimetablePlan } from '@/lib/timetable/readiness';
 import { fewerGroupsLines, longerDayLines } from '@/lib/timetable/fit';
 import { SUBJECT_TIME_LABELS } from '@/lib/timetable/checks';
 import { SUBJECT_TIMES, type SubjectTime } from '@/lib/timetable/config';
@@ -168,26 +168,6 @@ function ClassCard({ c, onApplied }: { c: PlanClass; onApplied: () => void }) {
             )}
         </li>
     );
-}
-
-/** A subject's time of day across every level that teaches it (each level has its own Mathematics). */
-interface SubjectTimeRow { key: string; name: string; ids: string[]; time: SubjectTime | null }
-
-/** One row per subject name, with every level's subject id; `time` is null when the levels differ. */
-function subjectTimeRows(plan: TimetablePlan): SubjectTimeRow[] {
-    const rows = new Map<string, { name: string; ids: Set<string>; times: Set<SubjectTime> }>();
-    for (const c of plan.classes) {
-        for (const l of [...c.core, ...c.blocks.flatMap(b => b.loads)]) {
-            const key = l.subject.trim().toLowerCase();
-            const row = rows.get(key) ?? { name: l.subject.trim(), ids: new Set<string>(), times: new Set<SubjectTime>() };
-            row.ids.add(l.subjectId);
-            row.times.add(l.time);
-            rows.set(key, row);
-        }
-    }
-    return [...rows.entries()]
-        .map(([key, r]) => ({ key, name: r.name, ids: [...r.ids], time: r.times.size === 1 ? [...r.times][0] : null }))
-        .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 /** When each subject is best taught, across every class: the school's choice, else the usual for its kind. */

@@ -222,3 +222,23 @@ export function loadsSummary(plan: TimetablePlan): string {
 export function firstCard(plan: TimetablePlan): StudioCard {
     return plan.blockers[0]?.card ?? (plan.loads > 0 ? 'drafts' : 'loads');
 }
+
+/** A subject's time of day across every level that teaches it (each level has its own Mathematics). */
+export interface SubjectTimeRow { key: string; name: string; ids: string[]; time: SubjectTime | null }
+
+/** One row per subject name, with every level's subject id; `time` is null when the levels differ. */
+export function subjectTimeRows(plan: Pick<TimetablePlan, 'classes'>): SubjectTimeRow[] {
+    const rows = new Map<string, { name: string; ids: Set<string>; times: Set<SubjectTime> }>();
+    for (const c of plan.classes) {
+        for (const l of [...c.core, ...c.blocks.flatMap(b => b.loads)]) {
+            const key = l.subject.trim().toLowerCase();
+            const row = rows.get(key) ?? { name: l.subject.trim(), ids: new Set<string>(), times: new Set<SubjectTime>() };
+            row.ids.add(l.subjectId);
+            row.times.add(l.time);
+            rows.set(key, row);
+        }
+    }
+    return [...rows.entries()]
+        .map(([key, row]) => ({ key, name: row.name, ids: [...row.ids], time: row.times.size === 1 ? [...row.times][0] : null }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+}

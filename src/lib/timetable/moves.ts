@@ -7,7 +7,7 @@
  * overlapping clock times, never the same period number.
  */
 import { minutesOf, runsOn, type TimetableConfig, type TimetableLesson, type TimetablePeriod } from './config';
-import { lessonTime, periodsOfLesson } from './layout';
+import { lessonTime, periodIndexOf, periodsOfLesson, type GridRow } from './layout';
 
 /** The lesson fields a move check reads. */
 export type MoveLesson = Pick<TimetableLesson, 'id' | 'day' | 'period' | 'grade_stream_id' | 'teacher_id' | 'room_id' | 'stream'> & Partial<Pick<TimetableLesson, 'subject' | 'teacher' | 'room' | 'locked'>>;
@@ -81,6 +81,34 @@ export function checkMove(config: TimetableConfig, pool: readonly MoveLesson[], 
         if (why) return { ok: false, reason: `Swapping would clash: ${why.charAt(0).toLowerCase()}${why.slice(1)}` };
     }
     return { ok: true, swap };
+}
+
+/** Why a lesson cannot take `roomId` in its own slot (another lesson then is in that room), or null when it can. */
+export function roomChangeClash(config: TimetableConfig, pool: readonly MoveLesson[], lesson: MoveLesson, roomId: string): string | null {
+    const at = clockAt(config, lesson, lesson.period);
+    if (!at) return null;
+    const other = pool.find(o => {
+        if (o.id === lesson.id || o.day !== lesson.day || o.room_id !== roomId) return false;
+        const theirs = lessonTime(config, o as TimetableLesson);
+        return !!theirs && overlaps(at, [theirs.start, theirs.end]);
+    });
+    return other ? `${other.room?.name ?? 'That room'} is in use then by ${other.stream?.full_name ?? 'another class'}.` : null;
+}
+
+/** Where a picked lesson could go: free to move into, a swap with what is there, or not possible (and why). */
+export interface CellHint { state: 'free' | 'swap' | 'blocked'; reason?: string }
+
+/**
+ * A grid cell's hint while `selected` is picked to move: what a tap there
+ * would do. Null on the lesson's own slot. The web and the app show these so
+ * a school sees every slot a lesson can go to before choosing.
+ */
+export function moveHint(config: TimetableConfig, pool: readonly MoveLesson[], selected: MoveLesson, day: number, row: GridRow): CellHint | null {
+    const period = periodIndexOf(config, selected, row);
+    if (period < 0) return { state: 'blocked', reason: 'Not a lesson time for this class.' };
+    if (day === selected.day && period === selected.period) return null;
+    const check = checkMove(config, pool, selected, day, period);
+    return check.ok ? { state: check.swap.length > 0 ? 'swap' : 'free' } : { state: 'blocked', reason: check.reason };
 }
 
 const teacherLabel = (l: MoveLesson) => (l.teacher ? `${l.teacher.first_name} ${l.teacher.last_name}`.trim() : 'The teacher');

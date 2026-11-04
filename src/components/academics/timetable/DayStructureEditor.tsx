@@ -62,7 +62,7 @@ function QuickSetup({ periods, onBuild }: { periods: readonly TimetablePeriod[];
  * column heads. Grid areas keep the inputs in reading order for keyboards.
  */
 const PERIOD_GRID = [
-    "grid items-end gap-2 grid-cols-[minmax(0,1fr)_8.5rem_minmax(2.25rem,auto)] [grid-template-areas:'name_kind_del'_'start_end_len'_'days_days_days']",
+    "grid items-end gap-2 grid-cols-[minmax(0,1fr)_7.5rem_minmax(2.25rem,auto)] [grid-template-areas:'name_kind_del'_'start_end_len'_'days_days_days']",
     "@2xl:grid-cols-[minmax(6rem,1fr)_7.5rem_7.5rem_3.5rem_8.5rem_2.25rem] @2xl:[grid-template-areas:'name_start_end_len_kind_del'_'days_days_days_days_days_days']",
     "@4xl:grid-cols-[8rem_7.5rem_7.5rem_3.5rem_8.5rem_minmax(0,1fr)_2.25rem] @4xl:[grid-template-areas:'name_start_end_len_kind_days_del']",
 ].join(' ');

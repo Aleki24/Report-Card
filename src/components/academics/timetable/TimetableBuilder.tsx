@@ -13,11 +13,11 @@ import { describeQuality, type TimetableConfig, type TimetableLesson, type Timet
 import { timetablePdfUrl } from '@/lib/timetable/pdf-url';
 import { PUBLISH_TIMETABLE_WARNING, VERSION_TONES as STATUS_TONES, lessonClasses, newDraftName, teacherName } from '@/lib/ops/forms/academics';
 import { periodIndexOf, periodsOfLesson, type GridRow } from '@/lib/timetable/layout';
-import { checkMove } from '@/lib/timetable/moves';
+import { moveHint, type CellHint } from '@/lib/timetable/moves';
 import { auditLessons, hoursCheck } from '@/lib/timetable/checks';
 import type { TimetablePlan } from '@/lib/timetable/readiness';
 import { QualityPanel } from './QualityPanel';
-import { TimetableGrid, type CellHint } from './TimetableGrid';
+import { TimetableGrid } from './TimetableGrid';
 import { cn } from '@/lib/utils';
 
 type View = 'class' | 'teacher';
@@ -132,14 +132,8 @@ export function TimetableBuilder({ plan, onGenerated }: { plan?: TimetablePlan |
         } catch (err) { toast.error(errorText(err)); }
     };
 
-    const hintAt = useCallback((day: number, row: GridRow): CellHint | null => {
-        if (!selected || !config) return null;
-        const period = periodIndexOf(config, selected, row);
-        if (period < 0) return { state: 'blocked', reason: 'Not a lesson time for this class.' };
-        if (day === selected.day && period === selected.period) return null;
-        const check = checkMove(config, lessons, selected, day, period);
-        return check.ok ? { state: check.swap.length > 0 ? 'swap' : 'free' } : { state: 'blocked', reason: check.reason };
-    }, [selected, config, lessons]);
+    const hintAt = useCallback((day: number, row: GridRow): CellHint | null =>
+        selected && config ? moveHint(config, lessons, selected, day, row) : null, [selected, config, lessons]);
 
     const onCell = (day: number, row: GridRow, lesson: TimetableLesson | null) => {
         if (view !== 'class') return;
