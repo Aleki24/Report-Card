@@ -78,7 +78,7 @@ export function checkMove(config: TimetableConfig, pool: readonly MoveLesson[], 
     }
     for (const o of swap) {
         const why = clash(o, lesson.day, lesson.period);
-        if (why) return { ok: false, reason: `Swapping would clash: ${why.charAt(0).toLowerCase()}${why.slice(1)}` };
+        if (why) return { ok: false, reason: `Swapping would clash: ${why}` };
     }
     return { ok: true, swap };
 }

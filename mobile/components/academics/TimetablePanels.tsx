@@ -341,14 +341,14 @@ function PeriodsEditor({ periods, schoolDays, onChange }: { periods: readonly Ti
                         </View>
                         <SegmentedTabs tabs={PERIOD_KINDS} value={periodKind(p)} onChange={(k) => onChange(withPeriodPatched(periods, i, { is_break: k === 'break' }))} />
                         {periodKindMismatch(p) ? <Text style={{ fontSize: 12, color: colors.warningText, marginTop: 4 }}>{periodKindMismatch(p)}</Text> : null}
-                        <Text style={{ fontSize: 12, fontFamily: fonts.semibold, color: colors.muted, marginTop: spacing.sm }}>{schoolDays.every((d) => runsOn(p, d)) ? 'Runs every day' : 'Runs only on'}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.sm }}>
+                            <Text style={{ fontSize: 12, fontFamily: fonts.semibold, color: colors.muted }}>{schoolDays.every((d) => runsOn(p, d)) ? 'Runs every day' : 'Runs only on'}</Text>
+                            <Button size="sm" variant="ghost" label={`Remove ${p.label}`} onPress={() => onChange(periods.filter((_, j) => j !== i))} />
+                        </View>
                         <ButtonRow align="start">
                             {schoolDays.map((d) => (
                                 <Button key={d} size="sm" variant={runsOn(p, d) ? 'primary' : 'secondary'} label={WEEKDAY_LABELS[d]} onPress={() => onChange(withPeriodDayToggled(periods, i, d, schoolDays))} />
                             ))}
-                        </ButtonRow>
-                        <ButtonRow>
-                            <Button size="sm" variant="ghost" label={`Remove ${p.label}`} onPress={() => onChange(periods.filter((_, j) => j !== i))} />
                         </ButtonRow>
                     </Card>
                 );

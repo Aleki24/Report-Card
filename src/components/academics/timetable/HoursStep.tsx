@@ -11,7 +11,7 @@ import { TaughtTogether } from '@/components/academics/timetable/TaughtTogether'
 import { errorText, opsFetch } from '@/lib/ops/client';
 import { humanize, personName } from '@/lib/ops/format';
 import {
-    IMPORT_LOADS_NOTE, LOAD_DEFAULTS, LOAD_FIELDS, MINISTRY_LOADS_NOTE, importLoadsMessage, loadLessonsLabel,
+    IMPORT_LOADS_NOTE, LOAD_DEFAULTS, LOAD_FIELDS, MATCH_MINISTRY_CONFIRM, MINISTRY_LOADS_NOTE, importLoadsMessage, loadLessonsLabel,
     type ImportLoadsResult, type TeachingLoad as Load,
 } from '@/lib/ops/forms/academics';
 import { basisLine, overloadMessage, subjectTimeRows, type PlanClass, type PlanLoad, type SubjectTimeRow, type TimetablePlan } from '@/lib/timetable/readiness';
@@ -212,7 +212,7 @@ function Loads({ onChange }: { onChange: () => void }) {
     const confirm = useConfirm();
 
     const importLoads = async (mode: 'import' | 'reset') => {
-        if (mode === 'reset' && !(await confirm({ title: 'Match the Ministry for every class?', message: 'Every subject the Ministry sets lessons for gets its figure, doubles included. Subjects it does not cover keep theirs.', confirmText: 'Match the Ministry' }))) return;
+        if (mode === 'reset' && !(await confirm(MATCH_MINISTRY_CONFIRM))) return;
         setImporting(mode);
         try {
             const r = await opsFetch<ImportLoadsResult>('/api/academics/timetable/requirements/import', {

@@ -11,7 +11,7 @@ import { fewerGroupsLines, longerDayLines } from '@shared/timetable/fit';
 import { SUBJECT_TIME_LABELS } from '@shared/timetable/checks';
 import { dayParts, offLabel, offPhrase, type DayPart } from '@shared/timetable/away';
 import {
-    IMPORT_LOADS_NOTE, LOAD_DEFAULTS, LOAD_FIELDS, MINISTRY_LOADS_NOTE, ROOM_DEFAULTS, ROOM_FIELDS, importLoadsMessage, loadLessonsLabel, newDraftName, withBreaksFixed,
+    IMPORT_LOADS_NOTE, LOAD_DEFAULTS, LOAD_FIELDS, MATCH_MINISTRY_CONFIRM, MINISTRY_LOADS_NOTE, ROOM_DEFAULTS, ROOM_FIELDS, importLoadsMessage, loadLessonsLabel, newDraftName, withBreaksFixed,
     type ImportLoadsResult, type Room, type TeachingLoad,
 } from '@shared/ops/forms/academics';
 import { Button, ButtonRow, Card, ChipSelect, LoadingView, ProgressBar, TextField, useScrollToView } from '@/components/ui';
@@ -21,7 +21,7 @@ import { useToast } from '@/components/Toast';
 import { useApi } from '@/lib/api';
 import { errorMessage } from '@/lib/format';
 import { opsGet } from '@/lib/ops';
-import { confirmAlert } from '@/lib/confirm';
+import { askConfirm, confirmAlert } from '@/lib/confirm';
 import { fonts, makeStyles, radius, spacing, useTheme } from '@/lib/theme';
 import { DayStructureEditor, TimetableBuilder } from './TimetablePanels';
 import { TaughtTogether } from './TaughtTogether';
@@ -36,6 +36,7 @@ function Loads({ onChange, filter }: { onChange: () => void; filter: string }) {
     const [busy, setBusy] = useState<'import' | 'reset' | null>(null);
 
     const importLoads = async (mode: 'import' | 'reset') => {
+        if (mode === 'reset' && !(await askConfirm(MATCH_MINISTRY_CONFIRM.title, MATCH_MINISTRY_CONFIRM.message, MATCH_MINISTRY_CONFIRM.confirmText))) return;
         setBusy(mode);
         try {
             const r = await api.post<{ data: ImportLoadsResult }>('/api/academics/timetable/requirements/import', { lessons_per_week: Number(perWeek) || 5, update_existing: mode === 'reset' });
@@ -52,13 +53,13 @@ function Loads({ onChange, filter }: { onChange: () => void; filter: string }) {
     return (
         <View>
             <Card style={{ marginBottom: spacing.md }}>
-                <Text style={{ fontFamily: fonts.bold, color: colors.foreground }}>Start from subject assignments</Text>
+                <Text style={{ fontFamily: fonts.bold, color: colors.foreground }}>Start from who teaches what</Text>
                 <Text style={{ fontSize: 12, color: colors.muted, marginBottom: spacing.md }}>{IMPORT_LOADS_NOTE}</Text>
                 <Text style={{ fontSize: 12, color: colors.muted, marginBottom: spacing.md }}>{MINISTRY_LOADS_NOTE}</Text>
                 <TextField label="Other subjects: lessons a week" value={perWeek} onChangeText={setPerWeek} keyboardType="number-pad" />
                 <ButtonRow>
-                    <Button label={busy === 'import' ? 'Importing…' : 'Import loads'} onPress={() => void importLoads('import')} loading={busy === 'import'} disabled={busy !== null} />
-                    <Button variant="secondary" label={busy === 'reset' ? 'Resetting…' : 'Reset to Ministry'} onPress={() => void importLoads('reset')} loading={busy === 'reset'} disabled={busy !== null} />
+                    <Button label={busy === 'import' ? 'Importing…' : 'Import'} onPress={() => void importLoads('import')} loading={busy === 'import'} disabled={busy !== null} />
+                    <Button variant="secondary" label={busy === 'reset' ? 'Matching…' : 'Match the Ministry'} onPress={() => void importLoads('reset')} loading={busy === 'reset'} disabled={busy !== null} />
                 </ButtonRow>
             </Card>
             <ResourceList<'timetable-requirements', TeachingLoad>

@@ -141,7 +141,7 @@ export function basisLine(c: PlanClass): string | null {
     const whose = c.choiceSource === 'combinations' ? plural(c.learnersWithChoices, 'offered combination') : `${plural(c.learnersWithChoices, 'learner')}’ recorded choices`;
     if (c.basis === 'groups') {
         const who = c.choiceSource === 'combinations' ? 'combination' : 'learner';
-        return `Electives run in ${plural(c.blocks.length, 'subject group')}, one subject from each, built from ${whose}.${c.unfit.length > 0 ? ` ${plural(c.unfit.length, who)} has two subjects in one group.` : ' Every one fits.'}`;
+        return `Electives run in ${plural(c.blocks.length, 'subject group')}, one subject from each, built from ${whose}.${c.unfit.length > 0 ? ` ${plural(c.unfit.length, who)} ${c.unfit.length === 1 ? 'has' : 'have'} two subjects in one group.` : ' Every one fits.'}`;
     }
     if (c.basis === 'choices') return `Option blocks follow ${whose}: subjects taken together never share a slot.`;
     return 'No subject choices recorded for this class yet, so electives are grouped by subject type. Record learners’ electives (or the school’s combinations) for groups that match them.';

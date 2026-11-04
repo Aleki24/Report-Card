@@ -225,6 +225,13 @@ export const IMPORT_LOADS_NOTE = 'Creates a load for every subject each teacher 
 /** How weekly lessons are set when loads are imported. */
 export const MINISTRY_LOADS_NOTE = 'Lessons a week follow the KICD / Ministry allocation for each level (e.g. Grade 7 Mathematics 5, Integrated Science 5 with a double). Subjects it does not cover get the number you set.';
 
+/** Asked before every subject's lessons a week are set back to the Ministry's figures (web and app). */
+export const MATCH_MINISTRY_CONFIRM = {
+    title: 'Match the Ministry for every class?',
+    message: 'Every subject the Ministry sets lessons for gets its figure, doubles included. Subjects it does not cover keep theirs.',
+    confirmText: 'Match the Ministry',
+} as const;
+
 export const teacherName = (t: TimetableLesson['teacher']) => (t ? `${t.first_name} ${t.last_name}`.trim() : '');
 
 /** What a cell shows depends on whose timetable it is. */
