@@ -1,19 +1,22 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Plus } from 'lucide-react-native';
 import { DateField } from '@/components/DateField';
 import { Text, View } from 'react-native';
 import { date as fmtDate, personName, today } from '@shared/ops/format';
 import { BAND_LABELS } from '@shared/curriculum-bands';
-import { CURRICULUM_BANDS, WEEKDAYS, WEEKDAY_LABELS, describeQuality, type TimetablePeriod, type TimetableConfig, type TimetableLesson, type TimetableVersion } from '@shared/timetable/config';
-import { periodIndexOf, type GridRow } from '@shared/timetable/layout';
+import { CURRICULUM_BANDS, WEEKDAYS, WEEKDAY_LABELS, describeQuality, minutesOf, runsOn, type TimetablePeriod, type TimetableConfig, type TimetableLesson, type TimetableVersion } from '@shared/timetable/config';
+import { periodIndexOf, periodsOfLesson, type GridRow } from '@shared/timetable/layout';
+import { moveHint } from '@shared/timetable/moves';
+import { auditLessons, hoursCheck } from '@shared/timetable/checks';
+import type { TimetablePlan } from '@shared/timetable/readiness';
 import { timetablePdfUrl, type TimetablePdfView } from '@shared/timetable/pdf-url';
 import { useDownload } from '@/lib/useDownload';
 import {
-    PERIOD_KINDS, PUBLISH_TIMETABLE_WARNING, weekSummary, SECTIONS_NOTE, periodKind, periodKindMismatch, TIMETABLE_VIEWS, VERSION_TONES, lessonClasses, newDraftName, openSectionPresets,
-    withAddedPeriodTo, withPeriodPatched, withSectionAdded, withSectionBandToggled, withSectionPatched, withSectionRemoved,
+    PERIOD_KINDS, PUBLISH_TIMETABLE_WARNING, weekSummary, SECTIONS_NOTE, bellOrderProblem, bellSummary, periodKind, periodKindMismatch, TIMETABLE_VIEWS, VERSION_TONES, lessonClasses, newDraftName, openSectionPresets,
+    withAddedPeriodTo, withPeriodDayToggled, withPeriodPatched, withSectionAdded, withSectionBandToggled, withSectionPatched, withSectionRemoved,
     type CoverNeed, type CoverRow, type TimetableView, type TimetableViewResult,
 } from '@shared/ops/forms/academics';
-import { Badge, Button, ButtonRow, Card, ChipSelect, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView, Notice, SectionLabel, SegmentedTabs, TextField, ToggleRow } from '@/components/ui';
+import { Button, ButtonRow, Card, ChipSelect, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView, Notice, SectionLabel, SegmentedTabs, TextField } from '@/components/ui';
 import { useToast } from '@/components/Toast';
 import { LookupField, SelectField } from '@/components/ops/SelectField';
 import { StatusPill, useRefreshSignal } from '@/components/ops/bits';
@@ -103,11 +106,26 @@ export function TimetableViewer({ canBrowse }: { canBrowse: boolean }) {
     );
 }
 
+/** One check a school reads before publishing: what it says, and whether it holds. */
+function CheckRow({ ok, title, detail }: { ok: boolean; title: string; detail: string }) {
+    const { colors } = useTheme();
+    return (
+        <View style={{ flexDirection: 'row', gap: spacing.sm, borderWidth: 1, borderRadius: 14, padding: spacing.md, marginBottom: spacing.sm, borderColor: ok ? colors.success : colors.warning, backgroundColor: ok ? colors.successBg : colors.warningBg }}>
+            <Text style={{ fontSize: 16 }}>{ok ? '✓' : '!'}</Text>
+            <View style={{ flex: 1 }}>
+                <Text style={{ fontFamily: fonts.bold, color: ok ? colors.successText : colors.warningText }}>{title}</Text>
+                <Text style={{ fontSize: 12, fontFamily: fonts.regular, color: colors.muted }}>{detail}</Text>
+            </View>
+        </View>
+    );
+}
+
 /**
- * Generate drafts, inspect and adjust them class by class (tap a lesson,
- * then the slot to move or swap it into), pin lessons, and publish.
+ * Check drafts and adjust them class by class (tap a lesson: the grid shows
+ * where it can go, then tap the slot to move or swap it), pin lessons,
+ * reshuffle, and publish under the name teachers will see.
  */
-export function TimetableBuilder() {
+export function TimetableBuilder({ plan, onChanged }: { plan?: TimetablePlan | null; onChanged?: () => void }) {
     const { colors } = useTheme();
     const api = useApi();
     const toast = useToast();
@@ -117,8 +135,10 @@ export function TimetableBuilder() {
     const [lessons, setLessons] = useState<TimetableLesson[]>([]);
     const [streamId, setStreamId] = useState('');
     const [selected, setSelected] = useState<TimetableLesson | null>(null);
-    const [name, setName] = useState('');
     const [generating, setGenerating] = useState(false);
+    /** Set while publishing: the name the timetable goes out under. */
+    const [publishName, setPublishName] = useState<string | null>(null);
+    const [publishing, setPublishing] = useState(false);
     const pdf = useTimetablePdf();
 
     const fail = useCallback((err: unknown) => toast.error(errorMessage(err, 'Something went wrong')), [toast]);
@@ -150,14 +170,26 @@ export function TimetableBuilder() {
     const classLessons = lessons.filter((l) => l.grade_stream_id === shownStream);
     const unplaced = active?.stats.unplaced ?? [];
 
-    const generate = async () => {
+    // Read back from the lessons themselves, so moves made by hand are checked too.
+    const audit = useMemo(() => (config ? auditLessons(lessons.map((l) => ({ day: l.day, period: l.period, streamPeriods: periodsOfLesson(config, l), teacherId: l.teacher_id, roomId: l.room_id }))) : null), [config, lessons]);
+    const hours = useMemo(() => {
+        const loads = (plan?.classes ?? []).flatMap((c) => [...c.core, ...c.blocks.flatMap((b) => b.loads)].map((l) => ({ id: l.id, className: c.name, subject: l.subject, lessons: l.lessons })));
+        return loads.length > 0 ? hoursCheck(loads, lessons) : null;
+    }, [plan, lessons]);
+    const placedAll = active?.stats.required !== undefined && unplaced.length === 0;
+    const short = hours?.short.length ?? 0;
+    const clashes = audit ? audit.teacherClashes + audit.roomClashes : 0;
+
+    /** A new draft from the selected one: its pinned lessons stay, everything else is placed afresh. */
+    const reshuffle = async () => {
         setGenerating(true);
         try {
-            const r = await api.post<{ data: TimetableVersion }>('/api/academics/timetable/generate', { name: newDraftName(name), ...(activeId ? { keep_locked_from: activeId } : {}) });
-            toast.success('Draft generated.');
-            setName('');
+            const r = await api.post<{ data: TimetableVersion }>('/api/academics/timetable/generate', { name: newDraftName(''), ...(activeId ? { keep_locked_from: activeId } : {}) });
+            toast.success('New draft generated, pinned lessons kept.');
             setActiveId(r.data.id);
+            setSelected(null);
             await loadVersions();
+            onChanged?.();
         } catch (err) { fail(err); }
         finally { setGenerating(false); }
     };
@@ -170,21 +202,27 @@ export function TimetableBuilder() {
         } catch (err) { fail(err); }
     };
 
+    const hintAt = useCallback((day: number, row: GridRow) => (selected && config ? moveHint(config, lessons, selected, day, row) : null), [selected, config, lessons]);
+
     const onCell = (day: number, row: GridRow, lesson: TimetableLesson | null) => {
-        const period = selected && config ? periodIndexOf(config, selected, row) : -1;
-        if (selected && period >= 0 && (selected.day !== day || selected.period !== period)) void patchLesson(selected, { day, period });
+        const hint = hintAt(day, row);
+        if (selected && config && hint && hint.state !== 'blocked') void patchLesson(selected, { day, period: periodIndexOf(config, selected, row) });
+        else if (selected && hint?.state === 'blocked' && !lesson) toast.error(hint.reason ?? 'It cannot go there.');
         else setSelected(lesson && lesson.id !== selected?.id ? lesson : null);
     };
 
-    const publish = () => confirmAlert('Publish this timetable?', PUBLISH_TIMETABLE_WARNING, [
-        { text: 'Cancel', style: 'cancel' },
-        {
-            text: 'Publish',
-            onPress: () => void api.patch(`/api/academics/timetable/versions/${activeId}`, { status: 'PUBLISHED' })
-                .then(() => { toast.success('Timetable published. Teachers and learners now see it.'); return loadVersions(); })
-                .catch(fail),
-        },
-    ]);
+    const publish = async () => {
+        setPublishing(true);
+        try {
+            const name = (publishName ?? '').trim();
+            await api.patch(`/api/academics/timetable/versions/${activeId}`, { status: 'PUBLISHED', ...(name ? { name } : {}) });
+            toast.success('Timetable published. Teachers and learners now see it.');
+            setPublishName(null);
+            await loadVersions();
+            onChanged?.();
+        } catch (err) { fail(err); }
+        finally { setPublishing(false); }
+    };
 
     const remove = () => confirmAlert('Delete this draft?', 'The draft and its lessons are removed.', [
         { text: 'Cancel', style: 'cancel' },
@@ -192,57 +230,72 @@ export function TimetableBuilder() {
             text: 'Delete',
             style: 'destructive',
             onPress: () => void api.del(`/api/academics/timetable/versions/${activeId}`)
-                .then(() => { toast.success('Draft deleted.'); setActiveId(''); setLessons([]); return loadVersions(); })
+                .then(() => { toast.success('Draft deleted.'); setActiveId(''); setLessons([]); onChanged?.(); return loadVersions(); })
                 .catch(fail),
         },
     ]);
 
+    if (versions.length === 0) return <EmptyState title="No drafts yet." description="When every part is ready, generate one with the button at the top." />;
+
     return (
         <View>
-            <Card style={{ marginBottom: spacing.md }}>
-                <TextField label="New draft name" value={name} onChangeText={setName} placeholder="e.g. Term 3 timetable" />
-                <Button label={generating ? 'Generating…' : 'Generate timetable'} onPress={() => void generate()} loading={generating} block />
-                {activeId ? <Text style={{ fontSize: 11, color: colors.muted, marginTop: spacing.sm }}>Pinned lessons in the selected draft keep their slots when you generate again.</Text> : null}
-            </Card>
-
-            {versions.length === 0 ? <EmptyState title="Set up the day and teaching loads, then generate your first draft." /> : (
-                <>
-                    <SelectField
-                        label="Draft"
-                        value={activeId}
-                        onChange={(v) => { setActiveId(v); setSelected(null); }}
-                        options={versions.map((v) => ({ id: v.id, label: v.name, hint: `${v.status.toLowerCase()} · ${formatDate(v.created_at)}` }))}
+            <SelectField
+                label="Draft"
+                value={activeId}
+                onChange={(v) => { setActiveId(v); setSelected(null); setPublishName(null); }}
+                options={versions.map((v) => ({ id: v.id, label: v.name, hint: `${v.status.toLowerCase()} · ${formatDate(v.created_at)}` }))}
+            />
+            {active ? (
+                <ButtonRow>
+                    <StatusPill status={active.status} tones={VERSION_TONES} />
+                    <Button size="sm" variant="secondary" label="Master PDF" loading={pdf.busy === 'master'} onPress={() => void pdf.save({ view: 'master', version: active.id }, 'master-timetable.pdf')} />
+                    {active.status !== 'PUBLISHED' ? <Button size="sm" label="Publish" onPress={() => setPublishName(/^Draft\b/i.test(active.name) ? '' : active.name)} /> : null}
+                    {active.status !== 'PUBLISHED' ? <Button size="sm" variant="danger" label="Delete" onPress={remove} /> : null}
+                </ButtonRow>
+            ) : null}
+            {active && publishName !== null ? (
+                <Card style={{ marginVertical: spacing.sm, padding: spacing.md }}>
+                    <Text style={{ fontFamily: fonts.bold, color: colors.foreground }}>Publish this timetable?</Text>
+                    <Text style={{ fontSize: 12, fontFamily: fonts.regular, color: colors.muted, marginBottom: spacing.sm }}>{PUBLISH_TIMETABLE_WARNING}</Text>
+                    <TextField label="Name it as teachers and learners will see it" value={publishName} onChangeText={setPublishName} placeholder={active.name} />
+                    <ButtonRow>
+                        <Button size="sm" variant="ghost" label="Cancel" onPress={() => setPublishName(null)} />
+                        <Button size="sm" label={publishing ? 'Publishing…' : 'Publish'} loading={publishing} onPress={() => void publish()} />
+                    </ButtonRow>
+                </Card>
+            ) : null}
+            {active ? (
+                <View style={{ marginTop: spacing.sm }}>
+                    <CheckRow
+                        ok={placedAll && short === 0}
+                        title={!placedAll ? `${active.stats.placed ?? 0} of ${active.stats.required ?? 0} class periods filled` : short > 0 ? `${short} subject${short === 1 ? ' is' : 's are'} short of lessons` : 'Every subject has its lessons a week'}
+                        detail={!placedAll ? 'Some lessons did not fit: see below.' : short > 0 ? 'Loads changed after this draft was made. Generate a new draft.' : hours ? `${hours.placed} lessons in ${active.stats.placed ?? hours.placed} class periods, as set in Subjects & hours.` : 'As set in Subjects & hours.'}
                     />
-                    {streams.length > 0 ? <SelectField label="Class" value={shownStream} onChange={(v) => { setStreamId(v); setSelected(null); }} options={streams} /> : null}
-                    {active ? (
-                        <ButtonRow>
-                            <StatusPill status={active.status} tones={VERSION_TONES} />
-                            {active.stats.required !== undefined ? <Badge variant={unplaced.length === 0 ? 'success' : 'warning'} label={`${active.stats.placed} of ${active.stats.required} lessons placed`} /> : null}
-                            <Button size="sm" variant="secondary" label="Master PDF" loading={pdf.busy === 'master'} onPress={() => void pdf.save({ view: 'master', version: active.id }, 'master-timetable.pdf')} />
-                            {active.status !== 'PUBLISHED' ? <Button size="sm" label="Publish" onPress={publish} /> : null}
-                            {active.status !== 'PUBLISHED' ? <Button size="sm" variant="danger" label="Delete" onPress={remove} /> : null}
-                        </ButtonRow>
-                    ) : null}
-                    {selected ? (
-                        <Card style={{ marginVertical: spacing.sm, padding: spacing.md, backgroundColor: colors.infoBg }}>
-                            <Text style={{ fontFamily: fonts.bold, color: colors.foreground }}>Moving {selected.subject?.name}: tap a slot</Text>
-                            <ButtonRow>
-                                <Button size="sm" variant="secondary" label={selected.locked ? 'Unpin' : 'Pin here'} onPress={() => void patchLesson(selected, { locked: !selected.locked })} />
-                                <Button size="sm" variant="ghost" label="Cancel" onPress={() => setSelected(null)} />
-                            </ButtonRow>
-                        </Card>
-                    ) : null}
-                    {active?.stats.quality ? <QualityCard quality={describeQuality(active.stats.quality)} reshuffling={generating} onReshuffle={() => void generate()} /> : null}
-                    {unplaced.length > 0 ? (
-                        <Notice tone="warning" message={`Not placed — lighten these loads, free the teacher, or add rooms, then generate again: ${unplaced.slice(0, 12).map((u) => `${u.label}: ${u.lessons}`).join('; ')}`} />
-                    ) : null}
-                    {config && active && classLessons.length > 0 ? (
-                        <View style={{ marginTop: spacing.sm }}>
-                            <TimetableGrid config={config} lessons={classLessons} mode="class" selectedId={selected?.id} onCellPress={onCell} />
-                        </View>
-                    ) : null}
-                </>
-            )}
+                    <CheckRow
+                        ok={clashes === 0}
+                        title={clashes === 0 ? 'No teacher or room booked twice' : `${clashes} double booking${clashes === 1 ? '' : 's'}`}
+                        detail={clashes === 0 ? 'Checked lesson by lesson, across every class and bell, including the times teachers are away.' : 'Move one of the lessons, or reshuffle.'}
+                    />
+                </View>
+            ) : null}
+            {active?.stats.quality ? <QualityCard quality={describeQuality(active.stats.quality)} reshuffling={generating} onReshuffle={() => void reshuffle()} /> : null}
+            {unplaced.length > 0 ? (
+                <Notice tone="warning" message={`Not placed — free the teacher, lighten these loads, or add rooms, then generate again: ${unplaced.slice(0, 12).map((u) => `${u.label}: ${u.lessons}`).join('; ')}`} />
+            ) : null}
+            {streams.length > 0 ? <SelectField label="Class" value={shownStream} onChange={(v) => { setStreamId(v); setSelected(null); }} options={streams} /> : null}
+            {selected ? (
+                <Card style={{ marginVertical: spacing.sm, padding: spacing.md, backgroundColor: colors.infoBg }}>
+                    <Text style={{ fontFamily: fonts.bold, color: colors.foreground }}>Moving {selected.subject?.name}</Text>
+                    <Text style={{ fontSize: 12, fontFamily: fonts.regular, color: colors.muted }}>Green: move it there. Blue (⇄): swap with that lesson. Faded: not possible.</Text>
+                    <ButtonRow>
+                        <Button size="sm" variant="secondary" label={selected.locked ? 'Unpin' : 'Pin here'} onPress={() => void patchLesson(selected, { locked: !selected.locked })} />
+                        <Button size="sm" variant="ghost" label="Cancel" onPress={() => setSelected(null)} />
+                    </ButtonRow>
+                </Card>
+            ) : <Text style={{ fontSize: 12, fontFamily: fonts.regular, color: colors.muted, marginVertical: spacing.sm }}>Tap a lesson to move or pin it. Pinned lessons keep their slots when you reshuffle.</Text>}
+            {config && active && classLessons.length > 0 ? (
+                <TimetableGrid config={config} lessons={classLessons} mode="class" selectedId={selected?.id} onCellPress={onCell} hintAt={hintAt} />
+            ) : null}
         </View>
     );
 }
@@ -269,25 +322,37 @@ function QualityCard({ quality, reshuffling, onReshuffle }: { quality: ReturnTyp
     );
 }
 
-/** One bell: its periods and breaks with their times. */
-function PeriodsEditor({ periods, onChange }: { periods: readonly TimetablePeriod[]; onChange: (next: TimetablePeriod[]) => void }) {
+/** One bell: its periods and breaks with their times and the days each runs (a Friday ninth lesson). */
+function PeriodsEditor({ periods, schoolDays, onChange }: { periods: readonly TimetablePeriod[]; schoolDays: readonly number[]; onChange: (next: TimetablePeriod[]) => void }) {
     const { colors } = useTheme();
+    const problem = bellOrderProblem(periods);
     return (
         <View>
-            {periods.map((p, i) => (
-                <Card key={i} style={{ marginBottom: spacing.sm, padding: spacing.md, borderColor: p.is_break ? colors.warning : colors.border, backgroundColor: p.is_break ? colors.warningBg : colors.card }}>
-                    <TextField label="Name" value={p.label} onChangeText={(v) => onChange(withPeriodPatched(periods, i, { label: v }))} />
-                    <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-                        <View style={{ flex: 1 }}><TextField label="Starts" value={p.start} onChangeText={(v) => onChange(withPeriodPatched(periods, i, { start: v }))} placeholder="HH:MM" keyboardType="numbers-and-punctuation" /></View>
-                        <View style={{ flex: 1 }}><TextField label="Ends" value={p.end} onChangeText={(v) => onChange(withPeriodPatched(periods, i, { end: v }))} placeholder="HH:MM" keyboardType="numbers-and-punctuation" /></View>
-                    </View>
-                    <SegmentedTabs tabs={PERIOD_KINDS} value={periodKind(p)} onChange={(k) => onChange(withPeriodPatched(periods, i, { is_break: k === 'break' }))} />
-                    {periodKindMismatch(p) ? <Text style={{ fontSize: 12, color: colors.warningText, marginTop: 4 }}>{periodKindMismatch(p)}</Text> : null}
-                    <ButtonRow>
-                        <Button size="sm" variant="ghost" label={`Remove ${p.label}`} onPress={() => onChange(periods.filter((_, j) => j !== i))} />
-                    </ButtonRow>
-                </Card>
-            ))}
+            <Text style={{ fontSize: 13, fontFamily: fonts.semibold, color: colors.foreground, marginBottom: spacing.sm }}>{bellSummary(periods, schoolDays)}</Text>
+            {problem ? <Notice tone="danger" message={`${problem} Fix the times before saving.`} /> : null}
+            {periods.map((p, i) => {
+                const minutes = minutesOf(p.end) - minutesOf(p.start);
+                return (
+                    <Card key={i} style={{ marginBottom: spacing.sm, padding: spacing.md, borderColor: p.is_break ? colors.warning : colors.border, backgroundColor: p.is_break ? colors.warningBg : colors.card }}>
+                        <TextField label="Name" value={p.label} onChangeText={(v) => onChange(withPeriodPatched(periods, i, { label: v }))} />
+                        <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+                            <View style={{ flex: 1 }}><TextField label="Starts" value={p.start} onChangeText={(v) => onChange(withPeriodPatched(periods, i, { start: v }))} placeholder="HH:MM" keyboardType="numbers-and-punctuation" /></View>
+                            <View style={{ flex: 1 }}><TextField label={`Ends${minutes > 0 ? ` · ${minutes} min` : ''}`} value={p.end} onChangeText={(v) => onChange(withPeriodPatched(periods, i, { end: v }))} placeholder="HH:MM" keyboardType="numbers-and-punctuation" /></View>
+                        </View>
+                        <SegmentedTabs tabs={PERIOD_KINDS} value={periodKind(p)} onChange={(k) => onChange(withPeriodPatched(periods, i, { is_break: k === 'break' }))} />
+                        {periodKindMismatch(p) ? <Text style={{ fontSize: 12, color: colors.warningText, marginTop: 4 }}>{periodKindMismatch(p)}</Text> : null}
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.sm }}>
+                            <Text style={{ fontSize: 12, fontFamily: fonts.semibold, color: colors.muted }}>{schoolDays.every((d) => runsOn(p, d)) ? 'Runs every day' : 'Runs only on'}</Text>
+                            <Button size="sm" variant="ghost" label={`Remove ${p.label}`} onPress={() => onChange(periods.filter((_, j) => j !== i))} />
+                        </View>
+                        <ButtonRow align="start">
+                            {schoolDays.map((d) => (
+                                <Button key={d} size="sm" variant={runsOn(p, d) ? 'primary' : 'secondary'} label={WEEKDAY_LABELS[d]} onPress={() => onChange(withPeriodDayToggled(periods, i, d, schoolDays))} />
+                            ))}
+                        </ButtonRow>
+                    </Card>
+                );
+            })}
             <ButtonRow align="start">
                 <Button size="sm" variant="secondary" icon={Plus} label="Lesson period" onPress={() => onChange(withAddedPeriodTo(periods, false))} />
                 <Button size="sm" variant="secondary" icon={Plus} label="Break" onPress={() => onChange(withAddedPeriodTo(periods, true))} />
@@ -311,12 +376,13 @@ export function DayStructureEditor({ onSaved }: { onSaved?: () => void } = {}) {
     if (!config) return <LoadingView />;
 
     const update = (fn: (c: TimetableConfig) => TimetableConfig) => setConfig((c) => c && fn(c));
+    const problem = [config.periods, ...config.sections.map((sec) => sec.periods)].map(bellOrderProblem).find(Boolean);
 
     const save = async () => {
         setSaving(true);
         try {
             setConfig((await api.put<{ data: TimetableConfig }>('/api/academics/timetable/config', config)).data);
-            toast.success('Day structure saved.');
+            toast.success('School day saved.');
             onSaved?.();
         } catch (err) { toast.error(errorMessage(err, 'Could not save')); }
         finally { setSaving(false); }
@@ -342,7 +408,7 @@ export function DayStructureEditor({ onSaved }: { onSaved?: () => void } = {}) {
 
             <SectionLabel>{config.sections.length > 0 ? 'Main school day' : 'Periods and breaks'}</SectionLabel>
             {config.sections.length > 0 ? <Text style={{ fontSize: 12, color: colors.muted, marginBottom: spacing.sm }}>For classes in no section below.</Text> : null}
-            <PeriodsEditor periods={config.periods} onChange={(periods) => update((c) => ({ ...c, periods }))} />
+            <PeriodsEditor periods={config.periods} schoolDays={config.days} onChange={(periods) => update((c) => ({ ...c, periods }))} />
 
             <SectionLabel>Sections with their own bell</SectionLabel>
             <Text style={{ fontSize: 12, color: colors.muted, marginBottom: spacing.sm }}>{SECTIONS_NOTE}</Text>
@@ -355,7 +421,7 @@ export function DayStructureEditor({ onSaved }: { onSaved?: () => void } = {}) {
                             <Button key={b} size="sm" variant={sec.bands.includes(b) ? 'primary' : 'secondary'} label={BAND_LABELS[b]} onPress={() => update((c) => withSectionBandToggled(c, sec.id, b))} />
                         ))}
                     </ButtonRow>
-                    <PeriodsEditor periods={sec.periods} onChange={(periods) => update((c) => withSectionPatched(c, sec.id, { periods }))} />
+                    <PeriodsEditor periods={sec.periods} schoolDays={config.days} onChange={(periods) => update((c) => withSectionPatched(c, sec.id, { periods }))} />
                     <ButtonRow>
                         <Button size="sm" variant="danger" label={`Remove ${sec.name}`} onPress={() => update((c) => withSectionRemoved(c, sec.id))} />
                     </ButtonRow>
@@ -367,15 +433,9 @@ export function DayStructureEditor({ onSaved }: { onSaved?: () => void } = {}) {
             </ButtonRow>
 
             <View style={{ marginTop: spacing.md }}>
-                <TextField
-                    label="Most lessons in a row for one teacher"
-                    value={String(config.rules.max_consecutive)}
-                    onChangeText={(v) => setConfig((c) => c && ({ ...c, rules: { ...c.rules, max_consecutive: Number(v) || 1 } }))}
-                    keyboardType="number-pad"
-                />
+                <Button label={saving ? 'Saving…' : 'Save school day'} onPress={() => void save()} loading={saving} disabled={!!problem} block />
             </View>
-            <Button label={saving ? 'Saving…' : onSaved ? 'Save and continue' : 'Save day structure'} onPress={() => void save()} loading={saving} block />
-            <Text style={{ fontSize: 11, color: colors.muted, marginTop: spacing.sm }}>Changing periods after publishing? Generate the timetable again so lessons line up with the new day.</Text>
+            <Text style={{ fontSize: 11, color: colors.muted, marginTop: spacing.sm }}>Changing the day after publishing? Generate the timetable again so lessons follow the new times.</Text>
         </Card>
     );
 }

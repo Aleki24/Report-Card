@@ -5,12 +5,21 @@
  */
 
 import type { ClassFixes } from './fit';
+import type { SubjectTime } from './config';
 
 export interface PlanLoad {
     id: string;
+    subjectId: string;
     subject: string;
     teacher: string | null;
     lessons: number;
+    doubles: number;
+    /** The Ministry's lessons a week for this subject at the class's level, when it sets one. */
+    ministry: number | null;
+    /** When the subject is best taught (the school's choice, else its usual). */
+    time: SubjectTime;
+    /** Whether `time` is the school's own choice rather than the subject's usual. */
+    timeChosen: boolean;
 }
 
 export interface PlanBlock {
@@ -41,20 +50,25 @@ export interface PlanClass {
     unfit: { name: string; subjects: [string, string] }[];
     /** Loads whose lessons a week differ from the Ministry's figure for the level. */
     offMinistry: { subject: string; lessons: number; ministry: number }[];
+    /** The class's level, as schools say it ("Junior School"). */
+    level: string | null;
     /** For a class that does not fit: the two ready-made ways to make it fit. */
     fixes?: ClassFixes;
 }
 
 /** A teacher's whole week across every class and level they teach. */
 export interface TeacherWeek {
+    id: string;
     name: string;
     lessons: number;
-    /** Periods in the week of the longest bell they teach on. */
+    /** Periods they can teach: the week of the longest bell they teach on, less the times they are away. */
     capacity: number;
+    /** Periods lost to times they are away. */
+    away: number;
     classes: string[];
 }
 
-export type StudioCard = 'day' | 'loads' | 'rooms' | 'drafts';
+export type StudioCard = 'day' | 'loads' | 'teachers' | 'rooms' | 'drafts';
 
 /** A fix the studio can apply in one tap instead of sending the school to an editor. */
 export type QuickFix = 'set-breaks';
@@ -71,7 +85,12 @@ export interface Blocker {
 
 export interface TimetablePlan {
     day: {
-        days: number; lessonsPerDay: number; starts: string | null; ends: string | null; sections: number;
+        days: number;
+        /** Lessons on the longest and shortest school day of the main bell (8 and 9 with a Friday-only lesson). */
+        lessonsPerDay: number; fewestPerDay: number;
+        /** Lessons in the main bell's week. */
+        lessonsPerWeek: number;
+        starts: string | null; ends: string | null; sections: number;
         /** Periods named like breaks (Tea break, Lunch) but set as lessons. */
         breakMismatches: string[];
     };
@@ -87,7 +106,8 @@ export interface TimetablePlan {
     notes: Blocker[];
 }
 
-const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+/** "1 class", "4 classes", "2 lessons". */
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : /(s|sh|ch|x|z)$/.test(word) ? 'es' : 's'}`;
 
 /**
  * A teacher well under a normal load is worth a look. TSC expects about 27
@@ -121,7 +141,7 @@ export function basisLine(c: PlanClass): string | null {
     const whose = c.choiceSource === 'combinations' ? plural(c.learnersWithChoices, 'offered combination') : `${plural(c.learnersWithChoices, 'learner')}’ recorded choices`;
     if (c.basis === 'groups') {
         const who = c.choiceSource === 'combinations' ? 'combination' : 'learner';
-        return `Electives run in ${plural(c.blocks.length, 'subject group')}, one subject from each, built from ${whose}.${c.unfit.length > 0 ? ` ${plural(c.unfit.length, who)} has two subjects in one group.` : ' Every one fits.'}`;
+        return `Electives run in ${plural(c.blocks.length, 'subject group')}, one subject from each, built from ${whose}.${c.unfit.length > 0 ? ` ${plural(c.unfit.length, who)} ${c.unfit.length === 1 ? 'has' : 'have'} two subjects in one group.` : ' Every one fits.'}`;
     }
     if (c.basis === 'choices') return `Option blocks follow ${whose}: subjects taken together never share a slot.`;
     return 'No subject choices recorded for this class yet, so electives are grouped by subject type. Record learners’ electives (or the school’s combinations) for groups that match them.';
@@ -164,24 +184,30 @@ export function assess(plan: Omit<TimetablePlan, 'blockers' | 'notes'>): Pick<Ti
     const light: string[] = [];
     for (const t of plan.teachers) {
         if (t.lessons > t.capacity) {
-            blockers.push({ card: 'loads', message: `${t.name} teaches ${t.lessons} lessons a week (${t.classes.join(', ')}) but the week has ${t.capacity} periods. Give some of these classes to another teacher.` });
+            blockers.push({
+                card: 'teachers',
+                message: t.away > 0
+                    ? `${t.name} teaches ${t.lessons} lessons a week (${t.classes.join(', ')}) but can teach in only ${t.capacity} periods, with the times they are away. Give some of these classes to another teacher, or free some of their time.`
+                    : `${t.name} teaches ${t.lessons} lessons a week (${t.classes.join(', ')}) but the week has ${t.capacity} periods. Give some of these classes to another teacher.`,
+            });
         } else if (isLightLoad(t)) {
             light.push(`${t.name}: ${plural(t.lessons, 'lesson')} (${t.classes.join(', ') || 'no classes'})`);
         }
     }
     if (light.length > 0) {
-        notes.push({ card: 'loads', message: `${plural(light.length, 'teacher')} with a light week (under ${LIGHT_LOAD} lessons). Give them more classes in Subjects → Teachers, then import loads again.`, details: light });
+        notes.push({ card: 'teachers', message: `${plural(light.length, 'teacher')} with a light week (under ${LIGHT_LOAD} lessons). Give them more classes in Subjects → Teachers, then import loads again.`, details: light });
     }
     if (plan.rooms === 0) notes.push({ card: 'rooms', message: 'No labs or special rooms: every lesson runs in the class’s own room.' });
     return { blockers, notes };
 }
 
-/** "Mon–Fri · 8 lessons · 08:20–16:00". */
+/** "5 days · 8–9 lessons a day (41 a week) · 08:20–16:00". */
 export function daySummary(day: TimetablePlan['day']): string {
     if (day.days === 0) return 'Not set yet';
     const span = day.starts && day.ends ? ` · ${day.starts}–${day.ends}` : '';
     const sections = day.sections > 0 ? ` · ${plural(day.sections, 'section')}` : '';
-    return `${plural(day.days, 'day')} · ${plural(day.lessonsPerDay, 'lesson')} a day${span}${sections}`;
+    const perDay = day.fewestPerDay !== day.lessonsPerDay ? `${day.fewestPerDay}–${day.lessonsPerDay} lessons a day` : `${plural(day.lessonsPerDay, 'lesson')} a day`;
+    return `${plural(day.days, 'day')} · ${perDay} (${day.lessonsPerWeek} a week)${span}${sections}`;
 }
 
 /** "14 classes · 3 with option blocks · 2 don’t fit". */
@@ -195,4 +221,24 @@ export function loadsSummary(plan: TimetablePlan): string {
 /** The card the studio opens first: the first with a blocker, else drafts once loads exist. */
 export function firstCard(plan: TimetablePlan): StudioCard {
     return plan.blockers[0]?.card ?? (plan.loads > 0 ? 'drafts' : 'loads');
+}
+
+/** A subject's time of day across every level that teaches it (each level has its own Mathematics). */
+export interface SubjectTimeRow { key: string; name: string; ids: string[]; time: SubjectTime | null }
+
+/** One row per subject name, with every level's subject id; `time` is null when the levels differ. */
+export function subjectTimeRows(plan: Pick<TimetablePlan, 'classes'>): SubjectTimeRow[] {
+    const rows = new Map<string, { name: string; ids: Set<string>; times: Set<SubjectTime> }>();
+    for (const c of plan.classes) {
+        for (const l of [...c.core, ...c.blocks.flatMap(b => b.loads)]) {
+            const key = l.subject.trim().toLowerCase();
+            const row = rows.get(key) ?? { name: l.subject.trim(), ids: new Set<string>(), times: new Set<SubjectTime>() };
+            row.ids.add(l.subjectId);
+            row.times.add(l.time);
+            rows.set(key, row);
+        }
+    }
+    return [...rows.entries()]
+        .map(([key, row]) => ({ key, name: row.name, ids: [...row.ids], time: row.times.size === 1 ? [...row.times][0] : null }))
+        .sort((a, b) => a.name.localeCompare(b.name));
 }

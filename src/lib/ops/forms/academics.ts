@@ -10,7 +10,10 @@ import type { PillTone } from '../tones';
 import { today } from '../format';
 import { CBC_LEVELS, EVENT_AUDIENCES, EVENT_TYPES, ROOM_TYPES } from '../resources/academics';
 import type { PaperAction, PaperStatus, PrintStatus } from '../../academics/exam-papers';
-import { CURRICULUM_BANDS, SECTION_PRESETS, type TimetableConfig, type TimetableLesson, type TimetablePeriod, type TimetableVersion } from '../../timetable/config';
+import {
+    CURRICULUM_BANDS, SECTION_PRESETS, WEEKDAY_LABELS, lessonLength, lessonsOn, minutesOf, weeklyLessons,
+    type TimetableConfig, type TimetableLesson, type TimetablePeriod, type TimetableVersion,
+} from '../../timetable/config';
 import type { CurriculumBand } from '../../curriculum-bands';
 import { blockLabel } from '../../timetable/blocks';
 
@@ -222,6 +225,13 @@ export const IMPORT_LOADS_NOTE = 'Creates a load for every subject each teacher 
 /** How weekly lessons are set when loads are imported. */
 export const MINISTRY_LOADS_NOTE = 'Lessons a week follow the KICD / Ministry allocation for each level (e.g. Grade 7 Mathematics 5, Integrated Science 5 with a double). Subjects it does not cover get the number you set.';
 
+/** Asked before every subject's lessons a week are set back to the Ministry's figures (web and app). */
+export const MATCH_MINISTRY_CONFIRM = {
+    title: 'Match the Ministry for every class?',
+    message: 'Every subject the Ministry sets lessons for gets its figure, doubles included. Subjects it does not cover keep theirs.',
+    confirmText: 'Match the Ministry',
+} as const;
+
 export const teacherName = (t: TimetableLesson['teacher']) => (t ? `${t.first_name} ${t.last_name}`.trim() : '');
 
 /** What a cell shows depends on whose timetable it is. */
@@ -275,7 +285,6 @@ export function lessonClasses(lessons: readonly TimetableLesson[]): LookupOption
     return [...seen.entries()].map(([id, label]) => ({ id, label })).sort((a, b) => a.label.localeCompare(b.label));
 }
 
-/** A new lesson period (40 minutes) or break (20) after the last one. */
 /** A new lesson period (40 minutes) or break (20) after the last one in a bell. */
 export function withAddedPeriodTo(periods: readonly TimetablePeriod[], isBreak: boolean): TimetablePeriod[] {
     const last = periods[periods.length - 1];
@@ -312,6 +321,78 @@ export function withBreaksFixed(config: TimetableConfig): TimetableConfig {
 /** One period of a bell changed. */
 export const withPeriodPatched = (periods: readonly TimetablePeriod[], index: number, patch: Partial<TimetablePeriod>): TimetablePeriod[] =>
     periods.map((p, i) => (i === index ? { ...p, ...patch } : p));
+
+/**
+ * A period run on one more or one fewer school day. All days ticked again is
+ * the same as no days set; the last day can't be taken away (remove the
+ * period instead).
+ */
+export function withPeriodDayToggled(periods: readonly TimetablePeriod[], index: number, day: number, schoolDays: readonly number[]): TimetablePeriod[] {
+    return periods.map((p, i) => {
+        if (i !== index) return p;
+        const on = schoolDays.filter(d => !p.days || p.days.includes(d));
+        const next = on.includes(day) ? on.filter(d => d !== day) : [...on, day].sort((a, b) => a - b);
+        if (next.length === 0) return p;
+        const every = { label: p.label, start: p.start, end: p.end, is_break: p.is_break };
+        return next.length === schoolDays.length ? every : { ...every, days: next };
+    });
+}
+
+/** "Mon–Thu" for a run of days, else "Mon, Wed". */
+function daysPhrase(days: readonly number[]): string {
+    const sorted = [...days].sort((a, b) => a - b);
+    const run = sorted.every((d, i) => i === 0 || d === sorted[i - 1] + 1);
+    if (run && sorted.length >= 3) return `${WEEKDAY_LABELS[sorted[0]]}–${WEEKDAY_LABELS[sorted[sorted.length - 1]]}`;
+    return sorted.map(d => WEEKDAY_LABELS[d]).join(', ');
+}
+
+/**
+ * A bell in a line: "8 lessons a day · 40 a week · 08:20–15:20", or with
+ * days that differ, "8 lessons Mon–Thu, 9 on Fri · 41 a week".
+ */
+export function bellSummary(periods: readonly TimetablePeriod[], schoolDays: readonly number[]): string {
+    if (periods.length === 0 || schoolDays.length === 0) return 'No periods yet';
+    const byCount = new Map<number, number[]>();
+    schoolDays.forEach(d => { const n = lessonsOn(periods, d); byCount.set(n, [...(byCount.get(n) ?? []), d]); });
+    const groups = [...byCount.entries()].sort((a, b) => b[1].length - a[1].length);
+    const perDay = groups.length === 1
+        ? `${groups[0][0]} lesson${groups[0][0] === 1 ? '' : 's'} a day`
+        : groups.map(([n, days], i) => `${n} ${i === 0 ? `lesson${n === 1 ? '' : 's'} ` : ''}${i === 0 ? daysPhrase(days) : `on ${daysPhrase(days)}`}`).join(', ');
+    const running = (p: TimetablePeriod) => !p.days || p.days.some(d => schoolDays.includes(d));
+    const used = periods.filter(running);
+    const start = used[0]?.start;
+    const end = used[used.length - 1]?.end;
+    return `${perDay} · ${weeklyLessons(periods, schoolDays)} a week${start && end ? ` · ${start}–${end}` : ''}`;
+}
+
+/** Overlapping or out-of-order periods in a bell, in words, or null. */
+export function bellOrderProblem(periods: readonly TimetablePeriod[]): string | null {
+    for (let i = 0; i < periods.length; i++) {
+        const p = periods[i];
+        if (p.end <= p.start) return `${p.label} ends before it starts.`;
+        if (i > 0 && p.start < periods[i - 1].end) return `${p.label} starts before ${periods[i - 1].label} ends.`;
+    }
+    return null;
+}
+
+/** A bell built from a few numbers: the form's values, read back from an existing bell. */
+export interface QuickDay {
+    start: string;
+    lessonMinutes: number;
+    lessons: number;
+    breaks: { after: number; minutes: number; label: string }[];
+}
+
+export function quickDayOf(periods: readonly TimetablePeriod[]): QuickDay {
+    if (periods.length === 0) return { start: '08:20', lessonMinutes: 40, lessons: 8, breaks: [{ after: 2, minutes: 10, label: 'Short break' }, { after: 4, minutes: 30, label: 'Tea break' }, { after: 6, minutes: 60, label: 'Lunch' }] };
+    const breaks: QuickDay['breaks'] = [];
+    let lessons = 0;
+    for (const p of periods) {
+        if (p.is_break) { if (lessons > 0) breaks.push({ after: lessons, minutes: minutesOf(p.end) - minutesOf(p.start), label: p.label }); }
+        else if (!p.days) lessons++;
+    }
+    return { start: periods[0].start, lessonMinutes: lessonLength(periods), lessons: Math.max(1, lessons), breaks };
+}
 
 export type TimetableSection = TimetableConfig['sections'][number];
 

@@ -26,8 +26,7 @@ export const calendarSection: ManualSection = {
 export const timetableViewSection: ManualSection = {
     id: 'timetable-view',
     title: 'Your timetable',
-    summary: 'Timetable shows the published timetable for the week: periods down the side, days across the top, each lesson with its class, teacher and room. On a phone it shows one day at a time.',
-    figure: shot('timetable-view', 'A published weekly timetable grid', 'Timetable → My timetable. Breaks and lunch are shown between periods.'),
+    summary: 'Timetable shows the published timetable for the week: the days down the side and the periods across, breaks shaded between them, each lesson with its subject, teacher and room. On a phone it shows one day at a time, starting with today. A period that runs only on some days (a ninth lesson on Friday) is shaded on the others.',
     points: [
         '“Show” switches between your own timetable and any class, teacher or room.',
         'When a colleague is away and you are asked to cover a lesson, it is arranged under “Lesson cover”; check the timetable at the start of each day.',

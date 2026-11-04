@@ -11,11 +11,19 @@ export const WEEKDAY_NAMES: Record<number, string> = { 1: 'Monday', 2: 'Tuesday'
 
 const hhmm = z.string().regex(/^\d{2}:\d{2}$/, 'Use HH:MM');
 
+const weekdaySchema = z.number().int().min(1).max(7);
+
 export const periodSchema = z.object({
     label: z.string().trim().min(1).max(40),
     start: hhmm,
     end: hhmm,
     is_break: z.boolean(),
+    /**
+     * The weekdays this period runs, when not every school day: a ninth lesson
+     * on Friday only (Junior School's 41st), or afternoon lessons that stop for
+     * games on Wednesday. Omitted, it runs every school day.
+     */
+    days: z.array(weekdaySchema).min(1).max(7).refine(d => new Set(d).size === d.length, 'Each day once').optional(),
 }).refine(p => p.end > p.start, { message: 'A period must end after it starts', path: ['end'] });
 
 const periodsSchema = z.array(periodSchema).min(1).max(20)
@@ -23,6 +31,20 @@ const periodsSchema = z.array(periodSchema).min(1).max(20)
     .refine(ps => ps.every((p, i) => i === 0 || p.start >= ps[i - 1].end), 'Periods must be in order without overlapping');
 
 export const CURRICULUM_BANDS = Object.keys(BAND_LABELS) as CurriculumBand[];
+
+/** A time a teacher cannot teach, on one weekday. */
+export const teacherOffSchema = z.object({
+    teacher_id: z.string().trim().min(1).max(64),
+    day: weekdaySchema,
+    start: hhmm,
+    end: hhmm,
+}).refine(t => t.end > t.start, { message: 'Ends after it starts', path: ['end'] });
+
+export type TeacherOff = z.infer<typeof teacherOffSchema>;
+
+/** When a subject is best taught: the morning (mathematics, sciences), the afternoon (PE, art, music), or whenever. */
+export const SUBJECT_TIMES = ['morning', 'afternoon', 'any'] as const;
+export type SubjectTime = (typeof SUBJECT_TIMES)[number];
 
 /**
  * A part of the school with its own bell: pre-primary lessons run 30
@@ -46,7 +68,11 @@ export const timetableConfigSchema = z.object({
         .refine(ss => new Set(ss.flatMap(s => s.bands)).size === ss.flatMap(s => s.bands).length, 'Each level can follow only one section'),
     rules: z.object({
         max_consecutive: z.number().int().min(1).max(12).default(4),
-    }).default({ max_consecutive: 4 }),
+        /** Times a teacher cannot teach (a part-time teacher, a shared BOM teacher): never timetabled then. */
+        teacher_off: z.array(teacherOffSchema).max(500).default([]),
+        /** A subject's best time of day, where the school wants other than its usual (maths and sciences in the morning). */
+        subject_times: z.record(z.string().min(1).max(64), z.enum(SUBJECT_TIMES)).default({}),
+    }).default({ max_consecutive: 4, teacher_off: [], subject_times: {} }),
 });
 
 export type TimetableConfig = z.infer<typeof timetableConfigSchema>;
@@ -69,7 +95,7 @@ export const DEFAULT_TIMETABLE_CONFIG: TimetableConfig = {
         { label: 'P8', start: '14:40', end: '15:20', is_break: false },
     ],
     sections: [],
-    rules: { max_consecutive: 4 },
+    rules: { max_consecutive: 4, teacher_off: [], subject_times: {} },
 };
 
 // ── Sections and clock times ─────────────────────────────────────────
@@ -91,6 +117,95 @@ export function sectionFor(config: TimetableConfig, band: CurriculumBand | null 
 }
 
 export const periodsFor = (config: TimetableConfig, band: CurriculumBand | null | undefined): TimetablePeriod[] => sectionFor(config, band).periods;
+
+// ── Periods on given days ───────────────────────────────────────────
+
+/** Whether a period runs on a weekday. */
+export const runsOn = (p: { days?: readonly number[] }, day: number): boolean => !p.days || p.days.includes(day);
+
+/** The school days a period runs: its own days within the school week, else all of them. */
+export const periodDays = (p: { days?: readonly number[] }, schoolDays: readonly number[]): number[] =>
+    schoolDays.filter(d => runsOn(p, d));
+
+/** Lessons a bell holds in a week: each teaching period once for every day it runs. */
+export const weeklyLessons = (periods: readonly TimetablePeriod[], schoolDays: readonly number[]): number =>
+    periods.reduce((n, p) => n + (p.is_break ? 0 : periodDays(p, schoolDays).length), 0);
+
+/** Lessons on one day of a bell. */
+export const lessonsOn = (periods: readonly TimetablePeriod[], day: number): number =>
+    periods.filter(p => !p.is_break && runsOn(p, day)).length;
+
+/** "Mon, Wed, Fri" — the days a period runs, or "Every day". */
+export function daysLabel(days: readonly number[] | undefined, schoolDays: readonly number[]): string {
+    const on = days ? schoolDays.filter(d => days.includes(d)) : [...schoolDays];
+    if (on.length === schoolDays.length) return 'Every day';
+    return on.length === 0 ? 'No school day' : on.map(d => WEEKDAY_LABELS[d]).join(', ');
+}
+
+/**
+ * `n` school days spread across the week, for lessons added on only some of
+ * them: Friday for one, Tuesday and Thursday for two, Monday, Wednesday and
+ * Friday for three.
+ */
+export function spreadDays(n: number, schoolDays: readonly number[]): number[] {
+    const days = [...schoolDays].sort((a, b) => a - b);
+    if (n >= days.length) return days;
+    if (n <= 0) return [];
+    if (n === 1) return [days[days.length - 1]];
+    const step = (days.length - 1) / (n - 1);
+    const picked = new Set<number>();
+    for (let i = 0; i < n; i++) picked.add(days[Math.round(i * step)]);
+    // Rounding can land two picks on one day; fill from the end of the week.
+    for (let i = days.length - 1; picked.size < n && i >= 0; i--) picked.add(days[i]);
+    return days.filter(d => picked.has(d)).slice(0, n);
+}
+
+// ── A bell from a few numbers ─────────────────────────────────────────
+
+/** The usual length of a bell's lessons, in minutes. */
+export function lessonLength(periods: readonly TimetablePeriod[]): number {
+    const lengths = periods.filter(p => !p.is_break).map(p => minutesOf(p.end) - minutesOf(p.start)).sort((a, b) => a - b);
+    return lengths[Math.floor(lengths.length / 2)] ?? 40;
+}
+
+/**
+ * A bell with one period's times changed and every later period moved by the
+ * same amount, so the day stays in order without retyping each time.
+ */
+export function withPeriodRetimed(periods: readonly TimetablePeriod[], index: number, patch: { start?: string; end?: string }): TimetablePeriod[] {
+    const p = periods[index];
+    if (!p) return [...periods];
+    const start = patch.start ?? p.start;
+    // A new start keeps the period's length; a new end changes it.
+    const end = patch.end ?? hhmmOf(minutesOf(p.end) + minutesOf(start) - minutesOf(p.start));
+    const shift = minutesOf(end) - minutesOf(p.end);
+    return periods.map((q, i) => {
+        if (i < index) return q;
+        if (i === index) return { ...q, start, end };
+        return { ...q, start: hhmmOf(minutesOf(q.start) + shift), end: hhmmOf(minutesOf(q.end) + shift) };
+    });
+}
+
+/** Every lesson of a bell made `minutes` long, breaks keeping their length, the day re-timed from its first period. */
+export function withLessonLength(periods: readonly TimetablePeriod[], minutes: number): TimetablePeriod[] {
+    if (periods.length === 0) return [];
+    let t = minutesOf(periods[0].start);
+    return periods.map((p, i) => {
+        // A gap the school left between periods is kept.
+        if (i > 0) t += Math.max(0, minutesOf(p.start) - minutesOf(periods[i - 1].end));
+        const length = p.is_break ? minutesOf(p.end) - minutesOf(p.start) : minutes;
+        const next = { ...p, start: hhmmOf(t), end: hhmmOf(t + length) };
+        t += length;
+        return next;
+    });
+}
+
+/** The bell moved to start at `start`, every period keeping its length. */
+export function withDayStart(periods: readonly TimetablePeriod[], start: string): TimetablePeriod[] {
+    if (periods.length === 0) return [];
+    const shift = minutesOf(start) - minutesOf(periods[0].start);
+    return periods.map(p => ({ ...p, start: hhmmOf(minutesOf(p.start) + shift), end: hhmmOf(minutesOf(p.end) + shift) }));
+}
 
 /**
  * A day built from a start time, a lesson length and where the breaks fall:
@@ -161,6 +276,8 @@ export interface TimetableLesson {
     teacher_id: string | null;
     room_id: string | null;
     locked: boolean;
+    /** The teaching load it was generated from; null for a lesson whose load was since deleted. */
+    requirement_id?: string | null;
     stream: { full_name: string; grade?: { code: string | null; name_display: string | null } | null } | null;
     subject: { name: string; code: string } | null;
     teacher: { first_name: string; last_name: string } | null;
@@ -171,17 +288,27 @@ export interface TimetableVersion {
     id: string;
     name: string;
     status: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
-    stats: { placed?: number; required?: number; cost?: number; unplaced?: { label: string; lessons: number }[]; quality?: TimetableQuality };
+    stats: {
+        placed?: number; required?: number; cost?: number; unplaced?: { label: string; lessons: number }[]; quality?: TimetableQuality;
+        /** The draft read back after generating: teachers or rooms booked twice (always none). */
+        checks?: { teacherClashes: number; roomClashes: number };
+    };
     created_at: string;
     published_at: string | null;
 }
 
 /** How good a draft is, in terms a school can act on. */
 export interface TimetableQuality {
-    /** 0–100: 100 means no preference was broken. */
+    /** 0–100: 100 means no preference was broken that could have been kept. */
     score: number;
-    /** A subject twice in one class's day. */
+    /**
+     * A subject more often in one class's day than its lessons need: twice in
+     * a day when it has a day free. English's eight lessons over five days
+     * must double up on three days; those are not counted.
+     */
     repeatsInDay: number;
+    /** A subject taught on fewer days than it could be (Kiswahili 6 a week, but no Kiswahili on Tuesday). */
+    missedDays?: number;
     /** Maths or a science after lunch. */
     lateCoreLessons: number;
     /** PE, art or music in the first lessons of the day. */
@@ -192,22 +319,26 @@ export interface TimetableQuality {
     bunchedWeeks: number;
     /** Teachers teaching more lessons in a row than the school allows. */
     longTeacherRuns: number;
+    /** A class's free period in the middle of its day rather than at the end. */
+    midDayGaps?: number;
 }
 
-export const LESSON_SELECT = 'id, day, period, grade_stream_id, subject_id, teacher_id, room_id, locked, stream:grade_streams(full_name, grade:grades(code, name_display)), subject:subjects(name, code), teacher:users!timetable_lessons_teacher_id_fkey(first_name, last_name), room:rooms(name)';
-
 const QUALITY_NOTES: readonly { key: Exclude<keyof TimetableQuality, 'score'>; text: (n: number) => string }[] = [
-    { key: 'repeatsInDay', text: n => `${n} subject${n === 1 ? '' : 's'} taught twice in a day` },
-    { key: 'lateCoreLessons', text: n => `${n} core lesson${n === 1 ? '' : 's'} after lunch` },
+    { key: 'repeatsInDay', text: n => `${n} lesson${n === 1 ? '' : 's'} doubled up in a day when another day was free` },
+    { key: 'missedDays', text: n => `${n} subject${n === 1 ? '' : 's'} missing a day ${n === 1 ? 'it' : 'they'} could have had` },
+    { key: 'lateCoreLessons', text: n => `${n} maths or science lesson${n === 1 ? '' : 's'} after lunch` },
     { key: 'earlyCreativeLessons', text: n => `${n} creative lesson${n === 1 ? '' : 's'} first thing` },
     { key: 'samePeriodHabits', text: n => `${n} subject${n === 1 ? '' : 's'} stuck in the same period` },
     { key: 'bunchedWeeks', text: n => `${n} subject${n === 1 ? '' : 's'} bunched on neighbouring days` },
     { key: 'longTeacherRuns', text: n => `${n} long teaching run${n === 1 ? '' : 's'} without a break` },
+    { key: 'midDayGaps', text: n => `${n} free period${n === 1 ? '' : 's'} in the middle of a class’s day` },
 ];
 
 /** A draft's quality in words, for the builder on web and in the app. */
 export function describeQuality(q: TimetableQuality): { score: number; verdict: string; tone: 'good' | 'fair' | 'poor'; notes: string[] } {
     const tone = q.score >= 85 ? 'good' : q.score >= 65 ? 'fair' : 'poor';
-    const verdict = tone === 'good' ? 'Well balanced' : tone === 'fair' ? 'Workable — reshuffle to improve' : 'Needs work — check loads, then reshuffle';
-    return { score: q.score, verdict, tone, notes: QUALITY_NOTES.filter(n => q[n.key] > 0).map(n => n.text(q[n.key])) };
+    const verdict = tone === 'good' ? 'Well balanced' : tone === 'fair' ? 'Workable — reshuffle or move a few lessons to improve' : 'Needs work — check loads and teacher times, then reshuffle';
+    return { score: q.score, verdict, tone, notes: QUALITY_NOTES.filter(n => (q[n.key] ?? 0) > 0).map(n => n.text(q[n.key] ?? 0)) };
 }
+
+export const LESSON_SELECT = 'id, day, period, grade_stream_id, subject_id, teacher_id, room_id, locked, requirement_id, stream:grade_streams(full_name, grade:grades(code, name_display)), subject:subjects(name, code), teacher:users!timetable_lessons_teacher_id_fkey(first_name, last_name), room:rooms(name)';

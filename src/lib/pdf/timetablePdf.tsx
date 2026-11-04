@@ -3,7 +3,8 @@ import { Document, Image, Page, StyleSheet, Text, View, renderToBuffer } from '@
 import { FONT_STACKS } from './pdfFonts';
 import { bandForGrade } from '@/lib/curriculum-bands';
 import { WEEKDAY_LABELS, WEEKDAY_NAMES, sectionFor, type TimetableConfig, type TimetableLesson } from '@/lib/timetable/config';
-import { gridRows, lessonsAt, type GridRow } from '@/lib/timetable/layout';
+import { gridRows, lessonsAt, periodsOfLesson, rowRunsOn, type GridRow } from '@/lib/timetable/layout';
+import { availableLessons } from '@/lib/timetable/moves';
 import { shortSubject, teacherName, type GridMode } from '@/lib/ops/forms/academics';
 
 /**
@@ -61,6 +62,8 @@ const st = StyleSheet.create({
     lesson: { flex: 1, borderRadius: 3, paddingHorizontal: 3, paddingVertical: 2, justifyContent: 'center' },
     top: { fontFamily: FONT_STACKS.helvetica, fontWeight: 700, fontSize: 7.5, lineHeight: 1.15 },
     bottom: { fontSize: 6, color: '#4B5563', marginTop: 1.5 },
+    offDay: { flex: 1, borderRadius: 3, backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center' },
+    offDayText: { fontSize: 6, color: '#9CA3AF' },
     breakCol: { width: BREAK_W, backgroundColor: BREAK_FILL, borderLeftWidth: 1, borderLeftColor: LINE, justifyContent: 'center', alignItems: 'center' },
     breakText: { fontSize: 5.5, color: '#92400E', letterSpacing: 0.6, textTransform: 'uppercase', transform: 'rotate(-90deg)', width: 90, textAlign: 'center' },
     footer: { position: 'absolute', left: PAGE.margin, right: PAGE.margin, bottom: 12, flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: LINE, paddingTop: 5, fontSize: 6.5, color: MUTED },
@@ -145,6 +148,11 @@ function Cell({ lessons, width, mode, height }: { lessons: TimetableLesson[]; wi
     );
 }
 
+/** A period that does not run on this day (a Friday-only lesson, on Monday). */
+const OffDay = ({ width, height }: { width: number; height: number }) => (
+    <View style={[st.cell, { width, height }]}><View style={st.offDay}><Text style={st.offDayText}>—</Text></View></View>
+);
+
 /** The period header across the top: lessons with their times, breaks as narrow shaded columns. */
 function HeadRow({ rows, width, corner }: { rows: GridRow[]; width: number; corner: string }) {
     return (
@@ -181,7 +189,9 @@ function WeekGrid({ config, sheet }: { config: TimetableConfig; sheet: Timetable
                     <View style={st.rowLabel}><Text style={st.rowLabelText}>{WEEKDAY_LABELS[d]}</Text></View>
                     {rows.map(r => r.isBreak
                         ? (di === 0 ? <View key={r.key} style={[st.breakCol, { height: rowH }]}><Text style={st.breakText}>{r.label}</Text></View> : <View key={r.key} style={[st.breakCol, { height: rowH }]} />)
-                        : <Cell key={r.key} lessons={lessonsAt(config, sheet.lessons, d, r)} width={width} mode={sheet.mode} height={rowH} />)}
+                        : rowRunsOn(r, d)
+                            ? <Cell key={r.key} lessons={lessonsAt(config, sheet.lessons, d, r)} width={width} mode={sheet.mode} height={rowH} />
+                            : <OffDay key={r.key} width={width} height={rowH} />)}
                 </View>
             ))}
         </View>
@@ -191,7 +201,8 @@ function WeekGrid({ config, sheet }: { config: TimetableConfig; sheet: Timetable
 /** The whole school on one day: every class against every period. */
 function DayGrid({ config, sheet }: { config: TimetableConfig; sheet: DaySheet }) {
     const all = sheet.classes.flatMap(c => c.lessons);
-    const rows = gridRows(config, all);
+    // One day: only the periods that run on it.
+    const rows = gridRows(config, all).filter(r => rowRunsOn(r, sheet.day));
     const labelW = 74;
     const width = lessonWidth(rows, labelW);
     const avail = PAGE.height - PAGE.margin * 2 - FOOTER_H - HEADER_H - 23 - HEAD_ROW_H;
@@ -358,12 +369,14 @@ export function masterSheets(config: TimetableConfig, lessons: readonly Timetabl
         classes: g.sheets.map(s => ({ name: s.title, lessons: s.lessons.filter(l => l.day === day) })),
     })));
 
-    const capacityOf = (list: readonly TimetableLesson[]) => config.days.length * sectionFor(config, bandForGrade(list[0].stream?.grade ?? null)).periods.filter(p => !p.is_break).length;
+    // The periods a teacher can teach: the longest bell they teach on, day by day, less the times they are away.
+    const capacityOf = (teacherId: string, list: readonly TimetableLesson[]) =>
+        Math.max(0, ...[...new Set(list.map(l => periodsOfLesson(config, l)))].map(periods => availableLessons(config, periods, teacherId)));
     const loads: TeacherLoadRow[] = byName(teachers, l => teacherName(l[0].teacher))
-        .map(([, list]) => ({
+        .map(([teacherId, list]) => ({
             name: teacherName(list[0].teacher) || 'Teacher',
             lessons: slots(list),
-            capacity: capacityOf(list),
+            capacity: capacityOf(teacherId, list),
             classes: [...new Set(list.map(l => `${l.stream?.full_name ?? ''} ${shortSubject(l.subject?.name)}`.trim()))].join(' · '),
         }))
         .sort((a, b) => b.lessons - a.lessons);

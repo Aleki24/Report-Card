@@ -6,7 +6,7 @@
  * week, in clock order.
  */
 import { bandForGrade } from '../curriculum-bands';
-import { minutesOf, sectionFor, type TimetableConfig, type TimetableLesson, type TimetablePeriod } from './config';
+import { minutesOf, runsOn, sectionFor, type TimetableConfig, type TimetableLesson, type TimetablePeriod } from './config';
 
 export interface GridRow {
     key: string;
@@ -16,7 +16,12 @@ export interface GridRow {
     isBreak: boolean;
     start: number;
     end: number;
+    /** The weekdays the row's period runs, when not every day. */
+    days?: readonly number[];
 }
+
+/** Whether a row's period runs on a weekday (a Friday-only lesson does not on Monday). */
+export const rowRunsOn = (row: Pick<GridRow, 'days'>, day: number) => runsOn(row, day);
 
 /** The periods of the bell a lesson's class follows. */
 export function periodsOfLesson(config: TimetableConfig, lesson: Pick<TimetableLesson, 'stream'>): TimetablePeriod[] {
@@ -30,7 +35,7 @@ export function lessonTime(config: TimetableConfig, lesson: TimetableLesson): { 
 }
 
 const rowOf = (p: TimetablePeriod, key: string): GridRow => ({
-    key, label: p.label, time: `${p.start}–${p.end}`, isBreak: p.is_break, start: minutesOf(p.start), end: minutesOf(p.end),
+    key, label: p.label, time: `${p.start}–${p.end}`, isBreak: p.is_break, start: minutesOf(p.start), end: minutesOf(p.end), ...(p.days ? { days: p.days } : {}),
 });
 
 /**
@@ -48,7 +53,11 @@ export function gridRows(config: TimetableConfig, lessons: readonly TimetableLes
         const p = periodsOfLesson(config, l)[l.period];
         if (!p) continue;
         const key = `${p.start}-${p.end}`;
-        if (!seen.has(key)) seen.set(key, { ...rowOf(p, key), label: p.start });
+        const row = { ...rowOf(p, key), label: p.start };
+        const prev = seen.get(key);
+        // The same time in two bells runs on the days of either.
+        const days = prev && (prev.days && row.days ? [...new Set([...prev.days, ...row.days])].sort((a, b) => a - b) : undefined);
+        seen.set(key, prev ? { key, label: row.label, time: row.time, isBreak: row.isBreak, start: row.start, end: row.end, ...(days ? { days } : {}) } : row);
     }
     return [...seen.values()].sort((a, b) => a.start - b.start || a.end - b.end);
 }

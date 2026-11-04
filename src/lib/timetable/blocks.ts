@@ -66,6 +66,12 @@ export interface ClassPlan<L extends BlockLoad = BlockLoad> {
      * group, so they must change one (or take it outside the timetable).
      */
     unfit: { learnerId: string; subjects: [string, string] }[];
+    /**
+     * For a class whose learners' choices overflow its week: the electives in
+     * fewer groups that do fit, and the learners who would then have two
+     * subjects in one group (so must change one). Absent when none fits.
+     */
+    tighter?: SubjectGroupsPlan<L>;
 }
 
 /** A class's recorded elective choices: subject id → the learners taking it. */
@@ -186,10 +192,16 @@ export function planClass<L extends BlockLoad>(
         else rest.push(...free);
     }
     let basis: ClassPlan['basis'] = 'none';
-    let unfit: ClassPlan['unfit'] = [];
+    let tighter: SubjectGroupsPlan<L> | undefined;
     const finish = (core: L[]): ClassPlan<L> => {
         const needed = sum(core.map(l => l.lessons)) + sum(blocks.map(b => b.lessons));
-        return { streamId, capacity, core, blocks, needed, fits: needed <= capacity, basis, learnersWithChoices: basis === 'subjects' || basis === 'none' ? 0 : learners, choiceSource, unfit };
+        // Whoever chose two subjects that share a slot, however the blocks came about (by hand included).
+        const unfit = choices ? unfitLearners(blocks.map(b => b.loads), choices) : [];
+        return {
+            streamId, capacity, core, blocks, needed, fits: needed <= capacity, basis,
+            learnersWithChoices: basis === 'subjects' || basis === 'none' ? (manual.size > 0 ? learners : 0) : learners,
+            choiceSource, unfit, ...(tighter && needed > capacity ? { tighter } : {}),
+        };
     };
 
     // Recorded choices say which subjects are electives: anything a learner chose.
@@ -208,9 +220,11 @@ export function planClass<L extends BlockLoad>(
         const room = capacity - sum(core.map(l => l.lessons)) - sum(blocks.map(b => b.lessons));
         const exactLessons = sum(exact.map(bin => Math.max(...bin.map(l => l.lessons))));
         const grouped = exactLessons > room ? bestGroups(electives, choices, core.length + blocks.length, exact.length, room, learners) : null;
+        const planned = grouped ? grouped.groups.length : exact.length;
+        // Still over the week: the fewer groups that fit, for the school to weigh against a longer day.
+        if (exactLessons > room && (!grouped || sum(grouped.groups.map(g => g.lessons)) > room)) tighter = fittingGroups(electives, choices, planned, room) ?? undefined;
         if (grouped) {
             basis = 'groups';
-            unfit = grouped.unfit;
             for (const g of grouped.groups) blocks.push({ ...block(next++, g.loads, false), label: g.label });
             return finish(core);
         }
@@ -255,6 +269,38 @@ function bestGroups<L extends BlockLoad>(electives: readonly L[], choices: Class
         if (lessons <= room) break;
     }
     return best?.plan ?? null;
+}
+
+/**
+ * The electives in fewer than `groups` groups that fit `room` periods, with
+ * as few learners as possible left holding two subjects in one group.
+ */
+function fittingGroups<L extends BlockLoad>(electives: readonly L[], choices: ClassChoices, groups: number, room: number): SubjectGroupsPlan<L> | null {
+    let best: SubjectGroupsPlan<L> | null = null;
+    for (let k = groups - 1; k >= 1; k--) {
+        const plan = groupElectives(electives, k, choices, kcseGroup, g => KCSE_GROUP_LABEL[g as KcseGroup]);
+        if (!plan || sum(plan.groups.map(g => g.lessons)) > room) continue;
+        if (!best || plan.unfit.length < best.unfit.length) best = plan;
+    }
+    return best;
+}
+
+/** Learners whose chosen subjects put two in one block, and which two (the first pair found). */
+export function unfitLearners<L extends BlockLoad>(blocks: readonly (readonly L[])[], choices: ClassChoices): { learnerId: string; subjects: [string, string] }[] {
+    const blockOf = new Map<string, { block: number; name: string }>();
+    blocks.forEach((loads, b) => loads.forEach(l => blockOf.set(l.subjectId, { block: b, name: l.subjectName })));
+    const picks = new Map<string, { block: number; name: string }[]>();
+    choices.forEach((learners, subjectId) => {
+        const at = blockOf.get(subjectId);
+        if (!at) return;
+        learners.forEach(id => picks.set(id, [...(picks.get(id) ?? []), at]));
+    });
+    return [...picks.entries()].flatMap(([learnerId, mine]) => {
+        for (let x = 0; x < mine.length; x++) for (let y = x + 1; y < mine.length; y++) {
+            if (mine[x].block === mine[y].block) return [{ learnerId, subjects: [mine[x].name, mine[y].name] as [string, string] }];
+        }
+        return [];
+    });
 }
 
 /** Every class's plan, given each class's teaching periods and its learners' recorded choices. */

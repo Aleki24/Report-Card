@@ -1,13 +1,15 @@
 "use client";
 
 import React, { useState } from 'react';
-import { Lock } from 'lucide-react';
+import { ArrowLeftRight, Lock, MoveRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { WEEKDAY_LABELS, type TimetableConfig, type TimetableLesson } from '@/lib/timetable/config';
+import { WEEKDAY_LABELS, WEEKDAY_NAMES, type TimetableConfig, type TimetableLesson } from '@/lib/timetable/config';
 import { slotLines, type GridMode } from '@/lib/ops/forms/academics';
-import { gridRows, lessonsAt, type GridRow } from '@/lib/timetable/layout';
+import { gridRows, lessonsAt, rowRunsOn, type GridRow } from '@/lib/timetable/layout';
+import type { CellHint } from '@/lib/timetable/moves';
 
 export type { GridMode };
+
 
 interface Props {
     config: TimetableConfig;
@@ -16,7 +18,15 @@ interface Props {
     /** Editing: the lesson picked to move, and what a click on a cell does. */
     selectedId?: string | null;
     onCellClick?: (day: number, row: GridRow, lesson: TimetableLesson | null) => void;
+    /** While a lesson is picked: each cell's move, to highlight where it can go. */
+    hintAt?: (day: number, row: GridRow) => CellHint | null;
 }
+
+const HINT_TONE: Record<CellHint['state'], string> = {
+    free: 'ring-2 ring-emerald-500/70 ring-inset',
+    swap: 'ring-2 ring-sky-500/70 ring-inset',
+    blocked: 'opacity-35',
+};
 
 function LessonCell({ lessons, mode, selected }: { lessons: readonly TimetableLesson[]; mode: GridMode; selected: boolean }) {
     const [top, bottom] = slotLines(lessons, mode);
@@ -34,11 +44,12 @@ function LessonCell({ lessons, mode, selected }: { lessons: readonly TimetableLe
 
 /**
  * A week grid from `md` up (days down, periods across, breaks as shaded
- * columns); on phones one day at
- * a time, so nothing scrolls sideways. A class shows its section's bell; a
- * teacher or room teaching across sections shows each lesson time.
+ * columns); on phones one day at a time, so nothing scrolls sideways. A class
+ * shows its section's bell, a period that runs on some days only shaded on
+ * the others; a teacher or room teaching across sections shows each lesson
+ * time. While a lesson is picked to move, cells show where it can go.
  */
-export function TimetableGrid({ config, lessons, mode, selectedId, onCellClick }: Props) {
+export function TimetableGrid({ config, lessons, mode, selectedId, onCellClick, hintAt }: Props) {
     // Phones open on today (1 = Monday … 7 = Sunday), or the first school day
     // after it, rather than always on Monday.
     const [phoneDay, setPhoneDay] = useState(() => {
@@ -49,12 +60,35 @@ export function TimetableGrid({ config, lessons, mode, selectedId, onCellClick }
     const interactive = !!onCellClick;
 
     const cell = (day: number, row: GridRow) => {
+        if (!rowRunsOn(row, day)) {
+            return (
+                <span className="flex h-full min-h-12 items-center justify-center rounded-lg bg-[repeating-linear-gradient(135deg,transparent,transparent_6px,var(--color-muted)_6px,var(--color-muted)_12px)] text-[10px] font-medium text-muted-foreground" title={`${row.label} does not run on ${WEEKDAY_NAMES[day]}`}>
+                    Not on {WEEKDAY_LABELS[day]}
+                </span>
+            );
+        }
         const here = lessonsAt(config, lessons, day, row);
         const lesson = here[0] ?? null;
-        const content = lesson ? <LessonCell lessons={here} mode={mode} selected={here.some(l => l.id === selectedId)} /> : <span className="block h-full rounded-lg border border-dashed border-border/60" />;
+        const hint = hintAt?.(day, row) ?? null;
+        const selected = here.some(l => l.id === selectedId);
+        const content = lesson
+            ? <LessonCell lessons={here} mode={mode} selected={selected} />
+            : hint?.state === 'free'
+                ? <span className="flex h-full items-center justify-center gap-1 rounded-lg border border-dashed border-emerald-500/60 bg-emerald-500/8 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300"><MoveRight className="size-3.5" aria-hidden />Move here</span>
+                : <span className="block h-full rounded-lg border border-dashed border-border/60" />;
+        const label = `${WEEKDAY_LABELS[day]} ${row.label}${lesson ? `: ${here.map(l => l.subject?.name ?? '').join(', ')}` : ': free'}${hint ? ` · ${hint.state === 'free' ? 'can move here' : hint.state === 'swap' ? 'can swap here' : hint.reason ?? 'cannot move here'}` : ''}`;
         return interactive ? (
-            <button type="button" onClick={() => onCellClick(day, row, lesson)} className="block h-full min-h-12 w-full rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`${WEEKDAY_LABELS[day]} ${row.label}${lesson ? `: ${here.map(l => l.subject?.name ?? '').join(', ')}` : ': free'}`}>
+            <button
+                type="button"
+                onClick={() => onCellClick(day, row, lesson)}
+                title={hint?.state === 'blocked' ? hint.reason : hint?.state === 'swap' ? 'Swap with this lesson' : undefined}
+                className={cn('relative block h-full min-h-12 w-full rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring', hint && !selected && HINT_TONE[hint.state])}
+                aria-label={label}
+            >
                 {content}
+                {hint?.state === 'swap' && lesson && !selected && (
+                    <span className="absolute top-1 right-1 rounded-md bg-sky-500 p-0.5 text-white" aria-hidden><ArrowLeftRight className="size-3" /></span>
+                )}
             </button>
         ) : <div className="h-full min-h-12">{content}</div>;
     };
@@ -72,7 +106,7 @@ export function TimetableGrid({ config, lessons, mode, selectedId, onCellClick }
                     ))}
                 </div>
                 <ol className="flex flex-col gap-2">
-                    {rows.map(r => r.isBreak ? (
+                    {rows.filter(r => rowRunsOn(r, phoneDay)).map(r => r.isBreak ? (
                         <li key={r.key} className="rounded-lg bg-amber-500/12 px-3 py-1.5 text-center text-[11px] font-semibold text-amber-800 dark:text-amber-200">{r.label} · {r.time}</li>
                     ) : (
                         <li key={r.key} className="grid grid-cols-[4.5rem_1fr] items-stretch gap-2">
@@ -85,7 +119,7 @@ export function TimetableGrid({ config, lessons, mode, selectedId, onCellClick }
 
             {/* Tablets and up: the whole week, days down the side and periods across, as schools pin it up */}
             <div className="hidden overflow-x-auto rounded-2xl border border-border/60 bg-card shadow-sm md:block">
-                <div className="grid min-w-[44rem]" style={{ gridTemplateColumns: `5.5rem ${rows.map(r => (r.isBreak ? '1.75rem' : 'minmax(6.5rem, 1fr)')).join(' ')}` }}>
+                <div className="grid min-w-[44rem]" style={{ gridTemplateColumns: `4.25rem ${rows.map(r => (r.isBreak ? '1.75rem' : 'minmax(5.75rem, 1fr)')).join(' ')}` }}>
                     <div className="border-b border-border/60 bg-muted/40 px-3 py-2 text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">Day</div>
                     {rows.map(r => r.isBreak ? (
                         <div key={r.key} className="border-b border-l border-border/60 bg-amber-500/15" aria-hidden />
