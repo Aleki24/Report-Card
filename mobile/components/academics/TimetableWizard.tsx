@@ -4,6 +4,7 @@ import { AlertTriangle, CalendarClock, CheckCircle2, ChevronDown, FlaskConical, 
 import { humanize, personName } from '@shared/ops/format';
 import { basisLine, unfitTitle, daySummary, firstCard, isLightLoad, loadsSummary, overloadMessage, type Blocker, type StudioCard as StudioCardId, type TimetablePlan } from '@shared/timetable/readiness';
 import type { TimetableConfig } from '@shared/timetable/config';
+import { longerDayLines } from '@shared/timetable/fit';
 import {
     IMPORT_LOADS_NOTE, LOAD_DEFAULTS, LOAD_FIELDS, MINISTRY_LOADS_NOTE, ROOM_DEFAULTS, ROOM_FIELDS, importLoadsMessage, loadLessonsLabel, newDraftName, withBreaksFixed,
     type ImportLoadsResult, type Room, type TeachingLoad,
@@ -179,9 +180,9 @@ function FitChooser({ c, onApplied, onEditLoads }: { c: TimetablePlan['classes']
                 <FitOption
                     title="Make the day longer"
                     recommended
-                    lines={[`${day.level} get ${day.perDay} more lesson${day.perDay === 1 ? '' : 's'} at the end of each day: ${day.times.join(', ')}.`, 'Every other class keeps its day. No lessons are cut.']}
+                    lines={longerDayLines(day)}
                     busy={busy === 'longer-day'}
-                    onUse={() => apply('longer-day', 'Make the day longer?', `${day.level} will end at ${day.times[day.times.length - 1]?.split('–')[1] ?? 'a later time'}.`)}
+                    onUse={() => apply('longer-day', 'Make the day longer?', `${day.level}: ${day.changes.join('; ')}.`)}
                 />
             ) : null}
             {cuts ? (
@@ -225,7 +226,7 @@ function ClassFit({ plan, onApplied, onEditLoads }: { plan: TimetablePlan; onApp
                     {c.unfit.length > 0 ? (
                         <View style={[styles.block, { backgroundColor: colors.warningBg }]}>
                             <Text style={[styles.blockTitle, { color: colors.warningText }]}>{unfitTitle(c)}</Text>
-                            {c.unfit.map((u) => <Text key={u.name + u.subjects.join()} style={styles.fitLine}>{u.name}: {u.subjects.join(' and ')} are in the same group</Text>)}
+                            {c.unfit.map((u, i) => <Text key={i} style={styles.fitLine}>{u.name}: {u.subjects.join(' and ')} are in the same group</Text>)}
                         </View>
                     ) : null}
                     {c.blocks.map((b) => (

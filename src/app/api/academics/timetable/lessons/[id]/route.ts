@@ -1,8 +1,9 @@
 import { z } from 'zod';
 import { route, parseBody, HttpError, assertInSchool } from '@/lib/platform/access';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
-import { minutesOf, sectionFor } from '@/lib/timetable/config';
-import { loadConfig, streamBands } from '@/lib/timetable/server';
+import { LESSON_SELECT, type TimetableLesson } from '@/lib/timetable/config';
+import { loadConfig } from '@/lib/timetable/server';
+import { checkMove } from '@/lib/timetable/moves';
 
 type Params = { id: string };
 
@@ -13,25 +14,23 @@ const bodySchema = z.object({
     locked: z.boolean().optional(),
 });
 
-interface LessonRow { id: string; version_id: string; day: number; period: number; grade_stream_id: string; teacher_id: string | null; room_id: string | null }
-
-const LESSON_COLUMNS = 'id, version_id, day, period, grade_stream_id, teacher_id, room_id';
 /** A period no real lesson uses, where a lesson waits for a moment during a swap. */
 const PARK_PERIOD = 999;
 
 /**
  * Moves a lesson (swapping with the class's lessons already in that slot, if
  * any), changes its room, or pins it. An option block's electives share a
- * slot and move as one. Refuses anything that would put a teacher or room in
- * two places at once.
+ * slot and move as one. Refuses a period that does not run that day, and
+ * anything that would put a teacher or room in two places at once or a
+ * teacher in a time they cannot teach (see `checkMove`).
  */
 export const PATCH = route<Params>('timetable lesson update', { module: 'timetable', permission: 'timetable.manage' }, async ({ access, params, request }) => {
     const body = await parseBody(request, bodySchema);
     const db = createSupabaseAdmin();
-    const { data: lesson, error } = await db.from('timetable_lessons').select(LESSON_COLUMNS).eq('id', params.id).eq('school_id', access.schoolId).maybeSingle();
+    const { data: row, error } = await db.from('timetable_lessons').select(`${LESSON_SELECT}, version_id`).eq('id', params.id).eq('school_id', access.schoolId).maybeSingle();
     if (error) throw error;
-    if (!lesson) throw new HttpError(404, 'Lesson not found.');
-    const a = lesson as LessonRow;
+    if (!row) throw new HttpError(404, 'Lesson not found.');
+    const a = row as unknown as TimetableLesson & { version_id: string };
     if (body.room_id) await assertInSchool('rooms', [body.room_id], access.schoolId);
 
     const day = body.day ?? a.day;
@@ -39,57 +38,29 @@ export const PATCH = route<Params>('timetable lesson update', { module: 'timetab
     const roomId = body.room_id === undefined ? a.room_id : body.room_id;
     const moving = day !== a.day || period !== a.period;
 
-    // Sections can keep different bells, so "at the same time" means overlapping clock times.
-    const [config, bands] = await Promise.all([loadConfig(access.schoolId), streamBands(access.schoolId)]);
-    const periodsOf = (streamId: string) => sectionFor(config, bands.get(streamId) ?? null).periods;
-    const target = periodsOf(a.grade_stream_id)[period];
-    if (!target || target.is_break) throw new HttpError(400, 'That is not a lesson period for this class.');
-    const clockOf = (l: { grade_stream_id: string; period: number }): [number, number] | null => {
-        const p = periodsOf(l.grade_stream_id)[l.period];
-        return p ? [minutesOf(p.start), minutesOf(p.end)] : null;
-    };
-
-    const { data: sameDay, error: targetError } = await db.from('timetable_lessons')
-        .select(LESSON_COLUMNS)
-        .eq('version_id', a.version_id).in('day', [...new Set([day, a.day])]);
-    if (targetError) throw targetError;
-    const pool = (sameDay ?? []) as LessonRow[];
-    // An option block is several lessons in one class slot: they move together.
-    const inSlot = (d: number, p: number) => pool.filter(o => o.grade_stream_id === a.grade_stream_id && o.day === d && o.period === p);
-    const group = moving ? inSlot(a.day, a.period) : [a];
-    const swapGroup = moving ? inSlot(day, period) : [];
-    const ignore = [...group, ...swapGroup].map(o => o.id);
-
-    const clash = (who: LessonRow, d: number, p: number, room: string | null) => {
-        const at = clockOf({ grade_stream_id: who.grade_stream_id, period: p });
-        if (!at) return null;
-        return pool.find(o => {
-            if (ignore.includes(o.id) || o.day !== d) return false;
-            if (!((who.teacher_id && o.teacher_id === who.teacher_id) || (room && o.room_id === room))) return false;
-            const theirs = clockOf(o);
-            return !!theirs && at[0] < theirs[1] && theirs[0] < at[1];
-        });
-    };
-
-    if (group.some(o => clash(o, day, period, o.id === a.id ? roomId : o.room_id))) {
-        throw new HttpError(409, 'A teacher or room is already busy at that time.');
-    }
-    if (swapGroup.some(o => clash(o, a.day, a.period, o.room_id))) {
-        throw new HttpError(409, 'Swapping would double-book the other lesson’s teacher or room.');
-    }
-
     if (!moving) {
         const locked = body.locked !== undefined ? { locked: body.locked } : {};
         const { error: e } = await db.from('timetable_lessons').update({ room_id: roomId, ...locked }).eq('id', a.id);
         if (e) throw e;
         return { swapped: false };
     }
+
+    const [config, { data: sameDays, error: poolError }] = await Promise.all([
+        loadConfig(access.schoolId),
+        db.from('timetable_lessons').select(LESSON_SELECT).eq('version_id', a.version_id).in('day', [...new Set([day, a.day])]),
+    ]);
+    if (poolError) throw poolError;
+    const pool = (sameDays ?? []) as unknown as TimetableLesson[];
+    const check = checkMove(config, pool, { ...a, room_id: roomId }, day, period);
+    if (!check.ok) throw new HttpError(409, check.reason);
+    const group = pool.filter(o => o.grade_stream_id === a.grade_stream_id && o.day === a.day && o.period === a.period);
+
     // One transaction: the slot's lessons are parked outside the grid, the
     // group moves in and they move back, or nothing changes at all.
     const { error: swapError } = await db.rpc('swap_timetable_slot', {
         p_version_id: a.version_id,
         p_group: group.map(o => o.id),
-        p_swap: swapGroup.map(o => o.id),
+        p_swap: check.swap.map(o => o.id),
         p_to_day: day,
         p_to_period: period,
         p_from_day: a.day,
@@ -100,5 +71,5 @@ export const PATCH = route<Params>('timetable lesson update', { module: 'timetab
         p_locked: body.locked ?? null,
     });
     if (swapError) throw swapError;
-    return { swapped: swapGroup.length > 0 };
+    return { swapped: check.swap.length > 0 };
 });

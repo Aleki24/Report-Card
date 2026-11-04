@@ -5,7 +5,7 @@ import { embedOne, fetchAllRows } from '@/lib/postgrest';
 import { planClasses, type BlockLoad } from './blocks';
 import { syncLoadTeachers } from './assignments';
 import { BUILT_IN_TOGETHER, togetherGroups, type TogetherRule } from './together';
-import { DEFAULT_TIMETABLE_CONFIG, LESSON_SELECT, sectionFor, timetableConfigSchema, type TimetableConfig, type TimetableLesson } from './config';
+import { DEFAULT_TIMETABLE_CONFIG, LESSON_SELECT, sectionFor, timetableConfigSchema, weeklyLessons, type TimetableConfig, type TimetableLesson } from './config';
 
 const db = () => createSupabaseAdmin();
 
@@ -142,7 +142,8 @@ export async function loadTimetablePlan(schoolId: string) {
         return { ...r, subject: embedOne(r.subject), stream: stream ? { ...stream, grade: embedOne(stream.grade) } : null, teacher: embedOne(r.teacher) };
     });
     const sectionOf = (streamId: string) => sectionFor(config, bands.get(streamId) ?? null);
-    const capacityOf = (streamId: string) => config.days.length * sectionOf(streamId).periods.filter(p => !p.is_break).length;
+    // A period can run on some days only (a Friday ninth lesson), so the week is counted day by day.
+    const capacityOf = (streamId: string) => weeklyLessons(sectionOf(streamId).periods, config.days);
     const loads: PlannedLoad[] = rows.map(r => ({
         id: r.id, streamId: r.grade_stream_id, subjectId: r.subject_id, subjectName: r.subject?.name ?? '', subjectType: r.subject?.subject_type ?? null,
         category: r.subject?.category ?? null, teacherId: r.teacher_id, lessons: r.lessons_per_week, doubles: r.double_lessons,

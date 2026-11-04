@@ -10,22 +10,30 @@
  *
  * Hard rules (never broken):
  *   - a class, a teacher and a room hold at most one lesson at any moment;
+ *   - a lesson only goes in a period that runs that day (a Friday-only
+ *     ninth lesson takes lessons on Friday alone);
+ *   - a teacher is never timetabled at a time they cannot teach;
  *   - doubles sit in two back-to-back periods with no break between them;
  *   - lessons needing a room type (a lab) get a free room of that type,
  *     when the school has any rooms of that type;
  *   - pinned lessons stay where they are.
  *
  * Preferences (weighted cost, lower is better):
- *   - a subject at most once a day per class (doubles count once);
+ *   - a subject spread evenly over the week: on as many days as its lessons
+ *     allow, never twice in a day when another day is free (English's eight
+ *     lessons over five days double up on three days; that is not a fault);
  *   - mathematics and sciences before lunch; PE and the arts not first thing;
  *   - a subject not in the same period every day, and its few lessons spread
  *     across the week rather than bunched on neighbouring days;
+ *   - a class's free periods at the end of its day, not in the middle;
  *   - no more than `maxConsecutive` lessons in a row for a teacher, and a
  *     teacher's lessons spread evenly across the week.
  *
- * Method: most-constrained-first greedy placement with ejection, then
- * simulated annealing (moves and swaps). `solveBest` runs several seeds and
- * keeps the best. Pure: no I/O, deterministic for a seed.
+ * Method: most-constrained-first greedy placement with ejection, a repair
+ * pass that makes room for anything left over (moving the lessons in the way
+ * elsewhere), then simulated annealing (moves and swaps). `solveTimetable`
+ * runs several seeds and keeps the best. Pure: no I/O, deterministic for a
+ * seed and a time budget.
  */
 
 import type { TimetableQuality } from './config';
@@ -37,6 +45,8 @@ export interface SolverPeriod {
     /** Clock time in minutes from midnight; omitted, periods are taken as back to back hours. */
     start?: number;
     end?: number;
+    /** The weekdays the period runs; omitted, every day. */
+    days?: readonly number[];
 }
 
 export interface SolverSection { id: string; periods: readonly SolverPeriod[] }
@@ -64,6 +74,9 @@ export interface SolverRequirement {
 
 export interface SolverRoom { id: string; type: string }
 
+/** A time a teacher cannot teach: on `day` (a weekday) from `start` to `end`, minutes from midnight. */
+export interface TeacherUnavailable { teacherId: string; day: number; start: number; end: number }
+
 /** Every teacher a requirement books: its own and, for an option block, the others in parallel. */
 export const teachersOf = (r: Pick<SolverRequirement, 'teacherId' | 'coTeacherIds'>): string[] =>
     [...new Set([...(r.teacherId ? [r.teacherId] : []), ...(r.coTeacherIds ?? [])])];
@@ -85,6 +98,8 @@ export interface SolverInput {
     requirements: readonly SolverRequirement[];
     rooms: readonly SolverRoom[];
     pinned?: readonly PinnedLesson[];
+    /** Times teachers cannot teach. */
+    unavailable?: readonly TeacherUnavailable[];
     rules?: Partial<SolverRules>;
 }
 
@@ -99,17 +114,27 @@ export interface SolverResult {
 const DEFAULT_RULES: SolverRules = { maxConsecutive: 4, timeBudgetMs: 2500, seed: 42 };
 
 const COST = {
-    sameSubjectSameDay: 30,
+    /** A subject's lesson on a day beyond its fair share. */
+    overDailyShare: 30,
+    /** A day without a subject that has a lesson for every day. */
+    missedDay: 14,
     morningMiss: 4,
     earlyCreative: 3,
     samePeriodRepeat: 3,
     bunchedDays: 8,
+    /** A class's free period with a lesson still to come that day. */
+    midDayGap: 3,
+    /** A class's lessons a day, squared, so its free periods spread over the week. */
+    classLoad: 1,
     consecutiveOver: 12,
     imbalance: 2,
 } as const;
 
 /** A gap longer than this between two lessons gives a teacher a rest. */
 const REST_MINUTES = 5;
+
+/** A teacher timeline minute the teacher cannot teach. */
+const OFF = -2;
 
 /** Mulberry32: small, fast, seedable. */
 function rng(seed: number) {
@@ -134,9 +159,13 @@ interface Bell {
     isMorning: boolean[];
     /** The first two lessons of the day. */
     isEarly: boolean[];
+    /** Whether a slot runs on a day: `open[day * slots + slot]`, day an index into the school days. */
+    open: Uint8Array;
+    /** School days with at least one lesson slot. */
+    teachingDays: number;
 }
 
-function bellOf(section: SolverSection): Bell {
+function bellOf(section: SolverSection, days: readonly number[]): Bell {
     const periods = [...section.periods].sort((a, b) => a.index - b.index);
     const timed = periods.every(p => p.start !== undefined && p.end !== undefined);
     const startOf = (p: SolverPeriod) => (timed ? p.start! : p.index * 60);
@@ -145,14 +174,21 @@ function bellOf(section: SolverSection): Bell {
     const breaks = periods.filter(p => p.isBreak);
     // "Morning" is before the day's last break (lunch), or its only break.
     const lastBreak = breaks.length > 0 ? Math.max(...breaks.map(b => b.index)) : Infinity;
+    const n = lessons.length;
+    const open = new Uint8Array(days.length * n);
+    days.forEach((day, d) => lessons.forEach((p, i) => { open[d * n + i] = !p.days || p.days.includes(day) ? 1 : 0; }));
+    let teachingDays = 0;
+    for (let d = 0; d < days.length; d++) if (open.subarray(d * n, d * n + n).some(x => x === 1)) teachingDays++;
     return {
         id: section.id,
         teaching: lessons.map(p => p.index),
         start: lessons.map(startOf),
         end: lessons.map(endOf),
-        canPair: lessons.map((p, i) => i + 1 < lessons.length && lessons[i + 1].index === p.index + 1),
+        canPair: lessons.map((p, i) => i + 1 < n && lessons[i + 1].index === p.index + 1),
         isMorning: lessons.map(p => p.index < lastBreak),
         isEarly: lessons.map((_, i) => i < 2),
+        open,
+        teachingDays,
     };
 }
 
@@ -176,14 +212,14 @@ function solveOnce(input: SolverInput, rules: SolverRules): SolverResult {
     const sections = input.sections && input.sections.length > 0
         ? input.sections
         : [{ id: 'main', periods: input.periods ?? [] }];
-    const bells = new Map(sections.map(s => [s.id, bellOf(s)]));
+    const bells = new Map(sections.map(s => [s.id, bellOf(s, input.days)]));
     const firstBell = bells.get(sections[0].id)!;
     const bellFor = (req: SolverRequirement) => (req.sectionId && bells.get(req.sectionId)) || firstBell;
 
     // Clock span of the school day across every section, for minute timelines.
-    const allBells = [...bells.values()];
-    const dayStart = Math.min(...allBells.flatMap(b => b.start));
-    const dayEnd = Math.max(...allBells.flatMap(b => b.end));
+    const allBells = [...bells.values()].filter(b => b.start.length > 0);
+    const dayStart = allBells.length > 0 ? Math.min(...allBells.flatMap(b => b.start)) : 0;
+    const dayEnd = allBells.length > 0 ? Math.max(...allBells.flatMap(b => b.end)) : 1;
     const span = Math.max(1, dayEnd - dayStart);
 
     // Occupancy. Classes: per-slot grids in their own bell. Teachers and
@@ -204,6 +240,15 @@ function solveOnce(input: SolverInput, rules: SolverRules): SolverResult {
     const roomKey = (id: string) => `r:${id}`;
     /** Minute range [from, to) a session covers at a slot. */
     const minutes = (s: Session, slot: number): [number, number] => [s.bell.start[slot] - dayStart, s.bell.end[slot + s.length - 1] - dayStart];
+
+    // Times teachers cannot teach, marked on their timelines for good.
+    const dayIndex = new Map(input.days.map((d, i) => [d, i]));
+    for (const off of input.unavailable ?? []) {
+        const d = dayIndex.get(off.day);
+        if (d === undefined) continue;
+        const t = timeline(teacherKey(off.teacherId));
+        for (let m = Math.max(0, off.start - dayStart); m < Math.min(span, off.end - dayStart); m++) t[d * span + m] = OFF;
+    }
 
     const roomsByType = new Map<string, SolverRoom[]>();
     input.rooms.forEach(r => roomsByType.set(r.type, [...(roomsByType.get(r.type) ?? []), r]));
@@ -242,42 +287,75 @@ function solveOnce(input: SolverInput, rules: SolverRules): SolverResult {
         s.day = -1; s.slot = -1; s.roomId = null;
     };
 
-    const shapeFits = (s: Session, slot: number) => (s.length === 1 ? slot < s.bell.teaching.length : !!s.bell.canPair[slot]);
+    /** Whether a session's shape fits a slot on a day: the periods run that day, and a double's two are back to back. */
+    const shapeFits = (s: Session, day: number, slot: number) => {
+        const n = s.bell.teaching.length;
+        if (slot + s.length > n || (s.length === 2 && !s.bell.canPair[slot])) return false;
+        for (let k = 0; k < s.length; k++) if (!s.bell.open[day * n + slot + k]) return false;
+        return true;
+    };
 
-    const busyIn = (owner: string, s: Session, day: number, slot: number, into: Set<number> | null): boolean => {
+    /** Whether `owner` is busy for `s` at (day, slot); lessons in the way are added to `into`. Off times count as hard. */
+    const busyIn = (owner: string, s: Session, day: number, slot: number, into: Set<number> | null): 'free' | 'busy' | 'off' => {
         const t = timelines.get(owner);
-        if (!t) return false;
+        if (!t) return 'free';
         const [from, to] = minutes(s, slot);
         let busy = false;
         for (let m = from; m < to; m++) {
             const hit = t[day * span + m];
-            if (hit >= 0 && hit !== s.key) { busy = true; if (!into) return true; into.add(hit); }
+            if (hit === OFF) return 'off';
+            if (hit >= 0 && hit !== s.key) { busy = true; if (!into) return 'busy'; into.add(hit); }
         }
-        return busy;
+        return busy ? 'busy' : 'free';
     };
 
-    /** Sessions blocking `s` at (day, slot), and a free room if one is needed. */
-    const conflictsAt = (s: Session, day: number, slot: number): { blockers: Set<number>; roomId: string | null; roomBlocked: boolean } => {
+    /** Sessions blocking `s` at (day, slot), and a free room if one is needed. `hard` when nothing can be moved out of the way. */
+    const conflictsAt = (s: Session, day: number, slot: number): { blockers: Set<number>; roomId: string | null; hard: boolean } => {
         const blockers = new Set<number>();
         const g = streamGrids.get(s.req.streamId);
         const n = s.bell.teaching.length;
         if (g) for (let k = 0; k < s.length; k++) { const hit = g[day * n + slot + k]; if (hit >= 0 && hit !== s.key) blockers.add(hit); }
-        for (const t of teachersOf(s.req)) busyIn(teacherKey(t), s, day, slot, blockers);
+        for (const t of teachersOf(s.req)) if (busyIn(teacherKey(t), s, day, slot, blockers) === 'off') return { blockers, roomId: null, hard: true };
         let roomId: string | null = null;
-        let roomBlocked = false;
+        let hard = false;
         const typed = s.req.roomType ? roomsByType.get(s.req.roomType) : undefined;
         if (typed && typed.length > 0) {
-            roomId = typed.find(r => !busyIn(roomKey(r.id), s, day, slot, null))?.id ?? null;
-            roomBlocked = roomId === null;
+            roomId = typed.find(r => busyIn(roomKey(r.id), s, day, slot, null) === 'free')?.id ?? null;
+            hard = roomId === null;
         }
-        return { blockers, roomId, roomBlocked };
+        return { blockers, roomId, hard };
     };
 
     // ── Soft cost ────────────────────────────────────────────────────────
     const streamBell = new Map<string, Bell>();
     sessions.forEach(s => streamBell.set(s.req.streamId, s.bell));
 
-    /** A class's day: repeats, and subjects at the wrong time of day. */
+    // Each class's lessons of a subject as sessions (a double counts once), and its fair share a day.
+    const subjectKey = (streamId: string, subjectId: string) => `${streamId}|${subjectId}`;
+    const sessionsOf = new Map<string, number>();
+    sessions.forEach(s => { const k = subjectKey(s.req.streamId, s.req.subjectId); sessionsOf.set(k, (sessionsOf.get(k) ?? 0) + 1); });
+    // The days a class's subject can be taught at all: the class has a lesson
+    // slot then and its teacher is not away for the whole of it.
+    const teachableDays = new Map<string, number>();
+    for (const s of sessions) {
+        const k = subjectKey(s.req.streamId, s.req.subjectId);
+        if (teachableDays.has(k)) continue;
+        const n = s.bell.teaching.length;
+        let count = 0;
+        for (let d = 0; d < dayCount; d++) {
+            for (let t = 0; t < n; t++) {
+                if (!s.bell.open[d * n + t]) continue;
+                if (teachersOf(s.req).every(id => busyIn(teacherKey(id), { ...s, length: 1 }, d, t, null) !== 'off')) { count++; break; }
+            }
+        }
+        teachableDays.set(k, count);
+    }
+    const daysFor = (streamId: string, subjectId: string, bell: Bell) => teachableDays.get(subjectKey(streamId, subjectId)) ?? bell.teachingDays;
+    /** The most sessions of a subject one day should hold: its sessions spread over the days it can be taught. */
+    const dailyShare = (streamId: string, subjectId: string, bell: Bell) =>
+        Math.max(1, Math.ceil((sessionsOf.get(subjectKey(streamId, subjectId)) ?? 1) / Math.max(1, daysFor(streamId, subjectId, bell))));
+
+    /** A class's day: a subject past its fair share, subjects at the wrong time of day, and free periods before lessons. */
     const streamDayCost = (streamId: string, day: number): number => {
         const g = streamGrids.get(streamId);
         const bell = streamBell.get(streamId);
@@ -286,21 +364,27 @@ function solveOnce(input: SolverInput, rules: SolverRules): SolverResult {
         const seen = new Map<string, number>();
         let cost = 0;
         let last = -1;
+        let freeSoFar = 0;
         for (let slot = 0; slot < n; slot++) {
+            if (!bell.open[day * n + slot]) continue;
             const key = g[day * n + slot];
-            if (key < 0 || key === last) { last = key; continue; }
+            if (key < 0) { freeSoFar++; last = key; continue; }
+            if (freeSoFar > 0) { cost += freeSoFar * COST.midDayGap; freeSoFar = 0; }
+            if (key === last) continue;
             last = key;
             const s = byKey[key];
             const count = (seen.get(s.req.subjectId) ?? 0) + 1;
             seen.set(s.req.subjectId, count);
-            if (count > 1) cost += COST.sameSubjectSameDay;
+            if (count > dailyShare(streamId, s.req.subjectId, bell)) cost += COST.overDailyShare;
             if (s.req.preferMorning && !bell.isMorning[slot]) cost += COST.morningMiss;
             if (s.req.preferAfternoon && bell.isEarly[slot]) cost += COST.earlyCreative;
         }
-        return cost;
+        let load = 0;
+        for (let slot = 0; slot < n; slot++) if (g[day * n + slot] >= 0) load++;
+        return cost + load * load * COST.classLoad;
     };
 
-    /** A class's week: a subject in the same period day after day, or bunched on neighbouring days. */
+    /** A class's week: a subject in the same period day after day, bunched on neighbouring days, or missing a day it should have. */
     const streamWeekCost = (streamId: string): number => {
         const g = streamGrids.get(streamId);
         const bell = streamBell.get(streamId);
@@ -325,7 +409,10 @@ function solveOnce(input: SolverInput, rules: SolverRules): SolverResult {
             slots.forEach(t => counts.set(t, (counts.get(t) ?? 0) + 1));
             counts.forEach(c => { if (c > 1) cost += (c - 1) * COST.samePeriodRepeat; });
         }
-        for (const days of daysBySubject.values()) cost += bunching(days, dayCount) * COST.bunchedDays;
+        for (const [subject, days] of daysBySubject) {
+            cost += bunching(days, dayCount) * COST.bunchedDays;
+            cost += Math.max(0, Math.min(sessionsOf.get(subjectKey(streamId, subject)) ?? 0, daysFor(streamId, subject, bell)) - days.size) * COST.missedDay;
+        }
         return cost;
     };
 
@@ -352,7 +439,7 @@ function solveOnce(input: SolverInput, rules: SolverRules): SolverResult {
         return over * COST.consecutiveOver + load * load * COST.imbalance / 8;
     };
 
-    const localCost = (s: Session, day: number) => teachersOf(s.req).reduce((c, t) => c + teacherDayCost(t, day), streamDayCost(s.req.streamId, day));
+    const localCost = (s: Session, day: number) => teachersOf(s.req).reduce((c, t) => c + teacherDayCost(t, day), streamDayCost(s.req.streamId, day) + streamWeekCost(s.req.streamId));
 
     const candidateOrder = (s: Session) => {
         const all: [number, number][] = [];
@@ -361,8 +448,23 @@ function solveOnce(input: SolverInput, rules: SolverRules): SolverResult {
         return all;
     };
 
+    /** The cheapest free slot for `s` right now, if any. */
+    const bestFreeSlot = (s: Session): { day: number; slot: number; roomId: string | null; cost: number } | null => {
+        let best: { day: number; slot: number; roomId: string | null; cost: number } | null = null;
+        for (const [d, t] of candidateOrder(s)) {
+            if (!shapeFits(s, d, t)) continue;
+            const { blockers, roomId, hard } = conflictsAt(s, d, t);
+            if (blockers.size > 0 || hard) continue;
+            const before = localCost(s, d);
+            place(s, d, t, roomId);
+            const cost = localCost(s, d) - before;
+            unplace(s);
+            if (!best || cost < best.cost) best = { day: d, slot: t, roomId, cost };
+        }
+        return best;
+    };
+
     // ── Pinned lessons first ─────────────────────────────────────────────
-    const dayIndex = new Map(input.days.map((d, i) => [d, i]));
     for (const pin of input.pinned ?? []) {
         const d = dayIndex.get(pin.day);
         if (d === undefined) continue;
@@ -370,9 +472,9 @@ function solveOnce(input: SolverInput, rules: SolverRules): SolverResult {
         const s = candidates.find(x => x.length === 1) ?? candidates[0];
         if (!s) continue;
         const t = s.bell.teaching.indexOf(pin.period);
-        if (t < 0 || !shapeFits(s, t)) continue;
-        const { blockers } = conflictsAt(s, d, t);
-        if (blockers.size > 0) continue;
+        if (t < 0 || !shapeFits(s, d, t)) continue;
+        const { blockers, hard } = conflictsAt(s, d, t);
+        if (blockers.size > 0 || hard) continue;
         s.pinned = true;
         place(s, d, t, pin.roomId);
     }
@@ -389,42 +491,81 @@ function solveOnce(input: SolverInput, rules: SolverRules): SolverResult {
 
     while (queue.length > 0) {
         const s = queue.shift()!;
-        let best: { day: number; slot: number; roomId: string | null; cost: number } | null = null;
+        const best = bestFreeSlot(s);
+        if (best) { place(s, best.day, best.slot, best.roomId); continue; }
         let fallback: { day: number; slot: number; roomId: string | null; victim: Session } | null = null;
-
         for (const [d, t] of candidateOrder(s)) {
-            if (!shapeFits(s, t)) continue;
-            const { blockers, roomId, roomBlocked } = conflictsAt(s, d, t);
-            if (blockers.size === 0 && !roomBlocked) {
-                const before = localCost(s, d);
-                place(s, d, t, roomId);
-                const cost = localCost(s, d) - before;
-                unplace(s);
-                if (!best || cost < best.cost) best = { day: d, slot: t, roomId, cost };
-                if (cost === 0) break;
-            } else if (!roomBlocked && blockers.size === 1 && !fallback) {
-                const victim = byKey[[...blockers][0]];
-                if (!victim.pinned && (ejections.get(victim.key) ?? 0) < 3) fallback = { day: d, slot: t, roomId, victim };
-            }
+            if (!shapeFits(s, d, t)) continue;
+            const { blockers, roomId, hard } = conflictsAt(s, d, t);
+            if (hard || blockers.size !== 1) continue;
+            const victim = byKey[[...blockers][0]];
+            if (!victim.pinned && (ejections.get(victim.key) ?? 0) < 3) { fallback = { day: d, slot: t, roomId, victim }; break; }
         }
-
-        if (best) place(s, best.day, best.slot, best.roomId);
-        else if (fallback && ejected < maxEjections) {
+        if (fallback && ejected < maxEjections) {
             ejected++;
             ejections.set(fallback.victim.key, (ejections.get(fallback.victim.key) ?? 0) + 1);
             unplace(fallback.victim);
             place(s, fallback.day, fallback.slot, fallback.roomId);
             queue.push(fallback.victim);
         }
-        // Otherwise the session stays unplaced and is reported.
+        // Otherwise the session stays unplaced; the repair pass tries again.
+    }
+
+    // ── Repair: make room for what is left ───────────────────────────────
+    // For a lesson still out, clear a slot of the (at most three) lessons in
+    // its way and find each of them another free slot. Kept only when every
+    // displaced lesson lands; otherwise everything goes back as it was.
+    const repairDeadline = started + rules.timeBudgetMs * 0.4;
+    const tryRepair = (u: Session): boolean => {
+        const options: { day: number; slot: number; roomId: string | null; victims: Session[] }[] = [];
+        for (const [d, t] of candidateOrder(u)) {
+            if (!shapeFits(u, d, t)) continue;
+            const { blockers, roomId, hard } = conflictsAt(u, d, t);
+            if (hard || blockers.size === 0 || blockers.size > 3) continue;
+            const victims = [...blockers].map(k => byKey[k]);
+            if (victims.some(v => v.pinned)) continue;
+            options.push({ day: d, slot: t, roomId, victims });
+        }
+        options.sort((a, b) => a.victims.length - b.victims.length);
+        for (const o of options.slice(0, 40)) {
+            const from = o.victims.map(v => ({ v, day: v.day, slot: v.slot, roomId: v.roomId }));
+            o.victims.forEach(unplace);
+            place(u, o.day, o.slot, o.roomId);
+            const moved: Session[] = [];
+            let ok = true;
+            for (const v of o.victims) {
+                const spot = bestFreeSlot(v);
+                if (!spot) { ok = false; break; }
+                place(v, spot.day, spot.slot, spot.roomId);
+                moved.push(v);
+            }
+            if (ok) return true;
+            moved.forEach(unplace);
+            unplace(u);
+            from.forEach(f => place(f.v, f.day, f.slot, f.roomId));
+        }
+        return false;
+    };
+    let repairing = true;
+    while (repairing && Date.now() < repairDeadline) {
+        repairing = false;
+        for (const u of sessions) {
+            if (u.day >= 0) continue;
+            if (Date.now() >= repairDeadline) break;
+            const spot = bestFreeSlot(u);
+            if (spot) { place(u, spot.day, spot.slot, spot.roomId); repairing = true; continue; }
+            if (tryRepair(u)) repairing = true;
+        }
     }
 
     // ── Improvement: simulated annealing ─────────────────────────────────
     // A move takes a lesson to another slot of its class: an empty one, or
     // one held by another lesson of the same length, which swaps with it.
+    // The temperature falls with the time left, warms up again when nothing
+    // has improved for a while, and the best week seen is the one kept.
     const movable = sessions.filter(s => s.day >= 0 && !s.pinned);
     let iterations = 0;
-    let temperature = 8;
+    const annealStart = Date.now();
     const deadline = started + rules.timeBudgetMs;
     const affectedCost = (touched: readonly Session[], days: readonly number[]) => {
         let total = 0;
@@ -437,12 +578,39 @@ function solveOnce(input: SolverInput, rules: SolverRules): SolverResult {
         streams.forEach(id => { total += streamWeekCost(id); });
         return total;
     };
-    while (movable.length > 0 && Date.now() < deadline && iterations < 3_000_000) {
+    const streamIds = new Set(input.requirements.map(r => r.streamId));
+    const teacherIds = new Set(input.requirements.flatMap(teachersOf));
+    const totalCost = () => {
+        let total = 0;
+        streamIds.forEach(id => { total += streamWeekCost(id); });
+        for (let d = 0; d < dayCount; d++) {
+            streamIds.forEach(id => { total += streamDayCost(id, d); });
+            teacherIds.forEach(id => { total += teacherDayCost(id, d); });
+        }
+        return total;
+    };
+    let current = totalCost();
+    let bestCost = current;
+    let bestState = movable.map(x => [x.day, x.slot] as const);
+    const bestRooms = movable.map(x => x.roomId);
+    let sinceBest = 0;
+    const HOT = 10;
+    const COLD = 0.15;
+    let heat = HOT;
+    while (movable.length > 0 && iterations < 3_000_000) {
         iterations++;
+        if ((iterations & 255) === 0) {
+            const now = Date.now();
+            if (now >= deadline) break;
+            // Cool with the time left; after a long spell without a new best, warm up from there.
+            if (sinceBest > 40_000) { heat = Math.max(COLD * 4, heat * 0.5); sinceBest = 0; }
+        }
+        const progress = Math.min(1, (Date.now() - annealStart) / Math.max(1, deadline - annealStart));
+        const temperature = heat * Math.pow(COLD / HOT, progress);
         const a = movable[Math.floor(random() * movable.length)];
         const d = Math.floor(random() * dayCount);
         const t = Math.floor(random() * a.bell.teaching.length);
-        if ((d === a.day && t === a.slot) || !shapeFits(a, t)) continue;
+        if ((d === a.day && t === a.slot) || !shapeFits(a, d, t)) continue;
         const g = streamGrids.get(a.req.streamId)!;
         const n = a.bell.teaching.length;
         // Whatever the class has in the target cells must be one lesson of the same length, or nothing.
@@ -450,7 +618,7 @@ function solveOnce(input: SolverInput, rules: SolverRules): SolverResult {
         for (let k = 0; k < a.length; k++) { const hit = g[d * n + t + k]; if (hit >= 0 && hit !== a.key) occupants.add(hit); }
         if (occupants.size > 1) continue;
         const b = occupants.size === 1 ? byKey[[...occupants][0]] : null;
-        if (b && (b.pinned || b.length !== a.length || b.slot !== t)) continue;
+        if (b && (b.pinned || b.length !== a.length || b.slot !== t || !shapeFits(b, a.day, a.slot))) continue;
 
         const fromA = { day: a.day, slot: a.slot, roomId: a.roomId };
         const fromB = b ? { day: b.day, slot: b.slot, roomId: b.roomId } : null;
@@ -461,15 +629,16 @@ function solveOnce(input: SolverInput, rules: SolverRules): SolverResult {
         unplace(a);
         if (b) unplace(b);
         const fitA = conflictsAt(a, d, t);
-        let ok = fitA.blockers.size === 0 && !fitA.roomBlocked;
+        let ok = fitA.blockers.size === 0 && !fitA.hard;
         if (ok) place(a, d, t, fitA.roomId);
         if (ok && b) {
             const fitB = conflictsAt(b, fromA.day, fromA.slot);
-            ok = fitB.blockers.size === 0 && !fitB.roomBlocked;
+            ok = fitB.blockers.size === 0 && !fitB.hard;
             if (ok) place(b, fromA.day, fromA.slot, fitB.roomId);
         }
+        let delta = 0;
         const accept = ok && (() => {
-            const delta = affectedCost(touched, days) - before;
+            delta = affectedCost(touched, days) - before;
             return delta <= 0 || random() < Math.exp(-delta / temperature);
         })();
         if (!accept) {
@@ -477,8 +646,21 @@ function solveOnce(input: SolverInput, rules: SolverRules): SolverResult {
             if (b) unplace(b);
             place(a, fromA.day, fromA.slot, fromA.roomId);
             if (b && fromB) place(b, fromB.day, fromB.slot, fromB.roomId);
+            sinceBest++;
+            continue;
         }
-        if (iterations % 500 === 0) temperature = Math.max(0.05, temperature * 0.97);
+        current += delta;
+        if (current < bestCost - 1e-9) {
+            bestCost = current;
+            bestState = movable.map(x => [x.day, x.slot] as const);
+            movable.forEach((x, i) => { bestRooms[i] = x.roomId; });
+            sinceBest = 0;
+        } else sinceBest++;
+    }
+    // Back to the best week seen, if the search wandered off it.
+    if (current > bestCost + 1e-9) {
+        movable.forEach(unplace);
+        movable.forEach((x, i) => { const [day, slot] = bestState[i]; if (day >= 0) place(x, day, slot, bestRooms[i]); });
     }
 
     // ── Result ───────────────────────────────────────────────────────────
@@ -490,33 +672,33 @@ function solveOnce(input: SolverInput, rules: SolverRules): SolverResult {
             lessons.push({ requirementId: s.req.id, day: input.days[s.day], period: s.bell.teaching[s.slot + k], roomId: s.roomId, pinned: s.pinned });
         }
     }
-    let cost = 0;
-    const streamIds = new Set(input.requirements.map(r => r.streamId));
-    const teacherIds = new Set(input.requirements.flatMap(teachersOf));
-    streamIds.forEach(id => { cost += streamWeekCost(id); });
-    for (let d = 0; d < dayCount; d++) {
-        streamIds.forEach(id => { cost += streamDayCost(id, d); });
-        teacherIds.forEach(id => { cost += teacherDayCost(id, d); });
-    }
+    const cost = totalCost();
     const required = input.requirements.reduce((n, r) => n + r.lessons, 0);
     return {
         lessons,
         unplaced: [...missing.entries()].map(([requirementId, n]) => ({ requirementId, lessons: n })),
         stats: {
             placed: lessons.length, required, cost: Math.round(cost), iterations, ms: Date.now() - started, attempts: 1,
-            quality: measureQuality(sessions, dayCount, streamGrids, streamBell, teacherIds, (id, d) => teacherDay(id, d).longRuns, required),
+            quality: measureQuality({
+                sessions, dayCount, streamGrids, streamBell, teacherIds, totalLessons: required,
+                teacherLongRuns: (id, d) => teacherDay(id, d).longRuns,
+                dailyShare: (streamId, subjectId) => dailyShare(streamId, subjectId, streamBell.get(streamId)!),
+                sessionsOf: (streamId, subjectId) => sessionsOf.get(subjectKey(streamId, subjectId)) ?? 0,
+                daysFor: (streamId, subjectId) => daysFor(streamId, subjectId, streamBell.get(streamId)!),
+            }),
         },
     };
 }
 
 /**
- * How bunched a subject's week is: a two-lesson subject on neighbouring
- * days, or three or more days in a row (Mon, Tue, Wed) for a subject that
- * does not run every day. Monday, Tuesday and Thursday is fine.
+ * How bunched a subject's week is: a two-lesson subject on neighbouring days,
+ * or three or more days in a row (Mon, Tue, Wed) for a subject on fewer days
+ * than that leaves room for. A subject on all but one day has nothing to
+ * spread: four lessons over five days always sit together somewhere.
  */
 function bunching(days: ReadonlySet<number>, dayCount: number): number {
     const k = days.size;
-    if (k <= 1 || k >= dayCount) return 0;
+    if (k <= 1 || k >= dayCount - 1) return 0;
     const sorted = [...days].sort((a, b) => a - b);
     let excess = 0;
     let run = 1;
@@ -529,32 +711,42 @@ function bunching(days: ReadonlySet<number>, dayCount: number): number {
     return excess;
 }
 
-/** The preferences a draft breaks, counted the way a timetabler would. */
-function measureQuality(
-    sessions: readonly Session[],
-    dayCount: number,
-    streamGrids: ReadonlyMap<string, Int32Array>,
-    streamBell: ReadonlyMap<string, Bell>,
-    teacherIds: ReadonlySet<string>,
-    teacherLongRuns: (teacherId: string, day: number) => number,
-    totalLessons: number,
-): TimetableQuality {
-    let repeatsInDay = 0; let lateCoreLessons = 0; let earlyCreativeLessons = 0; let samePeriodHabits = 0; let bunchedWeeks = 0; let longTeacherRuns = 0;
-    for (const [streamId, g] of streamGrids) {
-        const bell = streamBell.get(streamId)!;
+/** The preferences a draft breaks that it could have kept, counted the way a timetabler would. */
+function measureQuality(q: {
+    sessions: readonly Session[];
+    dayCount: number;
+    streamGrids: ReadonlyMap<string, Int32Array>;
+    streamBell: ReadonlyMap<string, Bell>;
+    teacherIds: ReadonlySet<string>;
+    totalLessons: number;
+    teacherLongRuns: (teacherId: string, day: number) => number;
+    dailyShare: (streamId: string, subjectId: string) => number;
+    sessionsOf: (streamId: string, subjectId: string) => number;
+    daysFor: (streamId: string, subjectId: string) => number;
+}): TimetableQuality {
+    let repeatsInDay = 0; let missedDays = 0; let lateCoreLessons = 0; let earlyCreativeLessons = 0;
+    let samePeriodHabits = 0; let bunchedWeeks = 0; let longTeacherRuns = 0; let midDayGaps = 0;
+    for (const [streamId, g] of q.streamGrids) {
+        const bell = q.streamBell.get(streamId)!;
         const n = bell.teaching.length;
         const slotsBySubject = new Map<string, number[]>();
         const daysBySubject = new Map<string, Set<number>>();
-        for (let d = 0; d < dayCount; d++) {
-            const seen = new Set<string>();
+        for (let d = 0; d < q.dayCount; d++) {
+            const seen = new Map<string, number>();
             let last = -1;
+            let freeSoFar = 0;
             for (let slot = 0; slot < n; slot++) {
+                if (!bell.open[d * n + slot]) continue;
                 const key = g[d * n + slot];
-                if (key < 0 || key === last) { last = key; continue; }
+                if (key < 0) { freeSoFar++; last = key; continue; }
+                midDayGaps += freeSoFar;
+                freeSoFar = 0;
+                if (key === last) continue;
                 last = key;
-                const s = sessions[key];
-                if (seen.has(s.req.subjectId)) repeatsInDay++;
-                seen.add(s.req.subjectId);
+                const s = q.sessions[key];
+                const count = (seen.get(s.req.subjectId) ?? 0) + 1;
+                seen.set(s.req.subjectId, count);
+                if (count > q.dailyShare(streamId, s.req.subjectId)) repeatsInDay++;
                 if (s.req.preferMorning && !bell.isMorning[slot]) lateCoreLessons++;
                 if (s.req.preferAfternoon && bell.isEarly[slot]) earlyCreativeLessons++;
                 slotsBySubject.set(s.req.subjectId, [...(slotsBySubject.get(s.req.subjectId) ?? []), slot]);
@@ -567,12 +759,15 @@ function measureQuality(
             slots.forEach(t => counts.set(t, (counts.get(t) ?? 0) + 1));
             if (Math.max(...counts.values()) >= 3) samePeriodHabits++;
         }
-        for (const days of daysBySubject.values()) if (bunching(days, dayCount) > 0) bunchedWeeks++;
+        for (const [subject, days] of daysBySubject) {
+            if (bunching(days, q.dayCount) > 0) bunchedWeeks++;
+            if (Math.min(q.sessionsOf(streamId, subject), q.daysFor(streamId, subject)) > days.size) missedDays++;
+        }
     }
-    for (const id of teacherIds) for (let d = 0; d < dayCount; d++) longTeacherRuns += teacherLongRuns(id, d);
-    const points = repeatsInDay * 4 + lateCoreLessons + earlyCreativeLessons + samePeriodHabits * 2 + bunchedWeeks * 2 + longTeacherRuns * 3;
-    const score = totalLessons === 0 ? 100 : Math.max(0, Math.round(100 - (points / totalLessons) * 100));
-    return { score, repeatsInDay, lateCoreLessons, earlyCreativeLessons, samePeriodHabits, bunchedWeeks, longTeacherRuns };
+    for (const id of q.teacherIds) for (let d = 0; d < q.dayCount; d++) longTeacherRuns += q.teacherLongRuns(id, d);
+    const points = repeatsInDay * 4 + missedDays * 3 + lateCoreLessons + earlyCreativeLessons + samePeriodHabits * 2 + bunchedWeeks * 2 + longTeacherRuns * 3 + midDayGaps;
+    const score = q.totalLessons === 0 ? 100 : Math.max(0, Math.round(100 - (points / q.totalLessons) * 100));
+    return { score, repeatsInDay, missedDays, lateCoreLessons, earlyCreativeLessons, samePeriodHabits, bunchedWeeks, longTeacherRuns, midDayGaps };
 }
 
 /** Fewest lessons left out first, then the lowest cost. */
