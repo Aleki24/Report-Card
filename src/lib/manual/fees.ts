@@ -80,7 +80,7 @@ export const batchFeesSection: ManualSection = {
     steps: [
         { title: 'Choose the class and term', body: 'Every active learner in the class is listed.' },
         { title: 'Set the fee', body: 'Type the fee once and press Apply to fill it for everyone, and set one due date. Change any learner’s fee individually if needed.' },
-        { title: 'Record payments now (optional)', body: 'Enter any payment already received in “Payment now”; “Balance after” updates as you type.' },
+        { title: 'Record payments now (optional)', body: 'Enter any cash already received in “Payment now”; “Balance after” updates as you type. M-Pesa, bank and cheque payments each need their own code, so record those one by one or upload the statement on Reconcile.' },
         { title: 'Save all', body: 'Press “Save all”. Learners already billed for the term keep their record and are updated rather than billed twice.' },
     ],
 };
