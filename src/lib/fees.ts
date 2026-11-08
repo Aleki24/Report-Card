@@ -159,7 +159,17 @@ export interface SchoolBankAccount {
     isPrimary: boolean;
 }
 
-export function mapBankAccountRow(a: any): SchoolBankAccount {
+/** A school_bank_accounts row as the database returns it. */
+export interface SchoolBankAccountRow {
+    id: string;
+    bank_name: string;
+    account_name: string;
+    account_number: string;
+    branch: string | null;
+    is_primary: boolean;
+}
+
+export function mapBankAccountRow(a: SchoolBankAccountRow): SchoolBankAccount {
     return {
         id: a.id,
         bankName: a.bank_name,
@@ -170,7 +180,32 @@ export function mapBankAccountRow(a: any): SchoolBankAccount {
     };
 }
 
-export function mapFeePaymentRow(p: any): FeePayment {
+/** A fee_payments row as the database returns it (columns added later may be absent on old rows' reads). */
+export interface FeePaymentRow {
+    id: string;
+    student_fee_id: string | null;
+    receipt_number: string;
+    amount: number | string;
+    method: FeePaymentMethod;
+    status: FeePaymentRecordStatus;
+    phone_number: string | null;
+    payer_name: string | null;
+    mpesa_receipt_number: string | null;
+    mpesa_checkout_request_id: string | null;
+    pesapal_order_tracking_id: string | null;
+    pesapal_confirmation_code: string | null;
+    pesapal_payment_method: string | null;
+    unmatched_account_reference: string | null;
+    reference?: string | null;
+    split_from_payment_id?: string | null;
+    notes: string | null;
+    recorded_by: string | null;
+    voided_at?: string | null;
+    paid_at: string;
+    created_at: string;
+}
+
+export function mapFeePaymentRow(p: FeePaymentRow): FeePayment {
     return {
         id: p.id,
         studentFeeId: p.student_fee_id,

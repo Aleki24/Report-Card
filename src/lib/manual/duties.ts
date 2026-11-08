@@ -215,7 +215,7 @@ export const financeManual: Manual = {
     slug: 'finance',
     title: 'Bursar and finance guide',
     audience: 'Bursars and accountants',
-    summary: 'Billing the term from fee structures and vote heads, bursaries and waivers, each learner’s fee account and statement, recording payments and receipts, who owes and fee reminders, the collections report, and spending through payment vouchers.',
+    summary: 'Billing the term from fee structures and vote heads, bursaries and waivers, each learner’s fee account and statement, recording payments and receipts, matching M-Pesa and bank statements, signing off each day’s takings, following up arrears and promises to pay, the fees health score, and spending through payment vouchers.',
     chapters: [
         {
             ...startChapter('Bursars and accountants'),
@@ -271,7 +271,7 @@ export const financeManual: Manual = {
                 },
             ],
         },
-        feesChapter('The Fees page is where each learner’s balance lives: their fee account and statement, payments and receipts, who owes, and what came in.'),
+        feesChapter('The Fees page is where each learner’s balance lives: their fee account and statement, payments and receipts, matching every payment to a learner, each day’s sign-off, who owes and the follow-ups, and what came in.'),
         {
             id: 'expenses',
             title: 'Expenses',
