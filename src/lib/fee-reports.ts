@@ -2,6 +2,7 @@
  * The Fees page's reports: who owes (defaulters) and what came in
  * (collections). Client-safe.
  */
+import type { FollowUpSummary } from './fee-followups';
 
 export interface Defaulter {
     studentId: string;
@@ -18,6 +19,10 @@ export interface Defaulter {
     lastPaymentAt: string | null;
     guardianName: string | null;
     guardianPhone: string | null;
+    /** Paid towards this term's bill; null when not billed this term. Zero is a family that has paid nothing yet. */
+    paidThisTerm: number | null;
+    /** The last contact with the family, and their latest promise to pay. */
+    followUp: FollowUpSummary | null;
 }
 
 /** GET /api/school/fees/defaulters */

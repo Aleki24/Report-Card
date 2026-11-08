@@ -11,6 +11,7 @@ import {
     balanceState, feeAccountUrl, feeReceiptUrl, feeStatementUrl, formatKsh, methodLabel,
     type FeeAccount, type FeeAccountLearner, type FeeAccountTerm,
 } from '@/lib/fee-account';
+import { FollowUpsSection } from './FollowUpsSection';
 
 interface FeeAccountDrawerProps {
     /** The learner to show; null keeps the drawer closed. */
@@ -24,6 +25,8 @@ interface FeeAccountDrawerProps {
     version?: number;
     /** Whether the viewer may link parents (Parent accounts). */
     canLinkParents?: boolean;
+    /** Follow-ups on what is owed: shown to finance staff, written by collectors, removed by the bursar. */
+    followUps?: { canWrite: boolean; canRemove: boolean; onChanged?: () => void };
 }
 
 type Load = { status: 'loading' } | { status: 'error'; message: string } | { status: 'ready'; account: FeeAccount };
@@ -49,7 +52,7 @@ const shortDate = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { d
  * term (arrears carried forward), who to call about it, each term's bill,
  * the payments with their receipts, and the statement to hand a parent.
  */
-export function FeeAccountDrawer({ studentId, studentName, onClose, onRecordPayment, version = 0, canLinkParents = false }: FeeAccountDrawerProps) {
+export function FeeAccountDrawer({ studentId, studentName, onClose, onRecordPayment, version = 0, canLinkParents = false, followUps }: FeeAccountDrawerProps) {
     const [result, setResult] = useState<{ key: string; load: Load } | null>(null);
     // Bumped here after linking a parent.
     const [ownVersion, setOwnVersion] = useState(0);
@@ -96,12 +99,12 @@ export function FeeAccountDrawer({ studentId, studentName, onClose, onRecordPaym
         >
             {load.status === 'loading' && <div className="space-y-3" aria-busy="true">{[0, 1, 2].map(i => <div key={i} className="h-24 animate-pulse rounded-2xl bg-muted/60" />)}</div>}
             {load.status === 'error' && <p role="alert" className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">{load.message}</p>}
-            {account && <AccountBody account={account} canLinkParents={canLinkParents} onLinked={() => setOwnVersion(v => v + 1)} />}
+            {account && <AccountBody account={account} canLinkParents={canLinkParents} followUps={followUps} onLinked={() => setOwnVersion(v => v + 1)} />}
         </Drawer>
     );
 }
 
-function AccountBody({ account, canLinkParents, onLinked }: { account: FeeAccount; canLinkParents: boolean; onLinked: () => void }) {
+function AccountBody({ account, canLinkParents, followUps, onLinked }: { account: FeeAccount; canLinkParents: boolean; followUps: FeeAccountDrawerProps['followUps']; onLinked: () => void }) {
     const { learner, totals } = account;
     const state = balanceState(totals.balance);
     // Arrears: what earlier terms still owe, on top of the latest term.
@@ -130,6 +133,8 @@ function AccountBody({ account, canLinkParents, onLinked }: { account: FeeAccoun
             </section>
 
             <Guardians account={account} canLink={canLinkParents} onLinked={onLinked} />
+
+            {followUps && <FollowUpsSection studentId={learner.id} canWrite={followUps.canWrite} canRemove={followUps.canRemove} onChanged={followUps.onChanged} />}
 
             {/* Terms, newest first */}
             <section>

@@ -6,6 +6,7 @@ import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { isUuid } from '@/lib/postgrest';
 import { loadDefaulters } from '@/lib/fee-reports-server';
 import { daysSince, type DefaultersResponse } from '@/lib/fee-reports';
+import { PROMISE_COPY } from '@/lib/fee-followups';
 
 export const runtime = 'nodejs';
 
@@ -38,10 +39,13 @@ export async function GET(request: NextRequest) {
                 'Oldest due': d.oldestDue ?? '',
                 'Days overdue': d.oldestDue ? daysSince(d.oldestDue) : '',
                 'Last payment': d.lastPaymentAt ? d.lastPaymentAt.slice(0, 10) : 'Never',
+                'Paid this term (KES)': d.paidThisTerm ?? '',
+                'Promise': d.followUp?.promise ? `${PROMISE_COPY[d.followUp.promise.state].label}: ${d.followUp.promise.amount} by ${d.followUp.promise.dueDate}` : '',
+                'Last contact': d.followUp?.lastContactAt ? d.followUp.lastContactAt.slice(0, 10) : '',
                 'Parent / guardian': d.guardianName ?? '',
                 'Phone': d.guardianPhone ?? '',
             })));
-            sheet['!cols'] = [{ wch: 24 }, { wch: 14 }, { wch: 16 }, { wch: 12 }, { wch: 11 }, { wch: 12 }, { wch: 12 }, { wch: 13 }, { wch: 22 }, { wch: 15 }];
+            sheet['!cols'] = [{ wch: 24 }, { wch: 14 }, { wch: 16 }, { wch: 12 }, { wch: 11 }, { wch: 12 }, { wch: 12 }, { wch: 13 }, { wch: 14 }, { wch: 34 }, { wch: 13 }, { wch: 22 }, { wch: 15 }];
             const book = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(book, sheet, 'Defaulters');
             const buffer = XLSX.write(book, { type: 'buffer', bookType: 'xlsx' }) as Buffer;

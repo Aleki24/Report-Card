@@ -84,6 +84,8 @@ function FeesPageInner() {
     const [unmatchedCount, setUnmatchedCount] = useState(0);
     // Bumped when a statement is saved: its unmatched lines join the queue.
     const [queueVersion, setQueueVersion] = useState(0);
+    // Bumped when a follow-up is written in a fee account: Who owes shows it.
+    const [followUpVersion, setFollowUpVersion] = useState(0);
     const visibleTabs = useMemo(
         () => FEES_TABS
             .filter(t => !FINANCE_ONLY_MODES.has(t.id) || canViewAll)
@@ -589,6 +591,7 @@ function FeesPageInner() {
                     termId={selectedTerm}
                     canRemind={canManageFees}
                     onOpenAccount={(studentId, name) => setAccount({ studentId, name })}
+                    version={followUpVersion}
                 />
             )}
             {mode === 'collections' && <CollectionsPanel />}
@@ -835,6 +838,7 @@ function FeesPageInner() {
                         onRecordPayment={canCollect ? payFromAccount : undefined}
                         version={accountVersion}
                         canLinkParents={can('school.manage')}
+                        followUps={canViewAll ? { canWrite: canCollect, canRemove: canManageFees, onChanged: () => setFollowUpVersion(v => v + 1) } : undefined}
                     />
 
                     {/* ── Record Payment ── */}
