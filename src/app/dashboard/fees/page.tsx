@@ -14,6 +14,7 @@ import { FeeAccountDrawer } from '@/components/fees/FeeAccountDrawer';
 import { DefaultersPanel } from '@/components/fees/DefaultersPanel';
 import { CollectionsPanel } from '@/components/fees/CollectionsPanel';
 import { BatchEntryPanel } from '@/components/fees/BatchEntryPanel';
+import { VoidPaymentDialog, type VoidTarget } from '@/components/fees/VoidPaymentDialog';
 import { PaymentsLogPanel } from '@/components/fees/PaymentsLogPanel';
 import {
     balanceColor, formatCurrency, methodLabel, statusBadge, timeAgo, todayIso, toStudentOption,
@@ -337,21 +338,21 @@ function FeesPageInner() {
         },
     });
 
-    /** Voids a receipt after confirmation, then refreshes what shows it. */
-    const confirmVoid = (payment: { id: string; receiptNumber: string; amount: number }, feeId: string, after: () => Promise<unknown>) => setPendingConfirm({
-        title: `Void receipt ${payment.receiptNumber}?`,
-        message: `${formatCurrency(payment.amount)} will be taken off the balance it paid. This cannot be undone.`,
-        confirmText: 'Void receipt',
-        run: async () => {
-            try {
-                await requestJson(`/api/school/fees/${feeId}/payments/${payment.id}`, { method: 'DELETE' });
-                toast.success(`Receipt ${payment.receiptNumber} voided`);
-                await after();
-            } catch (err) {
-                toast.error(err instanceof Error ? err.message : 'Failed to void the payment');
-            }
-        },
-    });
+    /** Voids a receipt once a reason is given, then refreshes what shows it. */
+    const [voiding, setVoiding] = useState<{ payment: VoidTarget; feeId: string; after: () => Promise<unknown> } | null>(null);
+    const confirmVoid = (payment: VoidTarget, feeId: string, after: () => Promise<unknown>) => setVoiding({ payment, feeId, after });
+    const voidWithReason = async (reason: string) => {
+        if (!voiding) return;
+        const { payment, feeId, after } = voiding;
+        try {
+            await requestJson(`/api/school/fees/${feeId}/payments/${payment.id}`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason }) });
+            toast.success(`Receipt ${payment.receiptNumber} voided`);
+            setVoiding(null);
+            await after();
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : 'Failed to void the payment');
+        }
+    };
 
     // ── Record payment ──
 
@@ -955,6 +956,8 @@ function FeesPageInner() {
                             </div>
                         )}
                     </Modal>
+
+            <VoidPaymentDialog payment={voiding?.payment ?? null} onClose={() => setVoiding(null)} onVoid={voidWithReason} />
 
             <ConfirmDialog
                 isOpen={pendingConfirm !== null}

@@ -14,20 +14,24 @@ export interface ReviewLineActions {
     recordTo: (studentId: string) => void;
     split: (studentIds: string[]) => void;
     share: (studentId: string, amount: number) => void;
-    queue: () => void;
-    skip: () => void;
+    /** Leave it in the unmatched queue; omitted where it already is. */
+    queue?: () => void;
+    /** Set it aside as not school fees; omitted where the footer does it. */
+    skip?: () => void;
 }
 
 const when = (line: Pick<PreviewLine, 'date' | 'time'>) => `${line.date}${line.time ? ` ${line.time.slice(0, 5)}` : ''}`;
 
 /** One payment in from the statement: who sent it, what they typed, and where it goes. */
-export function ReviewLine({ line, decision, learners, byId, problem, actions }: {
+export function ReviewLine({ line, decision, learners, byId, problem, actions, footer }: {
     line: PreviewLine;
     decision: LineDecision | undefined;
     learners: readonly DirectoryLearner[];
     byId: ReadonlyMap<string, DirectoryLearner>;
     problem: string | null;
     actions: ReviewLineActions;
+    /** What ends the line (the unmatched queue's Assign), after the choices. */
+    footer?: React.ReactNode;
 }) {
     /** The learner search, to pick someone else or add a child to a split. */
     const [picker, setPicker] = useState<null | 'replace' | 'add'>(null);
@@ -146,13 +150,18 @@ export function ReviewLine({ line, decision, learners, byId, problem, actions }:
                                 <Split className="size-3.5" aria-hidden />Split between children
                             </button>
                         )}
-                        <button type="button" aria-pressed={decision?.action === 'QUEUE'} className={cn('btn-secondary h-8 px-3 text-xs', decision?.action === 'QUEUE' && 'border-amber-500/60 text-amber-800 dark:text-amber-200')} onClick={actions.queue}>
-                            Leave unmatched
-                        </button>
-                        <button type="button" aria-pressed={decision?.action === 'SKIP'} className={cn('btn-secondary h-8 px-3 text-xs', decision?.action === 'SKIP' && 'border-slate-500/60')} onClick={actions.skip}>
-                            Not school fees
-                        </button>
+                        {actions.queue && (
+                            <button type="button" aria-pressed={decision?.action === 'QUEUE'} className={cn('btn-secondary h-8 px-3 text-xs', decision?.action === 'QUEUE' && 'border-amber-500/60 text-amber-800 dark:text-amber-200')} onClick={actions.queue}>
+                                Leave unmatched
+                            </button>
+                        )}
+                        {actions.skip && (
+                            <button type="button" aria-pressed={decision?.action === 'SKIP'} className={cn('btn-secondary h-8 px-3 text-xs', decision?.action === 'SKIP' && 'border-slate-500/60')} onClick={actions.skip}>
+                                Not school fees
+                            </button>
+                        )}
                     </div>
+                    {footer}
                 </>
             )}
         </li>

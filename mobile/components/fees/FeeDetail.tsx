@@ -9,6 +9,7 @@ import { spacing, fonts, makeStyles } from '@/lib/theme';
 import { Badge, Button, ButtonRow, ChipSelect, EmptyState, ErrorBanner, ListRow, LoadingView, Notice, TextField } from '@/components/ui';
 import type { FeePayment, FeePaymentMethod, StaffFeeRecord } from '@/lib/types';
 import { confirmAlert } from '@/lib/confirm';
+import { VOID_REASONS, voidReasonProblem } from '@shared/fee-void';
 import { useCurrentUser } from '@/lib/UserContext';
 
 const METHODS: { value: FeePaymentMethod; label: string }[] = [
@@ -89,20 +90,18 @@ export function FeeDetail({ fee, onChanged }: { fee: StaffFeeRecord; onChanged: 
         );
     };
 
-    const voidPayment = (p: FeePayment) =>
-        confirmAlert('Void this payment?', `${formatCurrency(p.amount)} · receipt ${p.receiptNumber}. The balance goes back up.`, [
-            { text: 'Cancel', style: 'cancel' },
-            {
-                text: 'Void',
-                style: 'destructive',
-                onPress: () =>
-                    void act(p.id, async () => {
-                        await api.del(`/api/school/fees/${fee.id}/payments/${p.id}`);
-                        payments.refresh();
-                        onChanged();
-                    }, 'Payment voided.'),
-            },
-        ]);
+    /** The payment being voided, and why: a void needs a reason, kept with who voided it. */
+    const [voiding, setVoiding] = useState<{ payment: FeePayment; reason: string } | null>(null);
+    const voidPayment = () => {
+        if (!voiding || voidReasonProblem(voiding.reason)) return;
+        const { payment: p, reason } = voiding;
+        void act(p.id, async () => {
+            await api.del(`/api/school/fees/${fee.id}/payments/${p.id}`, { reason: reason.trim() });
+            setVoiding(null);
+            payments.refresh();
+            onChanged();
+        }, 'Payment voided.');
+    };
 
     const saveBill = () =>
         void act(
@@ -151,6 +150,22 @@ export function FeeDetail({ fee, onChanged }: { fee: StaffFeeRecord; onChanged: 
                 </>
             ) : null}
 
+            {panel === 'history' && voiding ? (
+                <Notice
+                    tone="danger"
+                    message={`Void ${formatCurrency(voiding.payment.amount)} · receipt ${voiding.payment.receiptNumber}? The balance goes back up; the receipt stays on record as voided, with your name and the reason.`}
+                />
+            ) : null}
+            {panel === 'history' && voiding ? (
+                <View style={{ gap: spacing.sm, marginBottom: spacing.md }}>
+                    <ChipSelect label="Reason" wrap options={VOID_REASONS.map((r) => ({ value: r, label: r }))} value={(VOID_REASONS as readonly string[]).includes(voiding.reason) ? voiding.reason : null} onChange={(reason) => setVoiding({ ...voiding, reason })} />
+                    <TextField label="Or say why" value={voiding.reason} onChangeText={(reason) => setVoiding({ ...voiding, reason })} placeholder="For example: M-Pesa reversed it" />
+                    <ButtonRow>
+                        <Button variant="secondary" label="Cancel" onPress={() => setVoiding(null)} />
+                        <Button variant="danger" label="Void payment" disabled={!!voidReasonProblem(voiding.reason)} loading={busy === voiding.payment.id} onPress={voidPayment} />
+                    </ButtonRow>
+                </View>
+            ) : null}
             {panel === 'history' ? (
                 payments.loading ? (
                     <LoadingView />
@@ -170,7 +185,7 @@ export function FeeDetail({ fee, onChanged }: { fee: StaffFeeRecord; onChanged: 
                                     {p.status === 'COMPLETED' ? (
                                         <View style={{ flexDirection: 'row', gap: 4 }}>
                                             <Button size="sm" variant="ghost" label="Receipt" onPress={() => receipt(p)} loading={busy === `r-${p.id}`} />
-                                            {canManage ? <Button size="sm" variant="ghost" label="Void" onPress={() => voidPayment(p)} loading={busy === p.id} /> : null}
+                                            {canManage ? <Button size="sm" variant="ghost" label="Void" onPress={() => setVoiding({ payment: p, reason: '' })} loading={busy === p.id} /> : null}
                                         </View>
                                     ) : null}
                                 </View>
