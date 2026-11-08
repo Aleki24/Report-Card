@@ -7,6 +7,12 @@
 import type { TermSummary, UpcomingRound } from '@/lib/dashboard';
 import type { Announcement } from '@/lib/announcements';
 import type { ReportRoundsResponse } from '@/lib/reports/exam-round';
+import type { Defaulter, DefaultersResponse } from '@/lib/fee-reports';
+import type { DayBook, DayBookPayment } from '@/lib/fee-daybook';
+import type { UnmatchedResponse } from '@/lib/fee-reconcile';
+import type { FeePayment } from '@/lib/fees';
+import { healthCheck, type FeesOverview, type TermCollection } from '@/lib/fee-overview';
+import { addDays, schoolToday } from '@/lib/dates';
 
 const DAY = 86_400_000;
 const iso = (offsetDays: number) => new Date(Date.now() + offsetDays * DAY).toISOString();
@@ -105,6 +111,102 @@ const FEES = STUDENTS.slice(0, 18).map((s, i) => {
     admissionNumber: s.admission_number, createdAt: iso(-20), updatedAt: iso(-i),
   };
 });
+
+const learnerName = (s: (typeof STUDENTS)[number]) => `${s.users.first_name} ${s.users.last_name}`;
+
+/** Who owes in the demo: with a kept promise, a broken one, one still due, and a call noted. */
+const DEFAULTERS: Defaulter[] = FEES.filter(f => f.balance > 0).map((f, i) => {
+  const s = STUDENTS[Number(f.id.replace('demo-f', ''))];
+  const promise = i === 0 ? { amount: 20000, dueDate: date(5), state: 'DUE' as const, paidByDue: 0 }
+    : i === 1 ? { amount: 15000, dueDate: date(-3), state: 'BROKEN' as const, paidByDue: 0 }
+    : null;
+  return {
+    studentId: s.id, name: learnerName(s), admissionNumber: s.admission_number, className: s.grade_streams.full_name,
+    gradeStreamId: s.current_grade_stream_id, owed: f.balance, termsOwing: 1, oldestDue: date(-30 + i), lastPaymentAt: f.paidAmount > 0 ? iso(-6 - i) : null,
+    guardianName: s.guardian_name, guardianPhone: s.guardian_phone, paidThisTerm: f.paidAmount,
+    followUp: promise ? { lastContactAt: iso(-8), promise } : i === 2 ? { lastContactAt: iso(-2), promise: null } : null,
+  };
+}).sort((a, b) => b.owed - a.owed);
+
+const termCollection = (termId: string, termName: string, expected: number, collected: number, learners: number, paidNothing: number): TermCollection =>
+  ({ termId, termName, yearName: '2026', expected, collected, rate: Math.round((collected / expected) * 100), learners, paidNothing });
+
+const CURRENT_COLLECTION = termCollection('demo-t3', 'Term 3', FEES.reduce((n, f) => n + f.totalFee, 0), FEES.reduce((n, f) => n + f.paidAmount, 0), FEES.length, FEES.filter(f => f.paidAmount === 0).length);
+
+const FEES_OVERVIEW: FeesOverview = {
+  current: CURRENT_COLLECTION,
+  previous: termCollection('demo-t2', 'Term 2', 810000, 704700, 18, 1),
+  totalOwed: DEFAULTERS.reduce((n, d) => n + d.owed, 0),
+  learnersOwing: DEFAULTERS.length,
+  arrearsByClass: STREAMS.map(st => {
+    const owing = DEFAULTERS.filter(d => d.gradeStreamId === st.id);
+    return { key: st.id, label: st.full_name, amount: owing.reduce((n, d) => n + d.owed, 0), count: owing.length };
+  }).filter(b => b.count > 0).sort((a, b) => b.amount - a.amount),
+  health: healthCheck({
+    current: CURRENT_COLLECTION, termDay: 40,
+    unmatchedCount: 2, unmatchedAmount: 27500, unmatchedOldestDays: 4,
+    daysSinceStatement: 9, traceablePayments30d: 64,
+    daysWithPayments: 6, daysReviewed: 4,
+    learnersOwing: DEFAULTERS.length, owingWithoutPhone: DEFAULTERS.filter(d => !d.guardianPhone).length, brokenPromises: 1,
+  }),
+};
+
+/** One day's takings in the demo: Paybill, cash, a bank slip, a voided double entry. */
+function dayBookFor(url: URL): DayBook {
+  const today = schoolToday();
+  const day = url.searchParams.get('day') || today;
+  const at = (hour: number) => new Date(`${day}T${String(hour).padStart(2, '0')}:15:00+03:00`).toISOString();
+  const pay = (i: number, amount: number, method: DayBookPayment['method'], hour: number, extra: Partial<DayBookPayment> = {}): DayBookPayment => {
+    const s = STUDENTS[i];
+    return {
+      id: `demo-db-${day}-${i}`, receiptNumber: `RCT-00${4100 + i}`, amount, method, voided: false, learner: learnerName(s), admissionNumber: s.admission_number,
+      unmatchedReference: null, code: method === 'MPESA' ? `SK${day.slice(8)}${i}QX7ZA`.slice(0, 10) : null, payerName: s.guardian_name,
+      recordedByName: method === 'MPESA' ? null : 'Mary Wambui', automatic: method === 'MPESA', paidAt: at(hour), recordedLateOn: null, voidedByName: null, notes: null, ...extra,
+    };
+  };
+  const payments = [
+    pay(1, 20000, 'MPESA', 7), pay(3, 15000, 'MPESA', 9), pay(4, 12000, 'CASH', 10),
+    pay(6, 30000, 'BANK', 11, { code: 'FT26310KX41' }), pay(7, 5000, 'CASH', 13, { voided: true, voidedByName: 'Peter Njoroge', notes: 'Voided: Entered twice' }),
+    pay(9, 8000, 'MPESA', 16),
+  ];
+  const kept = payments.filter(p => !p.voided);
+  const sum = (rows: DayBookPayment[]) => rows.reduce((n, p) => n + p.amount, 0);
+  const bucket = (key: string, label: string, rows: DayBookPayment[]) => ({ key, label, amount: sum(rows), count: rows.length });
+  return {
+    day, payments,
+    received: { amount: sum(kept), count: kept.length },
+    voided: { amount: sum(payments.filter(p => p.voided)), count: payments.filter(p => p.voided).length },
+    unmatched: { amount: 0, count: 0 }, recordedLate: 0,
+    byMethod: [bucket('MPESA', 'M-Pesa', kept.filter(p => p.method === 'MPESA')), bucket('BANK', 'Bank', kept.filter(p => p.method === 'BANK')), bucket('CASH', 'Cash', kept.filter(p => p.method === 'CASH'))].sort((a, b) => b.amount - a.amount),
+    byRecorder: [bucket('auto:MPESA', 'M-Pesa Paybill (on its own)', kept.filter(p => p.automatic)), bucket('demo-u0', 'Mary Wambui', kept.filter(p => !p.automatic))],
+    review: day < addDays(today, -1) ? { reviewedByName: 'Peter Njoroge', reviewedAt: new Date(`${day}T17:40:00+03:00`).toISOString(), note: 'Cash banked at Equity.', total: sum(kept), payments: kept.length, ownEntries: false } : null,
+    changedSinceReview: false, viewerRecorded: false,
+    recent: Array.from({ length: 14 }, (_, i) => {
+      const d = addDays(today, -i);
+      const weekend = [0, 6].includes(new Date(`${d}T12:00:00+03:00`).getUTCDay());
+      return { day: d, amount: weekend ? 0 : 60000 + ((i * 7919) % 40000), count: weekend ? 0 : 4 + (i % 4), reviewed: !weekend && i > 1, changed: i === 4 };
+    }),
+  };
+}
+
+/** Two Paybill payments that found no learner, with who they most likely belong to. */
+function demoUnmatched(): UnmatchedResponse {
+  const payment = (id: string, amount: number, typed: string, payer: string, phone: string, daysAgo: number): FeePayment => ({
+    id, studentFeeId: null, receiptNumber: `RCT-00${id.length}${Math.round(amount / 100)}`, amount, method: 'MPESA', status: 'COMPLETED', phoneNumber: phone, payerName: payer,
+    mpesaReceiptNumber: `SKD${daysAgo}4JQ8ZT`.slice(0, 10), mpesaCheckoutRequestId: null, pesapalOrderTrackingId: null, pesapalConfirmationCode: null, pesapalPaymentMethod: null,
+    unmatchedAccountReference: typed, reference: null, splitFromPaymentId: null, notes: 'No student matched this account number', recordedBy: null, voidedAt: null,
+    paidAt: iso(-daysAgo), createdAt: iso(-daysAgo),
+  });
+  const a = STUDENTS[2], b = STUDENTS[14], c = STUDENTS[4];
+  return {
+    data: [payment('demo-um1', 15000, `ADM ${a.admission_number}0`, `${a.guardian_name.split(' ')[1].toUpperCase()} JOHN`, '2547******311', 1), payment('demo-um2', 12500, '(none provided)', `${c.users.last_name.toUpperCase()} MARY`, '2547******988', 4)],
+    suggestions: {
+      'demo-um1': [{ studentId: a.id, score: 72, reason: 'ADMISSION_VARIANT' }, { studentId: b.id, score: 45, reason: 'NAME' }],
+      'demo-um2': [{ studentId: c.id, score: 70, reason: 'NAME' }],
+    },
+    learners: STUDENTS.filter(s => s.status === 'ACTIVE').map(s => ({ id: s.id, name: learnerName(s), admissionNumber: s.admission_number, className: s.grade_streams.full_name, balance: FEES.find(f => f.admissionNumber === s.admission_number)?.balance ?? 0 })),
+  };
+}
 
 const CLASS_MEANS = [48, 61, 72, 66];
 
@@ -338,6 +440,10 @@ export function demoResponse(url: URL): unknown {
     case '/api/admin/academic-structure': return ACADEMIC_STRUCTURE;
     case '/api/school/analytics/overview': return ANALYTICS_OVERVIEW;
     case '/api/school/fees': return { data: FEES };
+    case '/api/school/fees/overview': return { data: FEES_OVERVIEW };
+    case '/api/school/fees/daybook': return { data: dayBookFor(url) };
+    case '/api/school/fees/unmatched': return demoUnmatched();
+    case '/api/school/fees/defaulters': return { data: DEFAULTERS, totalOwed: DEFAULTERS.reduce((n, d) => n + d.owed, 0) } satisfies DefaultersResponse;
     case '/api/school/announcements': return { data: ANNOUNCEMENTS, nextCursor: null, counts: { all: ANNOUNCEMENTS.length, important: ANNOUNCEMENTS.filter(a => a.isImportant).length, mine: 2 } };
     case '/api/school/analytics': return analyticsFor(url);
     case '/api/reports/rounds': return REPORT_ROUNDS;

@@ -8,6 +8,7 @@ import { STATUS_COPY, type DirectoryLearner, type PreviewLine } from '@/lib/fee-
 import type { LineDecision } from '@/lib/fee-reconcile-plan';
 import { TONES } from '@/components/ui/tones';
 import { cn } from '@/lib/utils';
+import { formatIsoDate } from '@/lib/dates';
 import { LearnerPicker, balanceNote, learnerLine } from './LearnerPicker';
 
 export interface ReviewLineActions {
@@ -20,7 +21,7 @@ export interface ReviewLineActions {
     skip?: () => void;
 }
 
-const when = (line: Pick<PreviewLine, 'date' | 'time'>) => `${line.date}${line.time ? ` ${line.time.slice(0, 5)}` : ''}`;
+const when = (line: Pick<PreviewLine, 'date' | 'time'>) => `${formatIsoDate(line.date, { day: 'numeric', month: 'short', year: 'numeric' })}${line.time ? `, ${line.time.slice(0, 5)}` : ''}`;
 
 /** One payment in from the statement: who sent it, what they typed, and where it goes. */
 export function ReviewLine({ line, decision, learners, byId, problem, actions, footer }: {
@@ -78,13 +79,14 @@ export function ReviewLine({ line, decision, learners, byId, problem, actions, f
                                         role="radio"
                                         aria-checked={on}
                                         onClick={() => actions.recordTo(c.studentId)}
-                                        className={cn('flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-left text-sm transition-colors', on ? 'border-emerald-500/60 bg-emerald-500/[0.08]' : 'border-border hover:border-emerald-500/40')}
+                                        // Phones: the reason goes under the name, so the name is never squeezed out.
+                                        className={cn('flex flex-col gap-0.5 rounded-lg border px-3 py-2 text-left text-sm transition-colors sm:flex-row sm:items-center sm:justify-between sm:gap-3', on ? 'border-emerald-500/60 bg-emerald-500/[0.08]' : 'border-border hover:border-emerald-500/40')}
                                     >
                                         <span className="flex min-w-0 items-center gap-2">
                                             {on ? <Check className="size-4 shrink-0 text-emerald-600" aria-hidden /> : <span className="size-4 shrink-0 rounded-full border border-border" aria-hidden />}
                                             <span className="min-w-0 truncate">{l ? learnerLine(l) : 'A learner'}</span>
                                         </span>
-                                        <span className="shrink-0 text-[11px] text-muted-foreground">{MATCH_REASON_LABELS[c.reason]}{l ? ` · ${balanceNote(l.balance)}` : ''}</span>
+                                        <span className="pl-6 text-[11px] text-muted-foreground sm:shrink-0 sm:pl-0">{MATCH_REASON_LABELS[c.reason]}{l ? ` · ${balanceNote(l.balance)}` : ''}</span>
                                     </button>
                                 );
                             })}

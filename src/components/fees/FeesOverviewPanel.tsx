@@ -120,7 +120,7 @@ export function FeesOverviewPanel({ onGo }: { onGo: (target: Extract<FixTarget, 
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                 <StatTile icon={Wallet} hue="blue" label="Billed this term" value={current ? formatKsh(current.expected) : '—'} hint={current ? `${termLabel(current)} · ${current.learners.toLocaleString()} learners` : 'No current term'} />
                 <StatTile
-                    icon={Coins} label="Collected" tone="good"
+                    icon={Coins} label="Collected" tone={!current ? 'default' : current.rate >= TARGET_RATE ? 'good' : current.rate >= 50 ? 'warn' : 'bad'}
                     value={current ? `${current.rate}%` : '—'}
                     hint={current ? `${formatKsh(current.collected)}${change !== null && previous ? ` · ${change >= 0 ? '+' : '−'}${Math.abs(change)} pts on ${previous.termName}` : ''}` : undefined}
                 />

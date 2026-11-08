@@ -88,12 +88,12 @@ export function DayBookPanel({ canReview }: { canReview: boolean }) {
                         title="Day book"
                         description="Each day’s money in, and who looked it over. Someone other than the person who recorded the money signs each day off."
                     />
-                    <div className="flex shrink-0 items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 lg:shrink-0">
                         <button type="button" className="btn-icon" aria-label="Day before" onClick={() => setDay(d => addDays(d, -1))}>
                             <ChevronLeft className="size-4" />
                         </button>
                         <input
-                            type="date" className="input-field h-9 min-w-0 flex-1 sm:flex-none" aria-label="Day" max={today} value={day}
+                            type="date" className="input-field h-9 w-full min-w-0 sm:w-44" aria-label="Day" max={today} value={day}
                             onChange={e => e.target.value && e.target.value <= today && setDay(e.target.value)}
                         />
                         <button type="button" className="btn-icon" aria-label="Next day" disabled={day >= today} onClick={() => setDay(d => (d < today ? addDays(d, 1) : d))}>
@@ -115,7 +115,8 @@ export function DayBookPanel({ canReview }: { canReview: boolean }) {
                                         title={`${longDay(d.day)} · ${state.label}`}
                                         onClick={() => setDay(d.day)}
                                         className={cn(
-                                            'flex w-16 flex-col items-center gap-0.5 rounded-xl border px-2 py-1.5 text-center transition-colors',
+                                            // relative: keeps the screen-reader text inside the scrolling strip, not widening the page.
+                                            'relative flex w-16 flex-col items-center gap-0.5 rounded-xl border px-2 py-1.5 text-center transition-colors',
                                             on ? 'border-foreground bg-foreground text-background' : 'border-border hover:border-foreground/40',
                                         )}
                                     >
