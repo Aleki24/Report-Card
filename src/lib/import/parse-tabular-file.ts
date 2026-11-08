@@ -94,14 +94,15 @@ function toCellString(value: unknown): string {
  * Scans the first handful of rows and takes the one containing the most
  * recognisable headings, falling back to the first non-empty row.
  */
-function findHeaderRow(grid: unknown[][]): number {
-    const limit = Math.min(grid.length, 10);
+function findHeaderRow(grid: unknown[][], headings: ReadonlySet<string>): number {
+    // Statements open with a longer title block (account, short code, period) than class lists.
+    const limit = Math.min(grid.length, 20);
     let bestIndex = -1;
     let bestScore = 0;
 
     for (let i = 0; i < limit; i++) {
         const cells = (grid[i] || []).map(c => normalizeKey(toCellString(c)));
-        const score = cells.filter(c => c && KNOWN_HEADINGS.has(c)).length;
+        const score = cells.filter(c => c && headings.has(c)).length;
         if (score > bestScore) {
             bestScore = score;
             bestIndex = i;
@@ -125,10 +126,10 @@ function isSummaryRow(values: string[]): boolean {
 }
 
 /** Shared shaping for both formats: locate headings, then build rows. */
-function gridToRows(grid: unknown[][]): SpreadsheetParseResult {
+function gridToRows(grid: unknown[][], headings: ReadonlySet<string>): SpreadsheetParseResult {
     if (grid.length === 0) return { rows: [], headers: [] };
 
-    const headerIndex = findHeaderRow(grid);
+    const headerIndex = findHeaderRow(grid, headings);
     const headers = (grid[headerIndex] || []).map(h => toCellString(h));
     const rows: Record<string, string>[] = [];
 
@@ -148,7 +149,7 @@ function gridToRows(grid: unknown[][]): SpreadsheetParseResult {
     return { rows, headers: headers.filter(Boolean) };
 }
 
-async function parseSpreadsheet(buffer: ArrayBuffer): Promise<SpreadsheetParseResult> {
+async function parseSpreadsheet(buffer: ArrayBuffer, headings: ReadonlySet<string>): Promise<SpreadsheetParseResult> {
     // Loaded on demand: SheetJS is large and most users never open a
     // spreadsheet, so it should not sit in the page's initial bundle.
     const XLSX = await import('xlsx');
@@ -162,29 +163,38 @@ async function parseSpreadsheet(buffer: ArrayBuffer): Promise<SpreadsheetParseRe
     const grid = XLSX.utils.sheet_to_json<unknown[]>(book.Sheets[sheetName], {
         header: 1, defval: '', blankrows: false,
     });
-    return gridToRows(grid);
+    return gridToRows(grid, headings);
 }
 
-function parseDelimited(text: string): SpreadsheetParseResult {
+function parseDelimited(text: string, headings: ReadonlySet<string>): SpreadsheetParseResult {
     // Parsed without headers so CSV goes through the same heading-row
     // detection as Excel — a titled CSV used to fail the same way.
     const results = Papa.parse<string[]>(text, { header: false, skipEmptyLines: true });
-    return gridToRows((results.data || []) as unknown[][]);
+    return gridToRows((results.data || []) as unknown[][], headings);
 }
 
 /**
  * Parse a file's contents by its name: the bytes of a spreadsheet, or the
  * text of a CSV/TSV. Platform-neutral, so the mobile app (which reads picked
- * files itself) shares it.
+ * files itself) shares it. `headings` are the normalised column names that
+ * locate the heading row (a fee statement knows its own; class lists and
+ * mark sheets use the importers').
  */
-export async function parseTabularData(name: string, read: { bytes: () => Promise<ArrayBuffer>; text: () => Promise<string> }): Promise<SpreadsheetParseResult> {
-    return isSpreadsheetName(name) ? parseSpreadsheet(await read.bytes()) : parseDelimited(await read.text());
+export async function parseTabularData(
+    name: string,
+    read: { bytes: () => Promise<ArrayBuffer>; text: () => Promise<string> },
+    headings: ReadonlySet<string> = KNOWN_HEADINGS,
+): Promise<SpreadsheetParseResult> {
+    return isSpreadsheetName(name) ? parseSpreadsheet(await read.bytes(), headings) : parseDelimited(await read.text(), headings);
 }
 
 /** Parse a CSV/TSV or Excel upload into rows keyed by column heading. */
-export function parseTabularFile(file: File): Promise<SpreadsheetParseResult> {
-    return parseTabularData(file.name, { bytes: () => file.arrayBuffer(), text: () => file.text() });
+export function parseTabularFile(file: File, headings?: ReadonlySet<string>): Promise<SpreadsheetParseResult> {
+    return parseTabularData(file.name, { bytes: () => file.arrayBuffer(), text: () => file.text() }, headings);
 }
+
+/** A heading as the parser compares it: lower case, letters and digits only. */
+export const normalizeHeading = normalizeKey;
 
 /**
  * Lower-cased, punctuation-stripped copy of each row so importers can look up
