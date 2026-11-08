@@ -70,6 +70,8 @@ export const previewBodySchema = z.object({
 });
 
 export const allocationSchema = z.object({ studentId: z.string().min(1).max(64), amount: z.number().positive() });
+/** A learner's share of a payment. */
+export type Allocation = z.infer<typeof allocationSchema>;
 
 export const commitBodySchema = z.object({
     source: z.enum(['MPESA', 'BANK']),

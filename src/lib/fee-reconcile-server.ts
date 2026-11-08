@@ -9,6 +9,7 @@ import { embedOne, fetchAllRows } from '@/lib/postgrest';
 import { findActiveTermId } from '@/lib/term-calendar';
 import { HttpError } from '@/lib/platform/access';
 import type { MatchLearner } from '@/lib/fee-matching';
+import type { Allocation } from '@/lib/fee-reconcile';
 
 const ID_CHUNK = 150;
 
@@ -127,8 +128,6 @@ export async function recordedCodes(db: SupabaseClient, schoolId: string, codes:
     }
     return found;
 }
-
-export interface Allocation { studentId: string; amount: number }
 
 export interface PaymentFacts {
     method: 'MPESA' | 'BANK' | 'CHEQUE' | 'CASH' | 'OTHER';
