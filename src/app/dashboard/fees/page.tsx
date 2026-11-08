@@ -2,7 +2,7 @@
 
 import PageHeader from '@/components/dashboard/PageHeader';
 import React, { Suspense, useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import { Plus, Search, Edit3, Trash2, Wallet, ArrowUpRight, Clock, AlertTriangle, Upload, FileText, CircleDollarSign, History, Download, Ban, Receipt, Layers, UsersRound, ChartColumn, ScanSearch, BookOpenCheck } from 'lucide-react';
+import { Plus, Search, Edit3, Trash2, Wallet, ArrowUpRight, Clock, AlertTriangle, Upload, FileText, CircleDollarSign, History, Download, Ban, Receipt, Layers, UsersRound, ChartColumn, ScanSearch, BookOpenCheck, Split } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api-error-message';
@@ -15,6 +15,7 @@ import { DefaultersPanel } from '@/components/fees/DefaultersPanel';
 import { CollectionsPanel } from '@/components/fees/CollectionsPanel';
 import { BatchEntryPanel } from '@/components/fees/BatchEntryPanel';
 import { VoidPaymentDialog, type VoidTarget } from '@/components/fees/VoidPaymentDialog';
+import { SharePaymentDialog, type ShareTarget } from '@/components/fees/SharePaymentDialog';
 import { PaymentsLogPanel } from '@/components/fees/PaymentsLogPanel';
 import { DayBookPanel } from '@/components/fees/DayBookPanel';
 import { UnmatchedQueue } from '@/components/fees/reconcile/UnmatchedQueue';
@@ -27,7 +28,8 @@ import Link from 'next/link';
 import { feeReceiptUrl, type FeeAccountLearner, type FeeAccountTerm } from '@/lib/fee-account';
 import { cn } from '@/lib/utils';
 import { findActiveTermId } from '@/lib/term-calendar';
-import { isOverdue, totalOwed, FEE_PAYMENT_METHODS, PAYMENT_REFERENCE, referenceProblem, type FeePayment, type FeePaymentMethod } from '@/lib/fees';
+import { isOverdue, totalOwed, FEE_PAYMENT_METHODS, PAYMENT_REFERENCE, paymentCode, referenceProblem, type FeePayment, type FeePaymentMethod } from '@/lib/fees';
+import { SCHOOL_TIME_ZONE } from '@/lib/dates';
 import { FEATURE_ICONS } from '@/components/ui/featureIcons';
 
 
@@ -464,6 +466,14 @@ function FeesPageInner() {
         const fee = historyFee;
         if (!fee) return;
         confirmVoid(payment, fee.id, () => Promise.all([openHistory(fee), fetchFees()]));
+    };
+
+    // One payment for two children that came in under one child's number: part of it moves to the other.
+    const [sharing, setSharing] = useState<ShareTarget | null>(null);
+    const afterShare = () => {
+        setSharing(null);
+        setAccountVersion(v => v + 1);
+        void Promise.all([historyFee ? openHistory(historyFee) : Promise.resolve(), fetchFees()]);
     };
 
 
@@ -927,7 +937,7 @@ function FeesPageInner() {
                                                       <th>Receipt</th>
                                                       <th>Date</th>
                                                       <th>Method</th>
-                                                      <th>Transaction Code</th>
+                                                      <th>Reference</th>
                                                       <th>Amount</th>
                                                       <th>Status</th>
                                                       <th />
@@ -937,9 +947,9 @@ function FeesPageInner() {
                                                   {historyPayments.map(p => (
                                                       <tr key={p.id}>
                                                           <td data-label="Receipt" className="font-mono text-xs">{p.receiptNumber}</td>
-                                                          <td data-label="Date" className="text-xs">{new Date(p.paidAt).toLocaleDateString('en-GB')}</td>
+                                                          <td data-label="Date" className="text-xs">{new Date(p.paidAt).toLocaleDateString('en-GB', { timeZone: SCHOOL_TIME_ZONE })}</td>
                                                           <td data-label="Method">{methodLabel(p.method)}</td>
-                                                          <td data-label="Transaction Code" className="font-mono text-xs">{p.mpesaReceiptNumber || p.pesapalConfirmationCode || '—'}</td>
+                                                          <td data-label="Reference" className="font-mono text-xs">{paymentCode(p) ?? '—'}</td>
                                                           <td data-label="Amount" className="font-semibold">{formatCurrency(p.amount)}</td>
                                                           <td data-label="Status">
                                                               {statusBadge(p.status)}
@@ -956,6 +966,15 @@ function FeesPageInner() {
                                                                       >
                                                                           <Receipt size={14} />
                                                                       </a>
+                                                                      {canManageFees && !p.splitFromPaymentId && (
+                                                                          <button
+                                                                              className="btn-icon text-muted-foreground hover:text-foreground"
+                                                                              onClick={() => setSharing({ id: p.id, receiptNumber: p.receiptNumber, amount: p.amount, code: paymentCode(p) })}
+                                                                              title="Share with a brother or sister" aria-label={`Share receipt ${p.receiptNumber} with another learner`}
+                                                                          >
+                                                                              <Split size={14} />
+                                                                          </button>
+                                                                      )}
                                                                       {canManageFees && (
                                                                           <button className="btn-icon text-destructive/80 hover:text-destructive" onClick={() => voidPayment(p)} title="Void Payment">
                                                                               <Ban size={14} />
@@ -976,6 +995,7 @@ function FeesPageInner() {
                     </Modal>
 
             <VoidPaymentDialog payment={voiding?.payment ?? null} onClose={() => setVoiding(null)} onVoid={voidWithReason} />
+            <SharePaymentDialog payment={sharing} onClose={() => setSharing(null)} onShared={afterShare} />
 
             <ConfirmDialog
                 isOpen={pendingConfirm !== null}

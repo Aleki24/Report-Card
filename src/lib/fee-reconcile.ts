@@ -111,6 +111,22 @@ export interface CommitResult {
 
 export const UNMATCHED_URL = '/api/school/fees/unmatched';
 
+/** Part of one learner's payment moved to another: two children paid for under one admission number. */
+export const paymentShareUrl = (paymentId: string) => `/api/school/fees/payments/${paymentId}/share`;
+export const shareBodySchema = z.object({
+    studentId: z.string().min(1).max(64),
+    amount: z.number().positive('Enter the share.').max(100_000_000),
+});
+export type ShareBody = z.infer<typeof shareBodySchema>;
+
+/** Who a payment could be shared with: brothers and sisters first (the same parent's phone), then anyone. */
+export interface ShareCandidates {
+    /** The learner the payment is on now. */
+    owner: DirectoryLearner | null;
+    siblings: DirectoryLearner[];
+    learners: DirectoryLearner[];
+}
+
 /** What the unmatched queue loads: the payments, who each most likely is, and everyone to pick from. */
 export interface UnmatchedResponse {
     data: FeePayment[];

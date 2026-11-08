@@ -106,6 +106,7 @@ export interface PaymentLogRow {
     pesapalConfirmationCode: string | null;
     /** Bank slip or cheque number. */
     reference: string | null;
+    splitFromPaymentId: string | null;
     notes: string | null;
     recordedByName: string | null;
     voidedByName: string | null;

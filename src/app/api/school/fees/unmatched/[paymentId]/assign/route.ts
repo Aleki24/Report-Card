@@ -5,7 +5,7 @@ import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { HttpError, accessOrResponse, errorResponse } from '@/lib/platform/access';
 import { audit } from '@/lib/platform/audit';
 import { allocationSchema } from '@/lib/fee-reconcile';
-import { assertAllocations, feeRecordsForPayment } from '@/lib/fee-reconcile-server';
+import { assertAllocations, feeRecordsForPayment, insertShares } from '@/lib/fee-reconcile-server';
 
 const bodySchema = z.union([
     // Older clients: one learner's fee record.
@@ -35,7 +35,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
         const { data: payment } = await supabase
             .from('fee_payments')
-            .select('id, school_id, student_fee_id, amount, method, status, mpesa_receipt_number, reference, payer_name, phone_number, paid_at, receipt_number')
+            .select('id, school_id, student_fee_id, amount, method, status, mpesa_receipt_number, reference, payer_name, phone_number, paid_at, receipt_number, reconciliation_id')
             .eq('id', paymentId)
             .maybeSingle();
         if (!payment || payment.school_id !== caller.schoolId) return NextResponse.json({ error: 'Payment not found' }, { status: 404 });
@@ -70,27 +70,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         if (error) throw error;
         if (!assigned || assigned.length === 0) return NextResponse.json({ error: 'Payment is already assigned' }, { status: 409 });
 
-        if (rest.length > 0) {
-            const code = (payment.mpesa_receipt_number ?? payment.reference ?? payment.receipt_number) as string;
-            const { error: shareError } = await supabase.from('fee_payments').insert(rest.map(s => ({
-                school_id: caller.schoolId,
-                student_fee_id: s.feeId,
-                amount: money(s.amount),
-                method: payment.method,
-                status: 'COMPLETED',
-                reference: payment.mpesa_receipt_number ?? payment.reference,
-                payer_name: payment.payer_name,
-                phone_number: payment.phone_number,
-                paid_at: payment.paid_at,
-                recorded_by: caller.userId,
-                split_from_payment_id: paymentId,
-                notes: `Share of ${code}`,
-            })));
-            if (shareError) {
-                // Put the payment back as it was rather than leave it half-shared.
-                await supabase.from('fee_payments').update({ student_fee_id: null, amount: payment.amount }).eq('id', paymentId);
-                throw shareError;
-            }
+        try {
+            await insertShares(supabase, caller, payment, rest);
+        } catch (shareError) {
+            // Put the payment back as it was rather than leave it half-shared.
+            await supabase.from('fee_payments').update({ student_fee_id: null, amount: payment.amount }).eq('id', paymentId);
+            throw shareError;
         }
 
         await audit(caller, 'update', 'fee_payments', paymentId, { assigned: shares.length, amount: Number(payment.amount) });

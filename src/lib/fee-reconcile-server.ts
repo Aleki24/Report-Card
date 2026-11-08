@@ -171,6 +171,53 @@ export function assertAllocations(allocations: readonly Allocation[], total: num
     if (Math.abs(sum - money(total)) > 0.009) throw new HttpError(400, `The shares add up to ${sum.toLocaleString()} but the payment is ${money(total).toLocaleString()}.`);
 }
 
+/** The payment a share is cut from: how it was paid, by whom and when. */
+export interface ShareSource {
+    id: string;
+    method: string;
+    mpesa_receipt_number: string | null;
+    reference: string | null;
+    receipt_number: string;
+    payer_name: string | null;
+    phone_number: string | null;
+    paid_at: string;
+    reconciliation_id?: string | null;
+}
+
+/**
+ * Other learners' shares of one payment (two siblings paid in one M-Pesa
+ * transaction): each its own receipt, carrying the original's code (in
+ * `reference`, so the unique M-Pesa code stays on the original) and pointing
+ * back to it, so a void or a statement check sees the payment whole.
+ */
+export async function insertShares(
+    db: SupabaseClient,
+    ctx: { schoolId: string; userId: string },
+    original: ShareSource,
+    shares: readonly { feeId: string; amount: number }[],
+    note?: string | null,
+): Promise<{ id: string; receipt_number: string }[]> {
+    if (shares.length === 0) return [];
+    const code = original.mpesa_receipt_number ?? original.reference;
+    const { data, error } = await db.from('fee_payments').insert(shares.map(s => ({
+        school_id: ctx.schoolId,
+        student_fee_id: s.feeId,
+        amount: money(s.amount),
+        method: original.method,
+        status: 'COMPLETED',
+        reference: code,
+        payer_name: original.payer_name,
+        phone_number: original.phone_number,
+        paid_at: original.paid_at,
+        recorded_by: ctx.userId,
+        split_from_payment_id: original.id,
+        reconciliation_id: original.reconciliation_id ?? null,
+        notes: `Share of ${code ?? original.receipt_number}${note ? ` · ${note}` : ''}`,
+    }))).select('id, receipt_number');
+    if (error) throw error;
+    return data ?? [];
+}
+
 /**
  * Records a payment against one learner, or shares it between several (two
  * siblings in one M-Pesa payment): the first share keeps the code, each
@@ -194,23 +241,17 @@ export async function insertAllocatedPayment(
         reconciliation_id: facts.reconciliationId ?? null,
     };
     const [first, ...rest] = allocations;
+    const codes = { mpesa_receipt_number: facts.method === 'MPESA' ? facts.code : null, reference: facts.method === 'MPESA' ? null : facts.code };
     const { data: main, error } = await db.from('fee_payments').insert({
         ...base,
+        ...codes,
         student_fee_id: first.feeId,
         amount: money(first.amount),
-        mpesa_receipt_number: facts.method === 'MPESA' ? facts.code : null,
-        reference: facts.method === 'MPESA' ? null : facts.code,
     }).select('id, receipt_number').single();
     if (error) throw error;
-    if (rest.length === 0) return [main];
-    const { data: shares, error: shareError } = await db.from('fee_payments').insert(rest.map(a => ({
-        ...base,
-        student_fee_id: a.feeId,
-        amount: money(a.amount),
-        reference: facts.code,
-        split_from_payment_id: main.id,
-        notes: `Share of ${facts.code ?? main.receipt_number}${facts.notes ? ` · ${facts.notes}` : ''}`,
-    }))).select('id, receipt_number');
-    if (shareError) throw shareError;
-    return [main, ...(shares ?? [])];
+    const shares = await insertShares(db, ctx, {
+        id: main.id, receipt_number: main.receipt_number, method: facts.method, ...codes,
+        payer_name: facts.payerName, phone_number: facts.phone, paid_at: facts.paidAt, reconciliation_id: facts.reconciliationId,
+    }, rest, facts.notes);
+    return [main, ...shares];
 }
