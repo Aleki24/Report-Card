@@ -27,7 +27,7 @@ import Link from 'next/link';
 import { feeReceiptUrl, type FeeAccountLearner, type FeeAccountTerm } from '@/lib/fee-account';
 import { cn } from '@/lib/utils';
 import { findActiveTermId } from '@/lib/term-calendar';
-import { isOverdue, totalOwed, FEE_PAYMENT_METHODS, type FeePayment, type FeePaymentMethod } from '@/lib/fees';
+import { isOverdue, totalOwed, FEE_PAYMENT_METHODS, PAYMENT_REFERENCE, referenceProblem, type FeePayment, type FeePaymentMethod } from '@/lib/fees';
 import { FEATURE_ICONS } from '@/components/ui/featureIcons';
 
 
@@ -124,7 +124,8 @@ function FeesPageInner() {
     const [payMethod, setPayMethod] = useState<FeePaymentMethod>('CASH');
     const [payPayerName, setPayPayerName] = useState('');
     const [payPhone, setPayPhone] = useState('');
-    const [payMpesaRef, setPayMpesaRef] = useState('');
+    // The M-Pesa code, bank slip or cheque number.
+    const [payReference, setPayReference] = useState('');
     const [payNotes, setPayNotes] = useState('');
     const [payDate, setPayDate] = useState('');
     const [paySaving, setPaySaving] = useState(false);
@@ -374,7 +375,7 @@ function FeesPageInner() {
         setPayMethod('CASH');
         setPayPayerName('');
         setPayPhone('');
-        setPayMpesaRef('');
+        setPayReference('');
         setPayNotes('');
         setPayDate(todayIso());
         setPayError('');
@@ -398,6 +399,11 @@ function FeesPageInner() {
             setPayError('Enter a valid amount greater than 0.');
             return;
         }
+        const refProblem = referenceProblem(payMethod, payReference);
+        if (refProblem) {
+            setPayError(refProblem);
+            return;
+        }
         setPaySaving(true);
         setPayError('');
         try {
@@ -409,7 +415,7 @@ function FeesPageInner() {
                     method: payMethod,
                     payer_name: payPayerName || null,
                     phone_number: payPhone || null,
-                    mpesa_receipt_number: payMethod === 'MPESA' ? (payMpesaRef || null) : null,
+                    reference: PAYMENT_REFERENCE[payMethod] ? (payReference.trim() || null) : null,
                     notes: payNotes || null,
                     // Only send a backdate; today's payments keep the exact time.
                     paid_at: payDate && payDate !== todayIso() ? payDate : undefined,
@@ -864,11 +870,16 @@ function FeesPageInner() {
                                         ))}
                                     </select>
                                 </div>
-                                {payMethod === 'MPESA' && (
+                                {PAYMENT_REFERENCE[payMethod] && (
                                     <div>
-                                        <label htmlFor="pay-ref" className="mb-2 block text-xs font-semibold text-muted-foreground">M-Pesa receipt code</label>
-                                        <input id="pay-ref" type="text" value={payMpesaRef} onChange={e => setPayMpesaRef(e.target.value)} placeholder="e.g. QGX7ZZ99AA" className="input-field w-full" />
-                                        <p className="mt-1 text-[11px] text-muted-foreground">For a paybill payment confirmed by SMS — enter it here until M-Pesa auto-reconciliation is set up.</p>
+                                        <label htmlFor="pay-ref" className="mb-2 block text-xs font-semibold text-muted-foreground">{PAYMENT_REFERENCE[payMethod].label}</label>
+                                        <input
+                                            id="pay-ref" type="text" autoCapitalize="characters" autoComplete="off" spellCheck={false}
+                                            value={payReference} onChange={e => setPayReference(e.target.value)}
+                                            placeholder={PAYMENT_REFERENCE[payMethod].placeholder} required={PAYMENT_REFERENCE[payMethod].required}
+                                            className="input-field w-full font-mono uppercase placeholder:font-sans placeholder:normal-case"
+                                        />
+                                        <p className="mt-1 text-[11px] text-muted-foreground">{PAYMENT_REFERENCE[payMethod].hint}</p>
                                     </div>
                                 )}
                                 <div>

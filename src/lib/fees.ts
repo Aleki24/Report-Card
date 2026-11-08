@@ -116,8 +116,39 @@ export interface FeePayment {
 export const paymentCode = (p: { mpesaReceiptNumber: string | null; pesapalConfirmationCode: string | null; reference: string | null }): string | null =>
     p.mpesaReceiptNumber ?? p.pesapalConfirmationCode ?? p.reference ?? null;
 
-/** Methods that need a reference to trace them by: the M-Pesa code, or the bank slip or cheque number. */
-export const METHODS_NEEDING_REFERENCE: ReadonlySet<FeePaymentMethod> = new Set<FeePaymentMethod>(['MPESA', 'BANK', 'CHEQUE']);
+/**
+ * The reference a payment is traced by, per method: the M-Pesa code, the bank
+ * slip or transaction number, the cheque number. Every non-cash payment needs
+ * one, so it can be found on the statement, cannot be entered twice, and a
+ * reversal or bounced cheque can be traced. Cash has the receipt; Other may
+ * carry one.
+ */
+export const PAYMENT_REFERENCE: Readonly<Partial<Record<FeePaymentMethod, { label: string; placeholder: string; hint: string; required: boolean }>>> = {
+    MPESA: { label: 'M-Pesa code', placeholder: 'e.g. QGX7ZZ99AA', hint: 'From the M-Pesa message. It ties the payment to the statement and stops it being entered twice.', required: true },
+    BANK: { label: 'Bank slip or transaction number', placeholder: 'e.g. FT24310ABC12', hint: 'From the deposit slip or the bank’s message, so the payment can be found on the bank statement.', required: true },
+    CHEQUE: { label: 'Cheque number', placeholder: 'e.g. 004512', hint: 'Kept so a bounced cheque can be traced and voided.', required: true },
+    OTHER: { label: 'Reference (optional)', placeholder: 'Any number that traces it', hint: 'A voucher, transfer or bursary letter number, if there is one.', required: false },
+};
+
+/** A reference as stored: trimmed, inner spaces gone, upper case (codes are case-blind). */
+export const normalizeReference = (reference: string | null | undefined): string | null => {
+    const v = (reference ?? '').replace(/\s+/g, '').toUpperCase();
+    return v ? v : null;
+};
+
+/** M-Pesa transaction codes: ten letters and digits. */
+const MPESA_CODE = /^[A-Z0-9]{10}$/;
+
+/** Why a payment's reference will not do, or null when it is fine. */
+export function referenceProblem(method: FeePaymentMethod, reference: string | null | undefined): string | null {
+    const field = PAYMENT_REFERENCE[method];
+    const v = normalizeReference(reference);
+    if (!field) return null;
+    if (!v) return field.required ? `Enter the ${field.label.toLowerCase()}.` : null;
+    if (v.length > 64) return 'That reference is too long.';
+    if (method === 'MPESA' && !MPESA_CODE.test(v)) return 'An M-Pesa code is 10 letters and numbers, like QGX7ZZ99AA.';
+    return null;
+}
 
 export interface SchoolBankAccount {
     id: string;
