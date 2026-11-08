@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getCaller } from '@/lib/auth-server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { classLearnersInTerm } from '@/lib/reports/class-history';
 import { sendBulkSMS } from '@/lib/africastalking';
 import { rateLimit } from '@/lib/rate-limit';
 import { fetchAllRows } from '@/lib/postgrest';
@@ -79,11 +80,18 @@ export async function POST(request: Request) {
 
         if (studentsErr) return internalError('sms/send students', studentsErr);
 
+        // The class's learners for the term: who was in it then, once its
+        // year has been promoted; else those in it now (on the roll).
+        const { rows: classLearners, historical } = await classLearnersInTerm<{ id: string }>(supabase, { schoolId, termId, streamId: gradeStreamId, select: 'id', current: 'active' });
+        const classStudentIds = classLearners.map(s => s.id);
+        const inClass = new Set(classStudentIds);
+
         // Tenant-scope: only keep students that belong to the caller's school.
         // Class-scope too: the results sent are this class's, so a student
-        // from another class would get a message about the wrong ranking.
+        // from another class would get a message about the wrong ranking. For
+        // a promoted year that is the class as it was, not who is in it now.
         const students = (allStudents || []).filter(
-            (s: any) => s.users?.school_id === schoolId && s.current_grade_stream_id === gradeStreamId
+            (s: any) => s.users?.school_id === schoolId && (historical ? inClass.has(s.id) : s.current_grade_stream_id === gradeStreamId)
         );
 
         if (!students.length) {
@@ -158,14 +166,7 @@ export async function POST(request: Request) {
         // Only released results are texted (parents can't be sent marks the
         // school is still correcting), every mark of the class is read (a
         // class's term passes PostgREST's 1,000-row page), and positions are
-        // among the learners still enrolled in the class.
-        const { data: classStudents, error: classError } = await supabase
-            .from('students')
-            .select('id')
-            .eq('current_grade_stream_id', gradeStreamId)
-            .eq('status', 'ACTIVE');
-        if (classError) return internalError('sms/send class', classError);
-        const classStudentIds = (classStudents ?? []).map(s => s.id as string);
+        // among the class's learners for the term (read above).
 
         const { rows: termMarks, error: marksError } = await fetchAllRows(() => {
             let marksQuery = supabase

@@ -149,7 +149,7 @@ function DownloadPanel({ scope }: { scope: Scope }) {
     const [busy, setBusy] = useState<'cards' | 'sheet' | string | null>(null);
     const [message, setMessage] = useState<{ tone: 'success' | 'danger' | 'info'; text: string } | null>(null);
     const [search, setSearch] = useState('');
-    const students = useApiQuery<StudentListItem[]>(withQuery('/api/school/data', { type: 'students', grade_stream_id: scope.streamId }));
+    const students = useApiQuery<StudentListItem[]>(withQuery('/api/reports/roster', { grade_stream_id: scope.streamId, term_id: scope.termId }));
 
     const baseQuery = { yearId: scope.yearId, termId: scope.termId, examType: scope.examType, customTitle: title.trim() || null };
     const templateParam = toTemplateParam(template);
@@ -338,7 +338,7 @@ function SmsPanel({ scope }: { scope: Scope }) {
     const { colors } = useTheme();
     const styles = useStyles();
     const api = useApi();
-    const students = useApiQuery<StudentListItem[]>(withQuery('/api/school/data', { type: 'students', grade_stream_id: scope.streamId }));
+    const students = useApiQuery<StudentListItem[]>(withQuery('/api/reports/roster', { grade_stream_id: scope.streamId, term_id: scope.termId }));
     const [deselected, setDeselected] = useState<Set<string>>(new Set());
     const [sending, setSending] = useState(false);
     const [message, setMessage] = useState<{ tone: 'success' | 'danger' | 'warning'; text: string } | null>(null);

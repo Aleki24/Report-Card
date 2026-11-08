@@ -47,6 +47,8 @@ export interface ReportSummary {
   generated_at: string | null;
   term: string;
   year: string;
+  /** The class the learner sat that term in (after a promotion, the one they moved up from). */
+  class_name: string | null;
   average: number | null;
   position: number | null;
   /** Subjects with released results that term. */

@@ -37,6 +37,7 @@ import { REPORT_SCHOOL_COLUMNS, reportSchoolFields } from '@/lib/pdf/reportSchoo
 import { classTeacherSignoffs } from '@/lib/pdf/classTeacherSignoff';
 import { sectionHeadForGrade } from '@/lib/school-sections-server';
 import { TERM_DATE_COLUMNS, resolveTermDates, type TermDateRow, type TermDates } from '@/lib/term-dates';
+import { classMembersInTerm, learnerClassInTerm } from '@/lib/reports/class-history';
 
 export const runtime = 'nodejs';
 
@@ -108,11 +109,28 @@ export async function GET(
             return NextResponse.json({ error: 'Student not found' }, { status: 404 });
         }
 
+        // The class the learner was in that term. After a promotion it is not
+        // the class they are in now: last year's card prints last year's class,
+        // its grade's exams and grading, its class teacher and its classmates.
+        const classThen = await learnerClassInTerm(supabase, userSchoolId, termId, student);
+        const currentStreamId = student.current_grade_stream_id as string | null;
+        if (classThen.historical && classThen.streamId !== currentStreamId) {
+            const { data: stream } = await supabase.from('grade_streams').select('full_name, grade_id').eq('id', classThen.streamId!).maybeSingle();
+            if (stream) {
+                student.grade_streams = stream;
+                student.current_grade_stream_id = classThen.streamId;
+            }
+        }
+
         if (role === 'STUDENT') {
             if (session.userId !== studentId) {
                  return NextResponse.json({ error: 'Unauthorized to view this student report' }, { status: 403 });
             }
-        } else if (!(await canStaffReportOnStream(session, student.current_grade_stream_id))) {
+        } else if (
+            !(await canStaffReportOnStream(session, student.current_grade_stream_id))
+            // The learner's class teacher now may print their earlier cards too.
+            && !(currentStreamId && currentStreamId !== student.current_grade_stream_id && await canStaffReportOnStream(session, currentStreamId))
+        ) {
             return NextResponse.json({ error: 'Only administrators and the designated class teacher can generate student reports.' }, { status: 403 });
         }
 
@@ -370,13 +388,20 @@ export async function GET(
 
         if (gradeStreamId) {
             // Learners still enrolled in the class, as the class batch ranks
-            // them; a leaver's card ranks among the whole class.
-            let classmatesQuery = supabase
-                .from('students')
-                .select('id')
-                .eq('current_grade_stream_id', gradeStreamId);
-            if (ranksAmongOnRoll(student.status)) classmatesQuery = classmatesQuery.eq('status', 'ACTIVE');
-            const { data: classmates } = await classmatesQuery;
+            // them; a leaver's card ranks among the whole class. A term of a
+            // promoted year ranks among the class as it was then.
+            let classmates: { id: string }[] | null;
+            if (classThen.historical) {
+                const members = await classMembersInTerm(supabase, userSchoolId, termId, [gradeStreamId]);
+                classmates = [...(members?.keys() ?? [])].map(id => ({ id }));
+            } else {
+                let classmatesQuery = supabase
+                    .from('students')
+                    .select('id')
+                    .eq('current_grade_stream_id', gradeStreamId);
+                if (ranksAmongOnRoll(student.status)) classmatesQuery = classmatesQuery.eq('status', 'ACTIVE');
+                classmates = (await classmatesQuery).data;
+            }
 
             if (classmates && classmates.length > 0) {
                 totalStudents = classmates.length;

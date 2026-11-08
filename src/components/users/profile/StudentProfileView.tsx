@@ -117,7 +117,7 @@ export function StudentProfileView({ user, data, tab, editing, onEditingChange, 
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium">{r.term} · {r.year}</p>
                     <p className="text-xs text-muted-foreground">
-                      {r.subjects} {r.subjects === 1 ? 'subject' : 'subjects'} released
+                      {r.class_name && <>{r.class_name} · </>}{r.subjects} {r.subjects === 1 ? 'subject' : 'subjects'} released
                       {r.generated_at && <> · generated {formatDate(r.generated_at)}</>}
                     </p>
                   </div>

@@ -4,6 +4,7 @@ import { isSeniorSchoolGrade } from '@/lib/curriculum-bands';
 import { pathwayLabel } from '@/lib/pathway-definitions';
 import type { SeniorRankGroup } from '@/lib/ranking';
 import type { GradingScale } from '@/types';
+import { classMembersInTerm } from './class-history';
 
 /**
  * Overall positions: every stream of a grade ranked together.
@@ -49,7 +50,11 @@ type Options = {
     rankingBasis: RankingBasis;
     /** The school's Senior School grouping; applies to CBC Grades 10-12 only. */
     seniorRankGroup: SeniorRankGroup;
-    /** Rank among learners on the roll only (default); false for a leaver's card (see ranksAmongOnRoll). */
+    /**
+     * Rank among learners on the roll only (default); false for a leaver's card
+     * (see ranksAmongOnRoll). A term of a promoted year ranks the grade as it
+     * was then, whoever has left since.
+     */
     onRollOnly?: boolean;
 };
 
@@ -83,16 +88,7 @@ export async function computeGradePositions(supabase: SupabaseClient, opts: Opti
     const streamIds = (streams ?? []).map(s => s.id as string);
     if (streamIds.length === 0) return empty;
 
-    let peerQuery = supabase
-        .from('students')
-        .select('id, pathway, subject_combination_id, subject_combinations ( code )')
-        .in('current_grade_stream_id', streamIds);
-    // Learners who have left keep their last class; only those on the roll
-    // are ranked, as the stream position already does (a leaver's own card
-    // ranks among the whole class).
-    if (opts.onRollOnly !== false) peerQuery = peerQuery.eq('status', 'ACTIVE');
-    const { data: peerData } = await peerQuery;
-    const peers = (peerData ?? []) as unknown as PeerRow[];
+    const peers = await gradePeers(supabase, opts, streamIds);
     if (peers.length === 0) return empty;
 
     const gradeName = (grade?.name_display as string | undefined) ?? 'Grade';
@@ -157,6 +153,33 @@ export async function computeGradePositions(supabase: SupabaseClient, opts: Opti
     }
 
     return { byStudent, differsFromStream: streamIds.length > 1 || group !== 'GRADE' };
+}
+
+const PEER_SELECT = 'id, pathway, subject_combination_id, subject_combinations ( code )';
+
+/**
+ * The learners ranked together: the grade's classes as they were in the
+ * term when its year has been promoted, else as they are now.
+ */
+async function gradePeers(supabase: SupabaseClient, opts: Options, streamIds: string[]): Promise<PeerRow[]> {
+    const then = await classMembersInTerm(supabase, opts.schoolId, opts.termId, streamIds);
+    if (then) {
+        const ids = [...then.keys()];
+        const peers: PeerRow[] = [];
+        for (let i = 0; i < ids.length; i += ID_CHUNK) {
+            const { data, error } = await supabase.from('students').select(PEER_SELECT).in('id', ids.slice(i, i + ID_CHUNK));
+            if (error) throw new Error(`Failed to load the grade for overall positions: ${error.message}`);
+            peers.push(...((data ?? []) as unknown as PeerRow[]));
+        }
+        return peers;
+    }
+    let peerQuery = supabase.from('students').select(PEER_SELECT).in('current_grade_stream_id', streamIds);
+    // Learners who have left keep their last class; only those on the roll
+    // are ranked, as the stream position already does (a leaver's own card
+    // ranks among the whole class).
+    if (opts.onRollOnly !== false) peerQuery = peerQuery.eq('status', 'ACTIVE');
+    const { data: peerData } = await peerQuery;
+    return (peerData ?? []) as unknown as PeerRow[];
 }
 
 /** Every mark the grade's learners have in the round, past PostgREST's 1,000-row page. */

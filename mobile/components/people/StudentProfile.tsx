@@ -274,7 +274,7 @@ export function StudentProfile({ data, username, actions }: { data: StudentProfi
                                 <View style={[styles.reportIcon, { backgroundColor: colors.primarySoft }]}><FileText size={16} color={colors.primary} /></View>
                                 <View style={{ flex: 1, minWidth: 0 }}>
                                     <Text style={styles.reportTitle} numberOfLines={1}>{r.term} · {r.year}</Text>
-                                    <Text style={styles.reportMeta}>{r.subjects} {r.subjects === 1 ? 'subject' : 'subjects'} released{r.generated_at ? ` · generated ${formatDate(r.generated_at)}` : ''}</Text>
+                                    <Text style={styles.reportMeta}>{r.class_name ? `${r.class_name} · ` : ''}{r.subjects} {r.subjects === 1 ? 'subject' : 'subjects'} released{r.generated_at ? ` · generated ${formatDate(r.generated_at)}` : ''}</Text>
                                 </View>
                                 <View style={{ alignItems: 'flex-end', gap: 4 }}>
                                     {r.average !== null ? <Text style={[styles.pill, { color: gradeTone(colors, r.average), backgroundColor: colors.mutedBg }]}>{Math.round(r.average)}% avg</Text> : null}

@@ -2,6 +2,7 @@ import 'server-only';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { fetchAllRows } from '@/lib/postgrest';
 import { ranksAmongOnRoll } from '@/lib/student/status-access';
+import { classMembersInTerm, learnerClassInTerm } from '@/lib/reports/class-history';
 import {
     aggregateStudentPerformance,
     calculateClassRanks,
@@ -143,8 +144,18 @@ export async function loadVerifiedResults(rawStudentId: string, query: VerifyQue
         if (!student) return notFound;
 
         const user = one<{ first_name?: string; last_name?: string; school_id?: string }>(student.users);
-        const stream = one<{ full_name?: string; grade_id?: string }>(student.grade_streams);
+        let stream = one<{ full_name?: string; grade_id?: string }>(student.grade_streams);
         const schoolId = user?.school_id;
+        // A card of a past term names its term: verify it against the class
+        // the learner was in then. After a promotion their marks sit on that
+        // grade's exams, not on the grade they are in now.
+        const classThen = termId && schoolId
+            ? await learnerClassInTerm(supabase, schoolId, termId, student)
+            : { streamId: student.current_grade_stream_id as string | null, historical: false };
+        if (classThen.historical && classThen.streamId && classThen.streamId !== student.current_grade_stream_id) {
+            const { data: then } = await supabase.from('grade_streams').select('full_name, grade_id').eq('id', classThen.streamId).maybeSingle();
+            if (then) stream = then;
+        }
         const gradeId = stream?.grade_id;
 
         let schoolName = 'School';
@@ -259,15 +270,22 @@ export async function loadVerifiedResults(rawStudentId: string, query: VerifyQue
         const showPositions = schoolId
             ? ranksCurriculum(await loadRankingSettings(supabase, schoolId), grading.gradingSystemType)
             : grading.gradingSystemType === 'KCSE';
-        if (showPositions && student.current_grade_stream_id) {
+        if (showPositions && classThen.streamId) {
             // As the printed card ranks: learners on the roll, or the whole
-            // class for a leaver (a college checking a graduate's card).
-            let classmatesQuery = supabase
-                .from('students')
-                .select('id')
-                .eq('current_grade_stream_id', student.current_grade_stream_id);
-            if (ranksAmongOnRoll(student.status)) classmatesQuery = classmatesQuery.eq('status', 'ACTIVE');
-            const { data: classmates } = await classmatesQuery;
+            // class for a leaver (a college checking a graduate's card); for a
+            // term of a promoted year, the class as it was then.
+            let classmates: { id: string }[] | null;
+            if (classThen.historical && schoolId) {
+                const members = await classMembersInTerm(supabase, schoolId, resolvedTermId, [classThen.streamId]);
+                classmates = [...(members?.keys() ?? [])].map(id => ({ id }));
+            } else {
+                let classmatesQuery = supabase
+                    .from('students')
+                    .select('id')
+                    .eq('current_grade_stream_id', classThen.streamId);
+                if (ranksAmongOnRoll(student.status)) classmatesQuery = classmatesQuery.eq('status', 'ACTIVE');
+                classmates = (await classmatesQuery).data;
+            }
 
             // Rank on the same sitting the marks above come from, as the
             // printed card does: ranking on every round of the term gave a

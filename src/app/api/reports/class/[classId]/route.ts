@@ -36,6 +36,7 @@ import {
 import { REPORT_SCHOOL_COLUMNS, reportSchoolFields } from '@/lib/pdf/reportSchool';
 import { classTeacherSignoffs } from '@/lib/pdf/classTeacherSignoff';
 import { sectionHeadForGrade } from '@/lib/school-sections-server';
+import { classLearnersInTerm } from '@/lib/reports/class-history';
 import { TERM_DATE_COLUMNS, resolveTermDates, type TermDateRow } from '@/lib/term-dates';
 export const runtime = 'nodejs';
 
@@ -156,15 +157,17 @@ export async function GET(
 
         const supabase = createSupabaseAdmin();
 
-        // 1. Fetch Students in the grade stream (classId = grade_stream_id)
-        const { data: students, error: studentsErr } = await supabase
-            .from('students')
-            .select('id, admission_number, academic_level_id, current_grade_stream_id, pathway, track, subject_combination_id, users(first_name, last_name, school_id), grade_streams(full_name, grade_id), subject_combinations(id, code, name, pathway, track)')
-            .eq('current_grade_stream_id', classId)
-            // Learners who left (transferred, graduated) are not printed or ranked.
-            .eq('status', 'ACTIVE');
+        // 1. The class's learners for this term: who was in it then, for a
+        // term of a year already promoted; else the learners in it now.
+        const [{ rows: students }, { data: classRow }] = await Promise.all([
+            classLearnersInTerm<any>(supabase, {
+                schoolId: userSchoolId, termId, streamId: classId, current: 'active',
+                select: 'id, admission_number, academic_level_id, current_grade_stream_id, pathway, track, subject_combination_id, users(first_name, last_name, school_id), grade_streams(full_name, grade_id), subject_combinations(id, code, name, pathway, track)',
+            }),
+            supabase.from('grade_streams').select('full_name, grade_id').eq('id', classId).maybeSingle(),
+        ]);
 
-        if (studentsErr || !students || students.length === 0) {
+        if (students.length === 0) {
             return NextResponse.json({ error: 'No students found in this class' }, { status: 404 });
         }
 
@@ -181,8 +184,9 @@ export async function GET(
         let gradingScales: GradingScale[] = [];
 
         const firstAcademicLevelId = students[0].academic_level_id;
-        const streamName = (students[0].grade_streams as any)?.full_name || '';
-        const gradeId = (students[0].grade_streams as any)?.grade_id;
+        // The class's own name and grade: after a promotion its learners of a past term sit in other classes now.
+        const streamName = classRow?.full_name || '';
+        const gradeId = classRow?.grade_id;
 
         /*
           Staff see results as soon as they are entered.
@@ -536,7 +540,6 @@ export async function GET(
 
             const firstName = (student.users as any)?.first_name || 'Student';
             const lastName = (student.users as any)?.last_name || '';
-            const streamName = (student.grade_streams as any)?.full_name || 'N/A';
 
             // Build subject marks map by subject ID
             const subjMarksMap = new Map<string, any>();
@@ -608,7 +611,7 @@ export async function GET(
                 academicYear: academicYearName,
                 studentName: `${firstName} ${lastName}`,
                 enrollmentNumber: student.admission_number || '',
-                className: streamName,
+                className: streamName || 'N/A',
                 gradingSystemType,
                 subjectMarks,
                 overallPercentage: studentPerf.percentage,
