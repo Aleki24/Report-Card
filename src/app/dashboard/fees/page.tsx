@@ -2,7 +2,7 @@
 
 import PageHeader from '@/components/dashboard/PageHeader';
 import React, { Suspense, useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import { Plus, Search, Edit3, Trash2, Wallet, ArrowUpRight, Clock, AlertTriangle, Upload, FileText, CircleDollarSign, History, Download, Ban, Receipt, Layers, UsersRound, ChartColumn } from 'lucide-react';
+import { Plus, Search, Edit3, Trash2, Wallet, ArrowUpRight, Clock, AlertTriangle, Upload, FileText, CircleDollarSign, History, Download, Ban, Receipt, Layers, UsersRound, ChartColumn, ScanSearch, BookOpenCheck } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api-error-message';
@@ -16,6 +16,9 @@ import { CollectionsPanel } from '@/components/fees/CollectionsPanel';
 import { BatchEntryPanel } from '@/components/fees/BatchEntryPanel';
 import { VoidPaymentDialog, type VoidTarget } from '@/components/fees/VoidPaymentDialog';
 import { PaymentsLogPanel } from '@/components/fees/PaymentsLogPanel';
+import { DayBookPanel } from '@/components/fees/DayBookPanel';
+import { UnmatchedQueue } from '@/components/fees/reconcile/UnmatchedQueue';
+import { StatementReconcile } from '@/components/fees/reconcile/StatementReconcile';
 import {
     balanceColor, formatCurrency, methodLabel, statusBadge, timeAgo, todayIso, toStudentOption,
     type FeeRecord, type PendingConfirm, type StreamOption, type StudentApiRow, type StudentOption, type TermOption,
@@ -29,7 +32,7 @@ import { FEATURE_ICONS } from '@/components/ui/featureIcons';
 
 
 
-type FeesMode = 'list' | 'payments' | 'batch' | 'defaulters' | 'collections';
+type FeesMode = 'list' | 'payments' | 'reconcile' | 'daybook' | 'batch' | 'defaulters' | 'collections';
 
 
 
@@ -43,15 +46,18 @@ const FEES_TABS: readonly PageTab<FeesMode>[] = [
     { id: 'list', label: 'Fee records', shortLabel: 'Records', icon: FileText, hue: 'emerald' },
     // The school-wide log exposes every receipt; it is admin-only on the server.
     { id: 'payments', label: 'Payments', icon: Receipt, hue: 'blue' },
+    // Matching money to learners: the unmatched queue and statement uploads.
+    { id: 'reconcile', label: 'Reconcile', icon: ScanSearch, hue: 'amber' },
+    { id: 'daybook', label: 'Day book', icon: BookOpenCheck, hue: 'teal' },
     { id: 'batch', label: 'Batch entry', shortLabel: 'Batch', icon: Layers, hue: 'violet' },
     { id: 'defaulters', label: 'Who owes', icon: UsersRound, hue: 'amber' },
     { id: 'collections', label: 'Collections', icon: ChartColumn, hue: 'teal' },
 ];
 
 /** Tabs about the whole school rather than one term's records: no term KPIs over them. */
-const REPORT_MODES: ReadonlySet<FeesMode> = new Set<FeesMode>(['defaulters', 'collections']);
+const REPORT_MODES: ReadonlySet<FeesMode> = new Set<FeesMode>(['reconcile', 'daybook', 'defaulters', 'collections']);
 /** Tabs only finance staff see (school-wide money). */
-const FINANCE_ONLY_MODES: ReadonlySet<FeesMode> = new Set<FeesMode>(['payments', 'defaulters', 'collections']);
+const FINANCE_ONLY_MODES: ReadonlySet<FeesMode> = new Set<FeesMode>(['payments', 'reconcile', 'daybook', 'defaulters', 'collections']);
 
 
 
@@ -72,7 +78,16 @@ function FeesPageInner() {
     // Recording payments (and matching unmatched Paybill money) is fees.collect:
     // an accountant can, without billing or editing fee records.
     const canCollect = can('fees.collect');
-    const visibleTabs = useMemo(() => FEES_TABS.filter(t => !FINANCE_ONLY_MODES.has(t.id) || canViewAll), [canViewAll]);
+    // Paybill money that could not be matched to a learner, matched on the Reconcile tab.
+    const [unmatchedCount, setUnmatchedCount] = useState(0);
+    // Bumped when a statement is saved: its unmatched lines join the queue.
+    const [queueVersion, setQueueVersion] = useState(0);
+    const visibleTabs = useMemo(
+        () => FEES_TABS
+            .filter(t => !FINANCE_ONLY_MODES.has(t.id) || canViewAll)
+            .map(t => (t.id === 'reconcile' && unmatchedCount > 0 ? { ...t, badge: unmatchedCount } : t)),
+        [canViewAll, unmatchedCount],
+    );
     const [mode, selectMode] = useUrlTab(visibleTabs, 'view');
     const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm | null>(null);
     const [confirming, setConfirming] = useState(false);
@@ -124,13 +139,10 @@ function FeesPageInner() {
     const [historyPayments, setHistoryPayments] = useState<FeePayment[]>([]);
     const [historyLoading, setHistoryLoading] = useState(false);
 
-    // Paybill money that could not be matched to a student; assigned on the Payments tab.
-    const [unmatchedCount, setUnmatchedCount] = useState(0);
-
     useEffect(() => {
         if (!canViewAll) return;
         const controller = new AbortController();
-        fetch('/api/school/fees/unmatched', { cache: 'no-store', signal: controller.signal })
+        fetch('/api/school/fees/unmatched?suggest=0', { cache: 'no-store', signal: controller.signal })
             .then(r => (r.ok ? r.json() : null))
             .then((j: { data?: unknown[] } | null) => setUnmatchedCount(j?.data?.length ?? 0))
             .catch(() => {});
@@ -502,24 +514,15 @@ function FeesPageInner() {
 
             <PageTabs tabs={visibleTabs} active={mode} onSelect={changeMode} label="Fees views" idPrefix="fees" />
 
-            {unmatchedCount > 0 && (
+            {unmatchedCount > 0 && mode !== 'reconcile' && (
                 <div role="status" className="mb-4 flex flex-col gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4 sm:flex-row sm:items-center sm:justify-between">
                     <p className="text-sm">
-                        <span className="font-semibold">{unmatchedCount} M-Pesa payment{unmatchedCount === 1 ? '' : 's'} not matched to a student.</span>{' '}
-                        <span className="text-muted-foreground">The payer used an account number we couldn&apos;t recognise. Assign it so it counts towards the right balance.</span>
+                        <span className="font-semibold">{unmatchedCount} payment{unmatchedCount === 1 ? '' : 's'} waiting to be matched to a learner.</span>{' '}
+                        <span className="text-muted-foreground">The account number didn&apos;t match anyone. Each one shows who it most likely belongs to; match them this week, before parents ask.</span>
                     </p>
-                    {mode !== 'payments' && (
-                        <button
-                            type="button"
-                            className="btn-secondary w-full shrink-0 sm:w-auto"
-                            onClick={() => {
-                                changeMode('payments');
-                                window.requestAnimationFrame(() => document.getElementById('unmatched-payments')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
-                            }}
-                        >
-                            {canCollect ? 'Assign payments' : 'View payments'}
-                        </button>
-                    )}
+                    <button type="button" className="btn-secondary w-full shrink-0 sm:w-auto" onClick={() => changeMode('reconcile')}>
+                        {canCollect ? 'Match payments' : 'View payments'}
+                    </button>
                 </div>
             )}
 
@@ -573,6 +576,13 @@ function FeesPageInner() {
                 />
             )}
             {mode === 'collections' && <CollectionsPanel />}
+            {mode === 'reconcile' && (
+                <div className="flex flex-col gap-6">
+                    <UnmatchedQueue key={queueVersion} canAssign={canCollect} canSetAside={canManageFees} onChanged={() => void fetchFees()} onCount={setUnmatchedCount} />
+                    <StatementReconcile canCollect={canCollect} onSaved={() => { setQueueVersion(v => v + 1); void fetchFees(); }} />
+                </div>
+            )}
+            {mode === 'daybook' && <DayBookPanel canReview={canManageFees} />}
 
             {/* ════════════════════════════════════════════ */}
             {/* BATCH ENTRY MODE                           */}
@@ -585,10 +595,7 @@ function FeesPageInner() {
             {mode === 'payments' && (
                 <PaymentsLogPanel
                     termId={selectedTerm}
-                    canCollect={canCollect}
                     canVoid={canManageFees}
-                    unmatchedCount={unmatchedCount}
-                    onUnmatchedCountChange={setUnmatchedCount}
                     onChanged={fetchFees}
                     confirmVoid={confirmVoid}
                 />

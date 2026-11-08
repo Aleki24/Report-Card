@@ -4,26 +4,23 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Ban, Download, Receipt, Search } from 'lucide-react';
 import { DataTable } from '@/components/ui';
-import { UnmatchedPaymentsPanel } from './UnmatchedPaymentsPanel';
-import { FEE_PAYMENT_METHODS } from '@/lib/fees';
+import { FEE_PAYMENT_METHODS, paymentCode } from '@/lib/fees';
+import { SCHOOL_TIME_ZONE } from '@/lib/dates';
 import { feeReceiptUrl as receiptUrl } from '@/lib/fee-account';
 import { formatCurrency, methodLabel, statusBadge, type PaymentLogRow } from './feesShared';
 
 interface PaymentsLogPanelProps {
     /** The term chosen on the page; empty for every term. */
     termId: string;
-    canCollect: boolean;
     canVoid: boolean;
-    unmatchedCount: number;
-    onUnmatchedCountChange: (count: number) => void;
     /** Reload the page's fee records after money moves. */
     onChanged: () => Promise<void>;
     /** The page's "void this payment?" confirmation, then `after`. */
     confirmVoid: (payment: { id: string; receiptNumber: string; amount: number }, feeId: string, after: () => Promise<unknown>) => void;
 }
 
-/** Every payment in the school, filterable and exportable, with Paybill money still to assign. */
-export function PaymentsLogPanel({ termId, canCollect, canVoid, unmatchedCount, onUnmatchedCountChange, onChanged, confirmVoid }: PaymentsLogPanelProps) {
+/** Every payment in the school, filterable and exportable. Money still to match is on the Reconcile tab. */
+export function PaymentsLogPanel({ termId, canVoid, onChanged, confirmVoid }: PaymentsLogPanelProps) {
     const [paymentsLog, setPaymentsLog] = useState<PaymentLogRow[]>([]);
     /** How many payments match, when the log shows only the newest of them. */
     const [paymentsLogTotal, setPaymentsLogTotal] = useState<number | null>(null);
@@ -72,8 +69,8 @@ export function PaymentsLogPanel({ termId, canCollect, canVoid, unmatchedCount, 
     }, [fetchPaymentsLog]);
 
 
-    // Unmatched payments have no fee to void against; they are assigned from
-    // Settings > Payments, and the log offers no void button for them.
+    // Unmatched payments have no fee to void against; they are matched (or set
+    // aside) on the Reconcile tab, and the log offers no void button for them.
     const voidLogPayment = (payment: PaymentLogRow) => {
         if (!payment.studentFeeId) return;
         confirmVoid(payment, payment.studentFeeId, () => Promise.all([fetchPaymentsLog(), onChanged()]));
@@ -94,16 +91,6 @@ export function PaymentsLogPanel({ termId, canCollect, canVoid, unmatchedCount, 
 
     return (
         <div>
-            {unmatchedCount > 0 && (
-                <div className="mb-4">
-                    <UnmatchedPaymentsPanel
-                        canAssign={canCollect}
-                        onCountChange={onUnmatchedCountChange}
-                        // The money is now on the learner's record: refresh what shows it.
-                        onAssigned={() => void Promise.all([onChanged(), fetchPaymentsLog()])}
-                    />
-                </div>
-            )}
             <section aria-label="Payment filters" className="mb-4 rounded-2xl border border-border/70 bg-card p-3 shadow-sm sm:p-4">
                 <div className="flex gap-2">
                     <div className="relative min-w-0 flex-1">
@@ -158,7 +145,7 @@ export function PaymentsLogPanel({ termId, canCollect, canVoid, unmatchedCount, 
                 columns={[
                     {
                         key: 'paidAt', header: 'Date',
-                        render: p => <span className="text-xs text-muted-foreground">{new Date(p.paidAt).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>,
+                        render: p => <span className="text-xs text-muted-foreground">{new Date(p.paidAt).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: SCHOOL_TIME_ZONE })}</span>,
                     },
                     {
                         key: 'student', header: 'Student',
@@ -176,8 +163,8 @@ export function PaymentsLogPanel({ termId, canCollect, canVoid, unmatchedCount, 
                         render: p => <span>{methodLabel(p.method)}</span>,
                     },
                     {
-                        key: 'transactionCode', header: 'Transaction Code', hideOnMobile: true,
-                        render: p => <span className="font-mono text-xs">{p.mpesaReceiptNumber || p.pesapalConfirmationCode || '—'}</span>,
+                        key: 'transactionCode', header: 'Reference', hideOnMobile: true,
+                        render: p => <span className="font-mono text-xs">{paymentCode(p) ?? '—'}</span>,
                     },
                     {
                         key: 'source', header: 'Source', hideOnMobile: true,
@@ -189,7 +176,12 @@ export function PaymentsLogPanel({ termId, canCollect, canVoid, unmatchedCount, 
                     },
                     {
                         key: 'status', header: 'Status',
-                        render: p => statusBadge(p.status),
+                        render: p => (
+                            <span className="flex flex-col items-start gap-0.5">
+                                {statusBadge(p.status)}
+                                {p.status === 'CANCELLED' && p.voidedByName && <span className="text-[11px] text-muted-foreground">by {p.voidedByName}</span>}
+                            </span>
+                        ),
                     },
                     {
                         key: 'recordedBy', header: 'Recorded By', hideOnMobile: true,

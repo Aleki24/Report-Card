@@ -101,11 +101,23 @@ export interface FeePayment {
     pesapalConfirmationCode: string | null;
     pesapalPaymentMethod: string | null;
     unmatchedAccountReference: string | null;
+    /** The bank slip or cheque number of a non-cash, non-M-Pesa payment; on a share of a split payment, the original's code. */
+    reference: string | null;
+    /** Set on each other learner's share of one payment split between learners. */
+    splitFromPaymentId: string | null;
     notes: string | null;
     recordedBy: string | null;
+    voidedAt: string | null;
     paidAt: string;
     createdAt: string;
 }
+
+/** The code a payment is traced by: the M-Pesa or Pesapal code, else the bank slip or cheque number. */
+export const paymentCode = (p: { mpesaReceiptNumber: string | null; pesapalConfirmationCode: string | null; reference: string | null }): string | null =>
+    p.mpesaReceiptNumber ?? p.pesapalConfirmationCode ?? p.reference ?? null;
+
+/** Methods that need a reference to trace them by: the M-Pesa code, or the bank slip or cheque number. */
+export const METHODS_NEEDING_REFERENCE: ReadonlySet<FeePaymentMethod> = new Set<FeePaymentMethod>(['MPESA', 'BANK', 'CHEQUE']);
 
 export interface SchoolBankAccount {
     id: string;
@@ -143,8 +155,11 @@ export function mapFeePaymentRow(p: any): FeePayment {
         pesapalConfirmationCode: p.pesapal_confirmation_code,
         pesapalPaymentMethod: p.pesapal_payment_method,
         unmatchedAccountReference: p.unmatched_account_reference,
+        reference: p.reference ?? null,
+        splitFromPaymentId: p.split_from_payment_id ?? null,
         notes: p.notes,
         recordedBy: p.recorded_by,
+        voidedAt: p.voided_at ?? null,
         paidAt: p.paid_at,
         createdAt: p.created_at,
     };

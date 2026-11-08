@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { embedOne, fetchAllRows } from '@/lib/postgrest';
+import { isIsoDate, schoolDayRange } from '@/lib/dates';
 
 /** Filters shared by the Payments log and its Excel export. */
 export interface PaymentLogFilters {
@@ -30,8 +31,13 @@ export interface PaymentLogEntry {
     payerName: string | null;
     mpesaReceiptNumber: string | null;
     pesapalConfirmationCode: string | null;
+    /** Bank slip or cheque number. */
+    reference: string | null;
+    splitFromPaymentId: string | null;
     notes: string | null;
     recordedBy: string | null;
+    voidedBy: string | null;
+    voidedAt: string | null;
     paidAt: string;
     createdAt: string;
 }
@@ -51,8 +57,12 @@ interface PaymentRow {
     pesapal_order_tracking_id: string | null;
     pesapal_confirmation_code: string | null;
     unmatched_account_reference: string | null;
+    reference: string | null;
+    split_from_payment_id: string | null;
     notes: string | null;
     recorded_by: string | null;
+    voided_by: string | null;
+    voided_at: string | null;
     paid_at: string;
     created_at: string;
     student_fees: {
@@ -74,8 +84,8 @@ export function parsePaymentLogFilters(searchParams: URLSearchParams): PaymentLo
         method: text(searchParams.get('method')),
         status: text(searchParams.get('status')),
         source: source === 'AUTO' || source === 'MANUAL' ? source : null,
-        dateFrom: text(searchParams.get('date_from')),
-        dateTo: text(searchParams.get('date_to')),
+        dateFrom: isIsoDate(searchParams.get('date_from')) ? searchParams.get('date_from') : null,
+        dateTo: isIsoDate(searchParams.get('date_to')) ? searchParams.get('date_to') : null,
         search: text(searchParams.get('search'))?.toLowerCase() ?? null,
     };
 }
@@ -100,16 +110,17 @@ export async function loadPaymentLog(supabase: SupabaseClient, schoolId: string,
             .select(`
                 id, student_fee_id, receipt_number, amount, method, status, phone_number, payer_name,
                 mpesa_receipt_number, mpesa_checkout_request_id, pesapal_order_tracking_id,
-                pesapal_confirmation_code, unmatched_account_reference, notes, recorded_by,
-                paid_at, created_at,
+                pesapal_confirmation_code, unmatched_account_reference, reference, split_from_payment_id,
+                notes, recorded_by, voided_by, voided_at, paid_at, created_at,
                 ${feeEmbed} ( term_id, terms ( name ), students ( admission_number, users ( first_name, last_name ) ) )
             `)
             .eq('school_id', schoolId);
         if (filters.termId) query = query.eq('student_fees.term_id', filters.termId);
         if (filters.method) query = query.eq('method', filters.method);
         if (filters.status) query = query.eq('status', filters.status);
-        if (filters.dateFrom) query = query.gte('paid_at', filters.dateFrom);
-        if (filters.dateTo) query = query.lte('paid_at', `${filters.dateTo}T23:59:59.999Z`);
+        // Kenyan days: a UTC day would put a payment made at 1am on the day before.
+        if (filters.dateFrom) query = query.gte('paid_at', schoolDayRange(filters.dateFrom).start);
+        if (filters.dateTo) query = query.lt('paid_at', schoolDayRange(filters.dateTo).end);
         return query.order('paid_at', { ascending: false }).order('id', { ascending: false }) as unknown as {
             range: (from: number, to: number) => PromiseLike<{ data: PaymentRow[] | null; error: unknown }>;
         };
@@ -120,7 +131,12 @@ export async function loadPaymentLog(supabase: SupabaseClient, schoolId: string,
         const fee = p.student_fees;
         const student = embedOne(fee?.students);
         const user = embedOne(student?.users);
-        const isAuto = Boolean(p.mpesa_checkout_request_id || p.pesapal_order_tracking_id || p.unmatched_account_reference);
+        // Came in on its own (STK push, Pesapal, or a Paybill payment matched by
+        // its account number) rather than typed in by staff. A matched Paybill
+        // payment has neither a checkout id nor an unmatched reference, and was
+        // counted as manual.
+        const isAuto = Boolean(p.mpesa_checkout_request_id || p.pesapal_order_tracking_id)
+            || (!p.recorded_by && (p.method === 'MPESA' || p.method === 'PESAPAL'));
         return {
             id: p.id,
             studentFeeId: p.student_fee_id,
@@ -138,8 +154,12 @@ export async function loadPaymentLog(supabase: SupabaseClient, schoolId: string,
             payerName: p.payer_name,
             mpesaReceiptNumber: p.mpesa_receipt_number,
             pesapalConfirmationCode: p.pesapal_confirmation_code,
+            reference: p.reference,
+            splitFromPaymentId: p.split_from_payment_id,
             notes: p.notes,
             recordedBy: p.recorded_by,
+            voidedBy: p.voided_by,
+            voidedAt: p.voided_at,
             paidAt: p.paid_at,
             createdAt: p.created_at,
         };
@@ -154,14 +174,15 @@ export async function loadPaymentLog(supabase: SupabaseClient, schoolId: string,
             || p.receiptNumber?.toLowerCase().includes(q)
             || p.mpesaReceiptNumber?.toLowerCase().includes(q)
             || p.pesapalConfirmationCode?.toLowerCase().includes(q)
+            || p.reference?.toLowerCase().includes(q)
             || p.unmatchedReference?.toLowerCase().includes(q));
     }
     return { entries, truncated };
 }
 
 /** Names of the staff who recorded these payments, by user id. */
-export async function recorderNames(supabase: SupabaseClient, entries: readonly Pick<PaymentLogEntry, 'recordedBy'>[]): Promise<Record<string, string>> {
-    const ids = [...new Set(entries.map(e => e.recordedBy).filter((id): id is string => Boolean(id)))];
+export async function recorderNames(supabase: SupabaseClient, entries: readonly (Pick<PaymentLogEntry, 'recordedBy'> & Partial<Pick<PaymentLogEntry, 'voidedBy'>>)[]): Promise<Record<string, string>> {
+    const ids = [...new Set(entries.flatMap(e => [e.recordedBy, e.voidedBy]).filter((id): id is string => Boolean(id)))];
     if (ids.length === 0) return {};
     const { data } = await supabase.from('users').select('id, first_name, last_name').in('id', ids);
     return Object.fromEntries((data ?? []).map((r: { id: string } & Named) => [r.id, `${r.first_name ?? ''} ${r.last_name ?? ''}`.trim()]));

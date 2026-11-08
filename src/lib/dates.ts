@@ -11,6 +11,8 @@
 
 /** Where the schools this app serves keep their calendar. */
 export const SCHOOL_TIME_ZONE = 'Africa/Nairobi';
+/** Its offset from UTC: Kenya keeps East Africa Time all year, with no daylight saving. */
+const SCHOOL_UTC_OFFSET = '+03:00';
 
 const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
@@ -23,6 +25,29 @@ export function isoDateInZone(date: Date, timeZone: string): string {
 /** Today in the school's time zone — for server code, which runs in UTC. */
 export function schoolToday(): string {
   return isoDateInZone(new Date(), SCHOOL_TIME_ZONE);
+}
+
+/** The school's calendar day, `YYYY-MM-DD`, of an instant (a database timestamp). */
+export function schoolDayOf(instant: string | Date): string {
+  return isoDateInZone(new Date(instant), SCHOOL_TIME_ZONE);
+}
+
+/** The school's wall-clock time, `HH:MM:SS`, of an instant. */
+export function schoolTimeOf(instant: string | Date): string {
+  return new Intl.DateTimeFormat('en-GB', { timeZone: SCHOOL_TIME_ZONE, hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).format(new Date(instant));
+}
+
+/**
+ * The instants a run of school days covers, to filter timestamps with:
+ * from the midnight that starts `from` up to, not including, the midnight
+ * after `to`. A UTC day would put a payment made at 1am in Nairobi on the
+ * day before.
+ */
+export function schoolDayRange(from: string, to: string = from): { start: string; end: string } {
+  return {
+    start: new Date(`${from}T00:00:00${SCHOOL_UTC_OFFSET}`).toISOString(),
+    end: new Date(`${addDays(to, 1)}T00:00:00${SCHOOL_UTC_OFFSET}`).toISOString(),
+  };
 }
 
 /** A Date's calendar day in the browser's own time zone. */

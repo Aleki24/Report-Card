@@ -33,6 +33,24 @@ export function initialPlan(preview: Pick<ReconcilePreview, 'lines'>): Reconcile
     return plan;
 }
 
+/** A suggestion strong enough, and clear of rivals, to start chosen in the unmatched queue. */
+const PRESELECT_SCORE = 60;
+
+/**
+ * Where the unmatched queue starts: a clear suggestion is picked (the bursar
+ * still presses Assign); anything less waits for a choice.
+ */
+export function queuePlan(lines: readonly PreviewLine[]): ReconcilePlan {
+    const plan: Record<number, LineDecision> = {};
+    for (const line of lines) {
+        const [best, second] = line.candidates;
+        plan[line.line] = best && best.score >= PRESELECT_SCORE && (!second || second.score < best.score)
+            ? { action: 'RECORD', allocations: [{ studentId: best.studentId, amount: line.amount }] }
+            : { action: 'QUEUE', allocations: [] };
+    }
+    return plan;
+}
+
 /** The whole line to one learner. */
 export const recordTo = (plan: ReconcilePlan, line: PreviewLine, studentId: string): ReconcilePlan =>
     ({ ...plan, [line.line]: { action: 'RECORD', allocations: [{ studentId, amount: line.amount }] } });

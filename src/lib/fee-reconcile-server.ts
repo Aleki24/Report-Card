@@ -9,7 +9,7 @@ import { embedOne, fetchAllRows } from '@/lib/postgrest';
 import { findActiveTermId } from '@/lib/term-calendar';
 import { HttpError } from '@/lib/platform/access';
 import type { MatchLearner } from '@/lib/fee-matching';
-import type { Allocation } from '@/lib/fee-reconcile';
+import type { Allocation, DirectoryLearner } from '@/lib/fee-reconcile';
 
 const ID_CHUNK = 150;
 
@@ -59,6 +59,26 @@ export async function loadMatchLearners(db: SupabaseClient, schoolId: string): P
             guardianNames: [l.guardian_name, ...parents.map(fullName)].filter((n): n is string => !!n),
         };
     });
+}
+
+/**
+ * The school's learners twice over: as the matcher needs them (guardian
+ * phones and names), and as the bursar picks from by hand (with what each
+ * owes across every term), A to Z.
+ */
+export async function loadLearnerDirectory(db: SupabaseClient, schoolId: string): Promise<{ learners: MatchLearner[]; directory: DirectoryLearner[] }> {
+    const [learners, balances] = await Promise.all([
+        loadMatchLearners(db, schoolId),
+        fetchAllRows<{ student_id: string; total_fee: number | string; paid_amount: number | string }>(() => db
+            .from('student_fees').select('student_id, total_fee, paid_amount').eq('school_id', schoolId).order('id')),
+    ]);
+    if (balances.error) throw balances.error;
+    const owed = new Map<string, number>();
+    for (const f of balances.rows) owed.set(f.student_id, (owed.get(f.student_id) ?? 0) + Number(f.total_fee) - Number(f.paid_amount));
+    const directory = learners
+        .map(l => ({ id: l.id, name: l.name, admissionNumber: l.admissionNumber, className: l.className, balance: Math.round((owed.get(l.id) ?? 0) * 100) / 100 }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+    return { learners, directory };
 }
 
 /**

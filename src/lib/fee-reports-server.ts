@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { embedOne, fetchAllRows } from '@/lib/postgrest';
 import { methodLabel } from '@/lib/fee-account';
+import { schoolDayOf, schoolDayRange } from '@/lib/dates';
 import type { CollectionBucket, CollectionsResponse, Defaulter } from '@/lib/fee-reports';
 
 type One<T> = T | T[] | null;
@@ -114,18 +115,13 @@ interface PaymentRow {
     student_fees: One<{ students: One<{ grade_streams: One<{ id: string; full_name: string }> }> }>;
 }
 
-/** Nairobi calendar day (UTC+3, no daylight saving) of an instant. */
-const nairobiDay = (iso: string) => new Date(new Date(iso).getTime() + 3 * 3_600_000).toISOString().slice(0, 10);
-
 function buckets(map: Map<string, CollectionBucket>, order: (a: CollectionBucket, b: CollectionBucket) => number): CollectionBucket[] {
     return [...map.values()].map(b => ({ ...b, amount: Math.round(b.amount * 100) / 100 })).sort(order);
 }
 
 /** Money that came in between two days (inclusive, Nairobi time), by day, method and class. */
 export async function loadCollections(supabase: SupabaseClient, schoolId: string, from: string, to: string): Promise<CollectionsResponse> {
-    // The window in UTC: Nairobi midnight is 21:00 the day before.
-    const start = new Date(`${from}T00:00:00+03:00`).toISOString();
-    const end = new Date(new Date(`${to}T00:00:00+03:00`).getTime() + 86_400_000).toISOString();
+    const { start, end } = schoolDayRange(from, to);
     const { rows, error } = await fetchAllRows<PaymentRow>(() => supabase
         .from('fee_payments')
         .select('amount, method, paid_at, student_fees ( students ( grade_streams ( id, full_name ) ) )')
@@ -149,7 +145,7 @@ export async function loadCollections(supabase: SupabaseClient, schoolId: string
     for (const p of rows) {
         const amount = Number(p.amount);
         total += amount;
-        const day = nairobiDay(p.paid_at);
+        const day = schoolDayOf(p.paid_at);
         add(byDay, day, day, amount);
         add(byMethod, p.method, methodLabel(p.method), amount);
         const stream = embedOne(embedOne(embedOne(p.student_fees)?.students ?? null)?.grade_streams ?? null);

@@ -8,6 +8,8 @@
 import { z } from 'zod';
 import type { MatchCandidate, MatchKind } from './fee-matching';
 import type { StatementRow, StatementSource } from './fee-statement';
+import type { FeePayment } from './fees';
+import { schoolDayOf, schoolTimeOf } from './dates';
 
 export const RECONCILE_URL = '/api/school/fees/reconcile';
 
@@ -105,6 +107,36 @@ export interface CommitResult {
     notBilled: number;
     /** Lines already recorded by the time this was saved (another upload, or M-Pesa itself). */
     alreadyRecorded: number;
+}
+
+export const UNMATCHED_URL = '/api/school/fees/unmatched';
+
+/** What the unmatched queue loads: the payments, who each most likely is, and everyone to pick from. */
+export interface UnmatchedResponse {
+    data: FeePayment[];
+    suggestions?: Record<string, MatchCandidate[]>;
+    learners?: DirectoryLearner[];
+}
+
+/** What a payer typed as the account, unless the Paybill got nothing. */
+export const typedAccount = (reference: string | null): string | null =>
+    reference && !reference.startsWith('(none') ? reference : null;
+
+/** An unmatched payment shaped like a statement line, so it is reviewed the same way. */
+export function unmatchedAsLine(p: FeePayment, index: number, candidates: MatchCandidate[]): PreviewLine {
+    return {
+        line: index + 1,
+        date: schoolDayOf(p.paidAt),
+        time: schoolTimeOf(p.paidAt),
+        amount: p.amount,
+        code: p.mpesaReceiptNumber ?? p.reference ?? null,
+        accountRef: typedAccount(p.unmatchedAccountReference),
+        payerName: p.payerName,
+        phone: p.phoneNumber,
+        details: p.notes ?? '',
+        status: candidates.length > 0 ? 'SUGGESTED' : 'UNMATCHED',
+        candidates,
+    };
 }
 
 /** Whether a statement's money in is fully accounted for. */
