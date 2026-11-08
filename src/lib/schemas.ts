@@ -10,7 +10,7 @@ export type UserRole = z.infer<typeof UserRole>;
 export const ExamType = z.enum(ALL_EXAM_TYPES.map(t => t.code) as [string, ...string[]]);
 export type ExamType = z.infer<typeof ExamType>;
 
-export const StudentStatus = z.enum(['ACTIVE', 'TRANSFERRED', 'GRADUATED', 'DEACTIVATED']);
+export const StudentStatus = z.enum(['ACTIVE', 'PENDING', 'TRANSFERRED', 'GRADUATED', 'DEACTIVATED']);
 export type StudentStatus = z.infer<typeof StudentStatus>;
 
 export const CbcPathway = z.enum(['STEM', 'SOCIAL_SCIENCES', 'ARTS_SPORTS']);

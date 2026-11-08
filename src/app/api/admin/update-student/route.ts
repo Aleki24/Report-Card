@@ -4,6 +4,7 @@ import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { canManageStream, canManageStudent, getCaller } from '@/lib/auth-server';
 import { syncStudentSubjects } from '@/lib/pathway/sync-student-subjects';
 import { CLASS_REQUIRED_MESSAGE, isSchoolClass } from '@/lib/classes';
+import { hasLeftSchool, needsClass } from '@/lib/student/status-access';
 
 export async function PATCH(request: NextRequest) {
     try {
@@ -58,10 +59,9 @@ export async function PATCH(request: NextRequest) {
         if (!(await canManageStudent(caller, student_id))) {
             return NextResponse.json({ error: 'You can only update students in your own class.' }, { status: 403 });
         }
-        // An active learner always sits in a class; only one who has left may be without.
+        // A learner on the roll (or pending promotion) always sits in a class; only one who has left may be without.
         if (grade_stream_id !== undefined) {
-            const staysActive = (status ?? student.status ?? 'ACTIVE') === 'ACTIVE';
-            if (!grade_stream_id && staysActive) {
+            if (!grade_stream_id && needsClass(status ?? student.status)) {
                 return NextResponse.json({ error: CLASS_REQUIRED_MESSAGE }, { status: 400 });
             }
             if (grade_stream_id && !(await isSchoolClass(supabaseAdmin, profile.school_id, grade_stream_id))) {
@@ -74,7 +74,7 @@ export async function PATCH(request: NextRequest) {
         }
 
         // Build update object for student table
-        const studentUpdates: Record<string, any> = {};
+        const studentUpdates: Record<string, unknown> = {};
         if (guardian_phone !== undefined) studentUpdates.guardian_phone = guardian_phone?.trim() || null;
         if (guardian_name !== undefined) studentUpdates.guardian_name = guardian_name?.trim() || null;
         if (guardian_email !== undefined) studentUpdates.guardian_email = guardian_email?.trim() || null;
@@ -110,7 +110,7 @@ export async function PATCH(request: NextRequest) {
         }
 
         // Build update object for users table
-        const userUpdates: Record<string, any> = {};
+        const userUpdates: Record<string, unknown> = {};
         if (first_name !== undefined) userUpdates.first_name = first_name?.trim() || null;
         if (last_name !== undefined) userUpdates.last_name = last_name?.trim() || null;
         if (admission_number !== undefined) {
@@ -146,7 +146,7 @@ export async function PATCH(request: NextRequest) {
             }
             // A learner who left (transferred, graduated, deactivated) can no
             // longer activate with a code sent while they were enrolled.
-            if (status !== undefined && status !== 'ACTIVE') await revokeInviteCodes(supabaseAdmin, student_id);
+            if (hasLeftSchool(status)) await revokeInviteCodes(supabaseAdmin, student_id);
         }
 
         // Update user record (name) — student_id IS the user_id (same UUID)

@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
-import { ArrowRight, ArrowUpRight, ChevronDown, ChevronUp, CircleAlert, GraduationCap, LogOut, Repeat2, Route, type LucideIcon } from 'lucide-react-native';
+import { ArrowRight, ArrowUpRight, ChevronDown, ChevronUp, CircleAlert, GraduationCap, Hourglass, LogOut, Repeat2, Route, type LucideIcon } from 'lucide-react-native';
 import {
-    OUTCOME_COPY, allowedOutcomes, choiceProblem, learnerMatches, outcomeLabel, stepCopy,
+    OUTCOME_COPY, choiceProblem, gradeOutcomes, learnerMatches, outcomeLabel, stepCopy,
     type GradeStep, type PromotionClass, type PromotionGrade, type PromotionLearner, type PromotionOutcome, type StepTone,
 } from '@shared/promotion';
 import { pluralize } from '@/lib/format';
@@ -11,17 +11,17 @@ import type { PromotionPlanApi } from '@/lib/usePromotionPlan';
 import { ChipSelect, IconTile } from '@/components/ui';
 
 /** The same icons as the web; wording and colour come from `@shared/promotion`. */
-export const OUTCOME_ICONS: Record<PromotionOutcome, LucideIcon> = { PROMOTE: ArrowUpRight, GRADUATE: GraduationCap, REPEAT: Repeat2, TRANSFER: LogOut };
-const STEP_ICONS: Record<StepTone, LucideIcon> = { MOVES_UP: ArrowUpRight, DECIDE: Route, LEAVES: GraduationCap };
+export const OUTCOME_ICONS: Record<PromotionOutcome, LucideIcon> = { PROMOTE: ArrowUpRight, PENDING: Hourglass, GRADUATE: GraduationCap, REPEAT: Repeat2, TRANSFER: LogOut };
+const STEP_ICONS: Record<StepTone, LucideIcon> = { MOVES_UP: ArrowUpRight, DECIDE: Route, WAITS: Hourglass, LEAVES: GraduationCap };
 
 /** The outcomes open to a grade as chips: a choice with `value`, one-tap actions without. */
-function OutcomeChips({ step, value, onChange, label }: { step: GradeStep; value?: PromotionOutcome | null; onChange: (o: PromotionOutcome) => void; label: string }) {
+function OutcomeChips({ step, outcomes, value, onChange, label }: { step: GradeStep; outcomes: readonly PromotionOutcome[]; value?: PromotionOutcome; onChange: (o: PromotionOutcome) => void; label: string }) {
     const { colors, tones } = useTheme();
     const styles = useStyles();
     const choosing = value !== undefined;
     return (
         <View style={styles.chips} accessibilityRole={choosing ? 'radiogroup' : undefined} accessibilityLabel={label}>
-            {allowedOutcomes(step).map((o) => {
+            {outcomes.map((o) => {
                 const tone = tones[OUTCOME_COPY[o].hue];
                 const Icon = OUTCOME_ICONS[o];
                 const checked = value === o;
@@ -77,7 +77,7 @@ function LearnerRow({ learner, classId, grade, plan }: { learner: PromotionLearn
                     </View>
                 ) : null}
             </View>
-            <OutcomeChips step={grade.step} value={choice.outcome} onChange={(outcome) => plan.setLearner(learner.id, classId, { outcome })} label={`What happens to ${learner.name}`} />
+            <OutcomeChips step={grade.step} outcomes={gradeOutcomes(grade)} value={choice.outcome} onChange={(outcome) => plan.setLearner(learner.id, classId, { outcome })} label={`What happens to ${learner.name}`} />
             {choice.outcome === 'PROMOTE' && grade.nextClasses.length > 1 ? (
                 <ClassPicker label="Moves into" value={choice.to} grade={grade} onChange={(to) => plan.setLearner(learner.id, classId, { to })} />
             ) : null}
@@ -89,7 +89,7 @@ function ClassBlock({ cls, grade, plan, learners, startOpen, searching }: { cls:
     const { colors } = useTheme();
     const styles = useStyles();
     const [open, setOpen] = useState(startOpen);
-    const pending = cls.learners.filter((l) => !plan.choices[l.id].outcome).length;
+    const pending = cls.learners.filter((l) => plan.choices[l.id].outcome === 'PENDING').length;
     // A search shows its matches; otherwise the list opens and closes on tap.
     const shown = open || searching;
     const Chevron = shown ? ChevronUp : ChevronDown;
@@ -98,16 +98,17 @@ function ClassBlock({ cls, grade, plan, learners, startOpen, searching }: { cls:
             <Text style={styles.className}>{cls.full_name}</Text>
             <Text style={styles.meta}>
                 {pluralize(cls.learners.length, 'learner')}
-                {pending > 0 ? <Text style={{ color: colors.warning, fontFamily: fonts.semibold }}> · {pending} to decide</Text> : null}
+                {pending > 0 ? <Text style={{ color: colors.warning, fontFamily: fonts.semibold }}> · {pending} pending</Text> : null}
             </Text>
-            {grade.nextClasses.length > 0 && cls.learners.length > 0 ? (
+            {/* Where the class moves to matters only once someone in it is moving up. */}
+            {grade.nextClasses.length > 0 && cls.learners.some((l) => plan.choices[l.id].outcome === 'PROMOTE') ? (
                 <ClassPicker label="Class moves into" value={plan.classTargets[cls.id] ?? null} grade={grade} onChange={(to) => plan.setClassTarget(cls.id, to)} />
             ) : null}
             {learners.length > 0 ? (
                 <>
                     <Pressable onPress={() => setOpen((v) => !v)} accessibilityRole="button" accessibilityState={{ expanded: shown }} style={styles.toggle}>
                         <Text style={styles.toggleText}>
-                            {shown ? 'Hide learners' : learners.length === cls.learners.length ? 'Change anyone repeating or leaving' : `${pluralize(learners.length, 'matching learner')}`}
+                            {shown ? 'Hide learners' : learners.length !== cls.learners.length ? `${pluralize(learners.length, 'matching learner')}` : grade.pending ? 'Decide each learner' : 'Change anyone repeating or leaving'}
                         </Text>
                         <Chevron size={16} color={colors.primary} />
                     </Pressable>
@@ -122,9 +123,9 @@ function ClassBlock({ cls, grade, plan, learners, startOpen, searching }: { cls:
 export function GradePromotionCard({ grade, plan, query }: { grade: PromotionGrade; plan: PromotionPlanApi; query: string }) {
     const { colors, tones } = useTheme();
     const styles = useStyles();
-    const copy = stepCopy(grade.step, grade.name);
+    const copy = stepCopy(grade);
     const tone = tones[copy.hue];
-    const mustDecide = copy.tone === 'DECIDE';
+    const highlight = copy.tone === 'DECIDE' || copy.tone === 'WAITS';
     const learnerCount = grade.classes.reduce((n, c) => n + c.learners.length, 0);
     const visible = grade.classes.map((cls) => ({ cls, learners: cls.learners.filter((l) => learnerMatches(l, query)) }));
     if (query && visible.every((v) => v.learners.length === 0)) return null;
@@ -145,15 +146,16 @@ export function GradePromotionCard({ grade, plan, query }: { grade: PromotionGra
             <View style={[styles.badge, { backgroundColor: tone.bg }]}>
                 <Text style={[styles.badgeText, { color: tone.fg }]}>{copy.badge}</Text>
             </View>
-            <Text style={[styles.explain, mustDecide ? { backgroundColor: colors.warningBg, color: colors.foreground } : { backgroundColor: colors.mutedBg }]}>{copy.explain}</Text>
+            <Text style={[styles.explain, highlight ? { backgroundColor: colors.warningBg, color: colors.foreground } : { backgroundColor: colors.mutedBg }]}>{copy.explain}</Text>
             {learnerCount > 0 ? (
                 <View style={{ marginTop: spacing.sm }}>
-                    <Text style={styles.label}>Everyone in {grade.name}</Text>
-                    <OutcomeChips step={grade.step} onChange={(o) => plan.setClassesOutcome(grade.classes.map((c) => c.id), o)} label={`Set every ${grade.name} learner`} />
+                    <Text style={styles.label}>Everyone {grade.pending ? 'pending ' : ''}in {grade.name}</Text>
+                    <OutcomeChips step={grade.step} outcomes={gradeOutcomes(grade)} onChange={(o) => plan.setClassesOutcome(grade.classes.map((c) => c.id), o)} label={`Set every ${grade.name} learner`} />
                 </View>
             ) : null}
             {visible.map(({ cls, learners }) => (
-                <ClassBlock key={cls.id} cls={cls} grade={grade} plan={plan} learners={learners} startOpen={mustDecide} searching={!!query} />
+                // Pending learners are there to be decided, so their lists start open.
+                <ClassBlock key={cls.id} cls={cls} grade={grade} plan={plan} learners={learners} startOpen={grade.pending} searching={!!query} />
             ))}
         </View>
     );

@@ -19,7 +19,7 @@ import { NewGradingSystemSheet, OwnSystemActions } from '@/components/settings/G
 import { RequireScreen } from '@/components/RequireScreen';
 import { SignatureCard } from '@/components/account/SignatureCard';
 import { SchoolSections } from '@/components/settings/SchoolSections';
-import type { PaymentSettingsStatus, Term } from '@/lib/types';
+import type { AcademicYear, PaymentSettingsStatus, Term } from '@/lib/types';
 import { confirmAlert } from '@/lib/confirm';
 
 interface SchoolProfile {
@@ -197,7 +197,8 @@ function CalendarTab() {
     const api = useApi();
     const { years, loading: yLoading, reload: reloadYears } = useAcademicYears();
     const { terms, loading: tLoading, reload: reloadTerms } = useTerms();
-    const [yearDraft, setYearDraft] = useState<{ name: string; start: string; end: string } | null>(null);
+    /** A year being added (no id) or corrected. */
+    const [yearDraft, setYearDraft] = useState<{ id: string | null; name: string; start: string; end: string } | null>(null);
     const [termDraft, setTermDraft] = useState<{ id: string | null; yearId: string | null; name: string; start: string; end: string; midtermClose: string; midterm: string; reopening: string; current: boolean } | null>(null);
     const [busy, setBusy] = useState(false);
     const [message, setMessage] = useState<Msg>(null);
@@ -221,8 +222,18 @@ function CalendarTab() {
 
     const saveYear = async () => {
         if (!yearDraft) return;
-        if (await run(() => api.post('/api/admin/academic-structure', { type: 'academic_year', name: yearDraft.name.trim(), start_date: yearDraft.start.trim(), end_date: yearDraft.end.trim() }), 'Academic year added.')) setYearDraft(null);
+        const fields = { name: yearDraft.name.trim(), start_date: yearDraft.start.trim(), end_date: yearDraft.end.trim() };
+        const ok = yearDraft.id
+            ? await run(() => api.patch('/api/admin/academic-structure', { type: 'academic_year', id: yearDraft.id, ...fields }), 'Academic year updated.')
+            : await run(() => api.post('/api/admin/academic-structure', { type: 'academic_year', ...fields }), 'Academic year added.');
+        if (ok) setYearDraft(null);
     };
+
+    const deleteYear = (y: AcademicYear) =>
+        confirmAlert(`Delete ${y.name}?`, 'Only a year with no terms can be deleted; delete its terms first.', [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Delete', style: 'destructive', onPress: () => void run(() => api.del(withQuery('/api/admin/academic-structure', { type: 'academic_year', id: y.id })), 'Academic year deleted.') },
+        ]);
 
     const saveTerm = async () => {
         if (!termDraft) return;
@@ -242,7 +253,7 @@ function CalendarTab() {
     };
 
     const deleteTerm = (t: Term) =>
-        confirmAlert(`Delete ${t.name}?`, 'Exams and marks linked to this term may stop resolving.', [
+        confirmAlert(`Delete ${t.name}?`, 'A term that holds exams, report cards or fee records can\'t be deleted; you will be told why.', [
             { text: 'Cancel', style: 'cancel' },
             { text: 'Delete', style: 'destructive', onPress: () => void run(() => api.del(withQuery('/api/admin/academic-structure', { type: 'term', id: t.id })), 'Term deleted.') },
         ]);
@@ -262,7 +273,7 @@ function CalendarTab() {
                     <DateField label="Ends" min={yearDraft.start || undefined} value={yearDraft.end} onChange={(end) => setYearDraft({ ...yearDraft, end })} />
                     <ButtonRow>
                         <Button variant="secondary" label="Cancel" onPress={() => setYearDraft(null)} />
-                        <Button label="Add year" onPress={() => void saveYear()} loading={busy} />
+                        <Button label={yearDraft.id ? 'Save year' : 'Add year'} onPress={() => void saveYear()} loading={busy} />
                     </ButtonRow>
                 </Card>
             ) : null}
@@ -286,7 +297,7 @@ function CalendarTab() {
 
             {!yearDraft && !termDraft ? (
                 <ButtonRow>
-                    <Button variant="secondary" icon={Plus} label="Year" onPress={() => setYearDraft({ name: '', start: '', end: '' })} />
+                    <Button variant="secondary" icon={Plus} label="Year" onPress={() => setYearDraft({ id: null, name: '', start: '', end: '' })} />
                     <Button icon={Plus} label="Term" onPress={() => setTermDraft({ id: null, yearId: years[0]?.id ?? null, name: '', start: '', end: '', midtermClose: '', midterm: '', reopening: '', current: false })} disabled={years.length === 0} />
                 </ButtonRow>
             ) : null}
@@ -294,7 +305,16 @@ function CalendarTab() {
             {years.length === 0 ? <EmptyState title="No academic years yet" description="Add a year, then its terms." /> : null}
             {years.map((y) => (
                 <View key={y.id}>
-                    <SectionLabel>{y.name}{y.start_date ? ` · ${formatDate(y.start_date)} – ${y.end_date ? formatDate(y.end_date) : ''}` : ''}</SectionLabel>
+                    <SectionLabel
+                        action={
+                            <View style={{ flexDirection: 'row', gap: 4 }}>
+                                <Button size="sm" variant="ghost" label="Edit" onPress={() => setYearDraft({ id: y.id, name: y.name, start: y.start_date ?? '', end: y.end_date ?? '' })} />
+                                <Button size="sm" variant="ghost" label="Delete" onPress={() => deleteYear(y)} />
+                            </View>
+                        }
+                    >
+                        {y.name}{y.start_date ? ` · ${formatDate(y.start_date)} – ${y.end_date ? formatDate(y.end_date) : ''}` : ''}
+                    </SectionLabel>
                     <ListCard>
                         {terms.filter((t) => t.academic_year_id === y.id).length === 0 ? <EmptyState title="No terms" /> : null}
                         {terms
@@ -308,7 +328,7 @@ function CalendarTab() {
                                         <View style={{ flexDirection: 'row', gap: 4, alignItems: 'center' }}>
                                             {t.id === activeId ? <Badge label="Active" variant="success" /> : null}
                                             <Button size="sm" variant="ghost" label="Edit" onPress={() => setTermDraft({ id: t.id, yearId: t.academic_year_id, name: t.name, start: t.start_date ?? '', end: t.end_date ?? '', midtermClose: t.midterm_closing_date ?? '', midterm: t.midterm_reopening_date ?? '', reopening: t.reopening_date ?? '', current: t.is_current })} />
-                                            <Button size="sm" variant="ghost" label="✕" onPress={() => deleteTerm(t)} />
+                                            <Button size="sm" variant="ghost" label="Delete" onPress={() => deleteTerm(t)} />
                                         </View>
                                     }
                                 />

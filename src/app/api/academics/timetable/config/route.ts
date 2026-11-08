@@ -6,13 +6,14 @@ import { loadConfig, saveConfig } from '@/lib/timetable/server';
 export const GET = route('timetable config', { module: 'timetable', permission: 'timetable.view' }, ({ access }) => loadConfig(access.schoolId));
 
 /**
- * PUT — the school day: days, bells and sections. Teachers' times away and
- * subjects' times of day are kept as stored (they change with PATCH), so a
- * day editor opened earlier never undoes them.
+ * PUT — the school day: days, bells and sections. The rules (teachers' times
+ * away, subjects' times of day, the longest run, filling free periods) are
+ * kept as stored: they change with PATCH, so a day editor opened earlier
+ * never undoes them.
  */
 export const PUT = route('timetable config save', { module: 'timetable', permission: 'timetable.manage' }, async ({ access, request }) => {
     const [config, current] = await Promise.all([parseBody(request, timetableConfigSchema), loadConfig(access.schoolId)]);
-    return saveConfig(access.schoolId, { ...config, rules: { ...config.rules, teacher_off: current.rules.teacher_off, subject_times: current.rules.subject_times } });
+    return saveConfig(access.schoolId, { ...config, rules: current.rules });
 });
 
 const patchSchema = z.object({
@@ -21,9 +22,11 @@ const patchSchema = z.object({
     /** Subjects' times of day to set (`any`: no preference, even for maths). */
     subject_times: z.record(z.string().min(1).max(64), z.enum(SUBJECT_TIMES)).optional(),
     max_consecutive: z.number().int().min(1).max(12).optional(),
+    /** Fill classes' free periods with extra lessons when generating. */
+    fill_free_periods: z.boolean().optional(),
 });
 
-/** PATCH — teachers' times away, subjects' times of day, or the longest run of lessons. */
+/** PATCH — teachers' times away, subjects' times of day, the longest run of lessons, or filling free periods. */
 export const PATCH = route('timetable config rules', { module: 'timetable', permission: 'timetable.manage' }, async ({ access, request }) => {
     const body = await parseBody(request, patchSchema);
     const current = await loadConfig(access.schoolId);
@@ -34,5 +37,6 @@ export const PATCH = route('timetable config rules', { module: 'timetable', perm
     }
     if (body.subject_times) rules.subject_times = { ...rules.subject_times, ...body.subject_times };
     if (body.max_consecutive) rules.max_consecutive = body.max_consecutive;
+    if (body.fill_free_periods !== undefined) rules.fill_free_periods = body.fill_free_periods;
     return saveConfig(access.schoolId, timetableConfigSchema.parse({ ...current, rules }));
 });

@@ -5,7 +5,7 @@ import { ArrowRight, ChevronDown, CircleAlert } from 'lucide-react';
 import { TONES } from '@/components/ui/tones';
 import { cn } from '@/lib/utils';
 import {
-    OUTCOME_COPY, allowedOutcomes, choiceProblem, learnerMatches, outcomeLabel, stepCopy,
+    OUTCOME_COPY, choiceProblem, gradeOutcomes, learnerMatches, outcomeLabel, stepCopy,
     type GradeStep, type PromotionClass, type PromotionGrade, type PromotionLearner, type PromotionOutcome,
 } from '@/lib/promotion';
 import { OUTCOME_ICONS, STEP_ICONS } from './promotionMeta';
@@ -13,6 +13,7 @@ import type { PromotionPlanApi } from './usePromotionPlan';
 
 interface OutcomePickerProps {
     step: GradeStep;
+    outcomes: readonly PromotionOutcome[];
     /** The chosen outcome; omit for a row of one-click actions instead of a choice. */
     value?: PromotionOutcome | null;
     onChange: (outcome: PromotionOutcome) => void;
@@ -21,11 +22,11 @@ interface OutcomePickerProps {
 }
 
 /** The outcomes open to a grade, as one row of radio chips (or action chips, without a value). */
-function OutcomePicker({ step, value, onChange, label, size = 'sm' }: OutcomePickerProps) {
+function OutcomePicker({ step, outcomes, value, onChange, label, size = 'sm' }: OutcomePickerProps) {
     const choosing = value !== undefined;
     return (
         <div role={choosing ? 'radiogroup' : 'group'} aria-label={label} className="flex flex-wrap gap-1.5">
-            {allowedOutcomes(step).map(outcome => {
+            {outcomes.map(outcome => {
                 const meta = OUTCOME_COPY[outcome];
                 const Icon = OUTCOME_ICONS[outcome];
                 const checked = value === outcome;
@@ -96,7 +97,7 @@ function LearnerRow({ learner, classId, grade, plan }: LearnerRowProps) {
                 </p>
             </div>
             <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-                <OutcomePicker step={grade.step} value={choice.outcome} onChange={outcome => plan.setLearner(learner.id, classId, { outcome })} label={`What happens to ${learner.name}`} />
+                <OutcomePicker step={grade.step} outcomes={gradeOutcomes(grade)} value={choice.outcome} onChange={outcome => plan.setLearner(learner.id, classId, { outcome })} label={`What happens to ${learner.name}`} />
                 {picksClass && (
                     <ClassSelect value={choice.to} options={grade.nextClasses} onChange={to => plan.setLearner(learner.id, classId, { to })} label={`Class ${learner.name} moves into`} />
                 )}
@@ -115,8 +116,9 @@ interface ClassBlockProps {
 
 function ClassBlock({ cls, grade, plan, learners, open }: ClassBlockProps) {
     const selectId = useId();
-    const canMove = grade.nextClasses.length > 0;
-    const pending = cls.learners.filter(l => !plan.choices[l.id].outcome).length;
+    // Where the class moves to matters only once someone in it is moving up.
+    const canMove = grade.nextClasses.length > 0 && cls.learners.some(l => plan.choices[l.id].outcome === 'PROMOTE');
+    const pending = cls.learners.filter(l => plan.choices[l.id].outcome === 'PENDING').length;
     return (
         <div className="rounded-xl border border-border/70 bg-background/40">
             <div className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between sm:p-4">
@@ -124,10 +126,10 @@ function ClassBlock({ cls, grade, plan, learners, open }: ClassBlockProps) {
                     <p className="truncate text-sm font-semibold">{cls.full_name}</p>
                     <p className="text-xs text-muted-foreground">
                         {cls.learners.length} learner{cls.learners.length === 1 ? '' : 's'}
-                        {pending > 0 && <span className="font-medium text-amber-600 dark:text-amber-400"> · {pending} to decide</span>}
+                        {pending > 0 && <span className="font-medium text-amber-600 dark:text-amber-400"> · {pending} pending</span>}
                     </p>
                 </div>
-                {canMove && cls.learners.length > 0 && (
+                {canMove && (
                     <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
                         <label htmlFor={selectId} className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
                             <ArrowRight className="size-3.5" aria-hidden />Moves into
@@ -139,7 +141,7 @@ function ClassBlock({ cls, grade, plan, learners, open }: ClassBlockProps) {
             {learners.length > 0 && (
                 <details className="group border-t border-border/70" open={open}>
                     <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2.5 text-xs font-semibold text-muted-foreground hover:text-foreground sm:px-4 [&::-webkit-details-marker]:hidden">
-                        <span>{learners.length === cls.learners.length ? 'Learners' : `${learners.length} matching learner${learners.length === 1 ? '' : 's'}`}: change anyone repeating or leaving</span>
+                        <span>{learners.length === cls.learners.length ? 'Learners' : `${learners.length} matching learner${learners.length === 1 ? '' : 's'}`}: {grade.pending ? 'decide each one' : 'change anyone repeating or leaving'}</span>
                         <ChevronDown className="size-4 shrink-0 transition-transform group-open:rotate-180" aria-hidden />
                     </summary>
                     <ul className="divide-y divide-border/60 px-3 sm:px-4">
@@ -160,11 +162,11 @@ interface GradePromotionCardProps {
 
 /** One grade: where its learners go, set for the whole grade, a class, or a learner. */
 export function GradePromotionCard({ grade, plan, query }: GradePromotionCardProps) {
-    const meta = stepCopy(grade.step, grade.name);
+    const meta = stepCopy(grade);
     const StepIcon = STEP_ICONS[meta.tone];
     const classIds = grade.classes.map(c => c.id);
     const learnerCount = grade.classes.reduce((n, c) => n + c.learners.length, 0);
-    const mustDecide = meta.tone === 'DECIDE';
+    const highlight = meta.tone === 'DECIDE' || meta.tone === 'WAITS';
     const visible = grade.classes.map(cls => ({ cls, learners: cls.learners.filter(l => learnerMatches(l, query)) }));
     if (query && visible.every(v => v.learners.length === 0)) return null;
 
@@ -189,20 +191,21 @@ export function GradePromotionCard({ grade, plan, query }: GradePromotionCardPro
                 <span className={cn('inline-flex w-fit shrink-0 items-center rounded-full px-2.5 py-1 text-xs font-semibold', TONES[meta.hue].tile)}>{meta.badge}</span>
             </header>
 
-            <p className={cn('mt-3 rounded-xl px-3 py-2.5 text-sm', mustDecide ? 'border border-amber-500/30 bg-amber-500/[0.07] text-foreground' : 'bg-muted/60 text-muted-foreground')}>
+            <p className={cn('mt-3 rounded-xl px-3 py-2.5 text-sm', highlight ? 'border border-amber-500/30 bg-amber-500/[0.07] text-foreground' : 'bg-muted/60 text-muted-foreground')}>
                 {meta.explain}
             </p>
 
             {learnerCount > 0 && (
                 <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
-                    <span className="text-xs font-semibold text-muted-foreground">Everyone in {grade.name}:</span>
-                    <OutcomePicker step={grade.step} onChange={o => plan.setClassesOutcome(classIds, o)} label={`Set every ${grade.name} learner`} size="md" />
+                    <span className="text-xs font-semibold text-muted-foreground">Everyone {grade.pending ? 'pending ' : ''}in {grade.name}:</span>
+                    <OutcomePicker step={grade.step} outcomes={gradeOutcomes(grade)} onChange={o => plan.setClassesOutcome(classIds, o)} label={`Set every ${grade.name} learner`} size="md" />
                 </div>
             )}
 
             <div className="mt-4 grid gap-3">
                 {visible.map(({ cls, learners }) => (
-                    <ClassBlock key={cls.id} cls={cls} grade={grade} plan={plan} learners={learners} open={mustDecide || !!query} />
+                    // Pending learners are there to be decided, so their lists start open.
+                    <ClassBlock key={cls.id} cls={cls} grade={grade} plan={plan} learners={learners} open={grade.pending || !!query} />
                 ))}
             </div>
         </section>

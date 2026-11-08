@@ -8,7 +8,7 @@ import { spacing, fonts, useTheme } from '@/lib/theme';
 import { Button, ButtonRow, Card, ChipSelect, ErrorBanner, TextField } from '@/components/ui';
 import type { GradeStream } from '@/lib/types';
 
-export const STUDENT_STATUSES = ['ACTIVE', 'TRANSFERRED', 'GRADUATED', 'DEACTIVATED'] as const;
+export const STUDENT_STATUSES = ['ACTIVE', 'PENDING', 'TRANSFERRED', 'GRADUATED', 'DEACTIVATED'] as const;
 export type StudentStatus = (typeof STUDENT_STATUSES)[number];
 
 export interface StudentFormValues {

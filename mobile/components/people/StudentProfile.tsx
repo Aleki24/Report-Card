@@ -20,7 +20,7 @@ const TABS = [
     { value: 'records', label: 'Records' },
 ] as const;
 
-const STATUS_LABEL: Record<string, string> = { ACTIVE: 'Active', TRANSFERRED: 'Transferred', GRADUATED: 'Graduated', DEACTIVATED: 'Deactivated' };
+const STATUS_LABEL: Record<string, string> = { ACTIVE: 'Active', PENDING: 'Pending promotion', TRANSFERRED: 'Transferred', GRADUATED: 'Graduated', DEACTIVATED: 'Deactivated' };
 
 const humanize = (s: string) => s.toLowerCase().replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
