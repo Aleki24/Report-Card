@@ -115,7 +115,7 @@ export function DefaultersPanel({ streams, termId, canRemind, onOpenAccount, ver
         }
     };
 
-    const all = useMemo(() => (load.status === 'ready' ? load.body.data : []), [load]);
+    const all = useMemo(() => (result?.key === key && result.load.status === 'ready' ? result.load.body.data : []), [result, key]);
     const counts = useMemo(() => Object.fromEntries(FOCUS.map(f => [f.id, all.filter(f.test).length])) as Record<Focus, number>, [all]);
     const rows = useMemo(() => all.filter(FOCUS.find(f => f.id === focus)?.test ?? (() => true)), [all, focus]);
     const noPhone = all.filter(r => !r.guardianPhone).length;

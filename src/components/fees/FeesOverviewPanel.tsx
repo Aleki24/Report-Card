@@ -44,16 +44,17 @@ function Meter({ value, hue, label }: { value: number; hue: keyof typeof METER; 
  * against last term's, and what is owed by class.
  */
 export function FeesOverviewPanel({ onGo }: { onGo: (target: Extract<FixTarget, { kind: 'tab' }>) => void }) {
-    const [load, setLoad] = useState<Load>({ state: 'loading' });
+    // Bumped by Retry; a result belongs to the attempt that loaded it, so a new attempt shows as loading.
     const [attempt, setAttempt] = useState(0);
+    const [result, setResult] = useState<{ attempt: number; load: Load } | null>(null);
+    const load: Load = result?.attempt === attempt ? result.load : { state: 'loading' };
 
     useEffect(() => {
         const controller = new AbortController();
-        setLoad({ state: 'loading' });
         requestJson<{ data: FeesOverview }>(OVERVIEW_URL, { cache: 'no-store', signal: controller.signal })
-            .then(({ data }) => setLoad({ state: 'ready', body: data }))
+            .then(({ data }) => setResult({ attempt, load: { state: 'ready', body: data } }))
             .catch((err: unknown) => {
-                if (!controller.signal.aborted) setLoad({ state: 'error', message: err instanceof Error ? err.message : 'Could not load the overview.' });
+                if (!controller.signal.aborted) setResult({ attempt, load: { state: 'error', message: err instanceof Error ? err.message : 'Could not load the overview.' } });
             });
         return () => controller.abort();
     }, [attempt]);
