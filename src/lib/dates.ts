@@ -13,6 +13,10 @@
 export const SCHOOL_TIME_ZONE = 'Africa/Nairobi';
 /** Its offset from UTC: Kenya keeps East Africa Time all year, with no daylight saving. */
 const SCHOOL_UTC_OFFSET = '+03:00';
+const SCHOOL_UTC_OFFSET_MS = 3 * 3_600_000;
+
+/** An instant as the school's wall clock reads it, `YYYY-MM-DDTHH:MM:SS` (plain arithmetic: no locale formats, same on every engine). */
+const schoolClock = (instant: string | Date): string => new Date(new Date(instant).getTime() + SCHOOL_UTC_OFFSET_MS).toISOString().slice(0, 19);
 
 const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
@@ -29,12 +33,12 @@ export function schoolToday(): string {
 
 /** The school's calendar day, `YYYY-MM-DD`, of an instant (a database timestamp). */
 export function schoolDayOf(instant: string | Date): string {
-  return isoDateInZone(new Date(instant), SCHOOL_TIME_ZONE);
+  return schoolClock(instant).slice(0, 10);
 }
 
 /** The school's wall-clock time, `HH:MM:SS`, of an instant. */
 export function schoolTimeOf(instant: string | Date): string {
-  return new Intl.DateTimeFormat('en-GB', { timeZone: SCHOOL_TIME_ZONE, hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).format(new Date(instant));
+  return schoolClock(instant).slice(11, 19);
 }
 
 /**

@@ -6,15 +6,19 @@ import { Text, View } from 'react-native';
 import { useApi, withQuery } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { useCurrentUser } from '@/lib/UserContext';
+import { useTabParam } from '@/lib/useTabParam';
 import { useGradeStreams, useTerms } from '@/lib/useSchoolData';
 import { errorMessage, formatCurrency, formatDate, fullName, isOverdue, pluralize } from '@/lib/format';
 import { spacing, useTheme } from '@/lib/theme';
 import {
     Badge, Button, ButtonRow, Card, ChipSelect, FilterGrid, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView, Notice,
-    Screen, ScreenHeader, SearchField, SegmentedTabs, StatGrid, StatTile, TextField,
+    Screen, ScreenHeader, ScrollTabs, SearchField, StatGrid, StatTile, TextField,
 } from '@/components/ui';
 import { RequireScreen } from '@/components/RequireScreen';
 import { FeeDetail, PAYMENT_STATUS_VARIANT } from '@/components/fees/FeeDetail';
+import { UnmatchedQueue } from '@/components/fees/UnmatchedQueue';
+import { DayBook } from '@/components/fees/DayBook';
+import { FeesOverview } from '@/components/fees/FeesOverview';
 import type { FeePaymentStatus, FeeStatus, StaffFeeRecord, StudentListItem } from '@/lib/types';
 import { totalOwed } from '@shared/fees';
 
@@ -25,7 +29,8 @@ const STATUS_META: Record<FeeStatus, { label: string; variant: 'success' | 'warn
     OVERPAID: { label: 'Overpaid', variant: 'info' },
 };
 
-type Tab = 'balances' | 'payments' | 'unmatched';
+const TABS = ['overview', 'balances', 'payments', 'unmatched', 'daybook'] as const;
+type Tab = (typeof TABS)[number];
 
 interface LedgerPayment {
     id: string;
@@ -54,13 +59,18 @@ export default function StaffFeesScreen() {
 
 function FeesContent() {
     const { can } = useCurrentUser();
-    const [tab, setTab] = useState<Tab>('balances');
+    const finance = can('fees.view');
+    // Finance staff open on the health check; a class teacher on their class's balances.
+    const [picked, setTab] = useTabParam<Tab>(TABS, finance ? 'overview' : 'balances');
     const tabs = [
+        ...(finance ? [{ value: 'overview' as const, label: 'Overview' }] : []),
         { value: 'balances' as const, label: 'Balances' },
         { value: 'payments' as const, label: 'Payments' },
         // Matching Paybill money is fees.collect work: the bursar or accountant, not only an admin.
         ...(can('fees.collect') ? [{ value: 'unmatched' as const, label: 'Unmatched' }] : []),
+        ...(finance ? [{ value: 'daybook' as const, label: 'Day book' }] : []),
     ];
+    const tab: Tab = tabs.some((t) => t.value === picked) ? picked : 'balances';
     return (
         <Screen>
             <ScreenHeader
@@ -69,8 +79,12 @@ function FeesContent() {
                     ? 'Bill learners, record payments and follow up balances.'
                     : can('fees.collect') ? 'Record payments and follow up balances.' : 'Fee balances for your class.'}
             />
-            <SegmentedTabs tabs={tabs} value={tab} onChange={setTab} />
-            {tab === 'balances' ? <Balances /> : tab === 'payments' ? <Payments /> : <Unmatched />}
+            <ScrollTabs tabs={tabs} value={tab} onChange={setTab} />
+            {tab === 'overview' ? <FeesOverview onGo={setTab} />
+                : tab === 'balances' ? <Balances />
+                : tab === 'payments' ? <Payments />
+                : tab === 'unmatched' ? <UnmatchedQueue />
+                : <DayBook />}
         </Screen>
     );
 }
@@ -356,76 +370,6 @@ function Payments() {
                     </ListCard>
                 )}
             </View>
-        </View>
-    );
-}
-
-// ── Unmatched M-Pesa (fees.collect) ───────────────────────
-
-interface UnmatchedPayment {
-    id: string;
-    receiptNumber: string;
-    amount: number;
-    phoneNumber: string | null;
-    payerName: string | null;
-    mpesaReceiptNumber: string | null;
-    unmatchedAccountReference: string | null;
-    paidAt: string;
-}
-
-/** Paybill payments whose account number matched no learner; assign each to the right fee. */
-function Unmatched() {
-    const { colors } = useTheme();
-    const api = useApi();
-    const { data, loading, error, refresh } = useApiQuery<UnmatchedPayment[]>('/api/school/fees/unmatched');
-    const fees = useApiQuery<StaffFeeRecord[]>('/api/school/fees');
-    const [assigning, setAssigning] = useState<string | null>(null);
-    const [search, setSearch] = useState('');
-    const [message, setMessage] = useState<{ tone: 'success' | 'danger'; text: string } | null>(null);
-
-    const assign = async (paymentId: string, feeId: string) => {
-        try {
-            await api.post(`/api/school/fees/unmatched/${paymentId}/assign`, { student_fee_id: feeId });
-            setAssigning(null);
-            setMessage({ tone: 'success', text: 'Payment assigned.' });
-            refresh();
-            fees.refresh();
-        } catch (err) {
-            setMessage({ tone: 'danger', text: errorMessage(err, 'Failed to assign') });
-        }
-    };
-
-    if (loading) return <LoadingView />;
-    const q = search.trim().toLowerCase();
-    const candidates = (fees.data ?? []).filter((f) => !q || `${f.studentName ?? ''} ${f.admissionNumber ?? ''}`.toLowerCase().includes(q)).slice(0, 10);
-
-    return (
-        <View>
-            {error ? <ErrorBanner message={error} onRetry={refresh} /> : null}
-            {message ? <Notice tone={message.tone} message={message.text} onDismiss={() => setMessage(null)} /> : null}
-            {(data ?? []).length === 0 ? (
-                <EmptyState title="Nothing unmatched" description="Every paybill payment found its learner." />
-            ) : (
-                <ListCard>
-                    {(data ?? []).map((p) => (
-                        <View key={p.id}>
-                            <ListRow
-                                title={`${formatCurrency(p.amount)} · ref “${p.unmatchedAccountReference ?? '—'}”`}
-                                subtitle={`${formatDate(p.paidAt)} · ${p.payerName ?? p.phoneNumber ?? ''} · ${p.mpesaReceiptNumber ?? p.receiptNumber}`}
-                                onPress={() => setAssigning(assigning === p.id ? null : p.id)}
-                            />
-                            {assigning === p.id ? (
-                                <View style={{ padding: spacing.md, backgroundColor: colors.mutedBg }}>
-                                    <SearchField value={search} onChangeText={setSearch} placeholder="Find the learner's fee record" />
-                                    {candidates.map((f) => (
-                                        <ListRow key={f.id} title={f.studentName ?? '—'} subtitle={`${f.admissionNumber ?? '—'} · ${f.termName ?? ''} · balance ${formatCurrency(f.balance)}`} right={<Button size="sm" label="Assign" onPress={() => void assign(p.id, f.id)} />} />
-                                    ))}
-                                </View>
-                            ) : null}
-                        </View>
-                    ))}
-                </ListCard>
-            )}
         </View>
     );
 }
