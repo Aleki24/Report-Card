@@ -23,4 +23,20 @@ export function ranksAmongOnRoll(status: string | null | undefined): boolean {
     return (status ?? 'ACTIVE') === 'ACTIVE';
 }
 
+/**
+ * Whether a learner has left the school (archived), so unused sign-in codes
+ * stop working. A pending learner (awaiting promotion) has not left.
+ */
+export function hasLeftSchool(status: string | null | undefined): boolean {
+    return status === 'TRANSFERRED' || status === 'GRADUATED' || status === 'DEACTIVATED';
+}
+
+/** Whether a learner must sit in a class: one on the roll, or pending promotion from it. */
+export function needsClass(status: string | null | undefined): boolean {
+    return !hasLeftSchool(status);
+}
+
+/** What a pending status means, for the forms that show it. */
+export const PENDING_STATUS_HINT = 'Pending promotion: off class lists until decided under Classes → Promote students.';
+
 export const LOCKED_OUT_STUDENT_MESSAGE = 'Your school has closed your learner account. Contact the school if this is a mistake.';

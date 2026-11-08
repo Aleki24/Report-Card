@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { FormGrid, FormField, InputField, SelectField, Modal } from '@/components/ui';
 import { pathwayLabel } from '@/lib/pathway-definitions';
 import { CLASS_REQUIRED_MESSAGE } from '@/lib/classes';
+import { PENDING_STATUS_HINT, needsClass } from '@/lib/student/status-access';
 import { apiErrorMessage } from '@/lib/api-error-message';
 import type { StudentStatus } from '@/types';
 import type { AcademicLevelOption, CombinationOption, CreatedCredential, GradeStreamOption, StudentRow } from './peopleTypes';
@@ -17,6 +18,7 @@ const GENDER_OPTIONS = [
 
 const STATUS_OPTIONS: readonly { id: StudentStatus; label: string }[] = [
   { id: 'ACTIVE', label: 'Active' },
+  { id: 'PENDING', label: 'Pending promotion' },
   { id: 'TRANSFERRED', label: 'Transferred' },
   { id: 'GRADUATED', label: 'Graduated' },
   { id: 'DEACTIVATED', label: 'Deactivated' },
@@ -51,7 +53,7 @@ function formProblem(f: StudentForm): string | null {
     return 'Guardian name looks like a phone number — put the number in Guardian phone instead.';
   }
   // Only a student who has left may be without a class.
-  if (!f.grade_stream_id && f.status === 'ACTIVE') return CLASS_REQUIRED_MESSAGE;
+  if (!f.grade_stream_id && needsClass(f.status)) return CLASS_REQUIRED_MESSAGE;
   const digits = f.guardian_phone.replace(/\D/g, '');
   if (f.guardian_phone.trim() && (digits.length < 9 || digits.length > 12)) {
     return "Guardian phone doesn't look right. Use a format like 0712345678.";
@@ -130,7 +132,7 @@ function StudentForm({ student, onClose, onSaved, gradeStreams, academicLevels, 
       <FormGrid>
         <FormField label="First name" span="half" required><InputField value={form.first_name} autoComplete="off" onChange={e => set('first_name', e.target.value)} /></FormField>
         <FormField label="Last name" span="half" required><InputField value={form.last_name} autoComplete="off" onChange={e => set('last_name', e.target.value)} /></FormField>
-        <FormField label="Class" span="half" required={form.status === 'ACTIVE'} hint={gradeStreams.length === 0 ? 'No classes yet — add them on the Classes page first.' : undefined}>
+        <FormField label="Class" span="half" required={needsClass(form.status)} hint={gradeStreams.length === 0 ? 'No classes yet — add them on the Classes page first.' : undefined}>
           <SelectField
             placeholder="Choose a class"
             value={form.grade_stream_id}
@@ -144,7 +146,7 @@ function StudentForm({ student, onClose, onSaved, gradeStreams, academicLevels, 
         <FormField label="Date of birth" span="half"><InputField type="date" value={form.date_of_birth} onChange={e => set('date_of_birth', e.target.value)} /></FormField>
         <FormField label="Curriculum" span={editing ? 'half' : 'full'}><SelectField placeholder="—" value={form.academic_level_id} onChange={v => set('academic_level_id', v)} options={academicLevels.map(al => ({ id: al.id, label: al.name }))} /></FormField>
         {editing && (
-          <FormField label="Status" span="half" hint={form.status === 'ACTIVE' ? undefined : 'Keeps their records; they drop off class lists.'}>
+          <FormField label="Status" span="half" hint={form.status === 'ACTIVE' ? undefined : form.status === 'PENDING' ? PENDING_STATUS_HINT : 'Keeps their records; they drop off class lists.'}>
             <SelectField placeholder={null} value={form.status} onChange={v => set('status', STATUS_OPTIONS.find(o => o.id === v)?.id ?? 'ACTIVE')} options={STATUS_OPTIONS} />
           </FormField>
         )}

@@ -127,11 +127,12 @@ export const leadershipManual: Manual = {
                     title: 'Generate & publish',
                     summary: 'When the top of the studio says Ready, press “Generate timetable”. In about 15 seconds you get a draft that has been checked lesson by lesson: every subject has its lessons a week, and no teacher or room is booked twice, across every class and bell.',
                     steps: [
+                        { title: 'Fill free periods', body: '“Fill free periods with extra lessons” is on unless you turn it off. A class with fewer lessons than its week (40 lessons in 45 periods, say) gets extra lessons of its own subjects in those periods, mathematics, languages and sciences first, and a shorter elective takes every period of its option block. Only where the teacher and any room are free, so nobody is booked twice; each teacher takes at most a few extras a week and never more lessons in a row than you allow. The checks say how many periods, if any, were left free and in which classes.' },
                         { title: 'Read the score', body: 'The score says how well the week is spread: each subject on different days, mathematics and sciences in the morning, no long runs for teachers and no free periods in the middle of a class’s day, with what could still be better. “Reshuffle” makes another draft and keeps your pinned lessons; keep the better one.' },
                         { title: 'Adjust by hand', body: 'Pick a class, then click a lesson. Green slots are free to move into, blue ones swap with the lesson there, and faded ones are not possible (point at one to see why, for example the teacher is teaching another class then). “Pin here” keeps a lesson in its slot when you reshuffle.' },
                         { title: 'Publish', body: 'Press Publish and give the timetable the name teachers and learners will see, such as “Term 1 2027 timetable”. It replaces the one they see now under Timetable, and learners’ My timetable.' },
                     ],
-                    tip: '“Lessons a week, subject by subject” lists every class’s subjects with the lessons placed against the lessons needed.',
+                    tip: '“Lessons a week, subject by subject” lists every class’s subjects with the lessons placed against the lessons needed, and any extra lessons as +1, +2.',
                 },
                 {
                     id: 'cover',

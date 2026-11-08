@@ -7,7 +7,7 @@ import { BAND_LABELS } from '@shared/curriculum-bands';
 import { CURRICULUM_BANDS, WEEKDAYS, WEEKDAY_LABELS, describeQuality, minutesOf, runsOn, type TimetablePeriod, type TimetableConfig, type TimetableLesson, type TimetableVersion } from '@shared/timetable/config';
 import { periodIndexOf, periodsOfLesson, type GridRow } from '@shared/timetable/layout';
 import { moveHint } from '@shared/timetable/moves';
-import { auditLessons, hoursCheck } from '@shared/timetable/checks';
+import { auditLessons, freePeriods, freePeriodsCheck, hoursCheck } from '@shared/timetable/checks';
 import type { TimetablePlan } from '@shared/timetable/readiness';
 import { timetablePdfUrl, type TimetablePdfView } from '@shared/timetable/pdf-url';
 import { useDownload } from '@/lib/useDownload';
@@ -16,7 +16,7 @@ import {
     withAddedPeriodTo, withPeriodDayToggled, withPeriodPatched, withSectionAdded, withSectionBandToggled, withSectionPatched, withSectionRemoved,
     type CoverNeed, type CoverRow, type TimetableView, type TimetableViewResult,
 } from '@shared/ops/forms/academics';
-import { Button, ButtonRow, Card, ChipSelect, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView, Notice, SectionLabel, SegmentedTabs, TextField } from '@/components/ui';
+import { Button, ButtonRow, Card, ChipSelect, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView, Notice, SectionLabel, SegmentedTabs, TextField, ToggleRow } from '@/components/ui';
 import { useToast } from '@/components/Toast';
 import { LookupField, SelectField } from '@/components/ops/SelectField';
 import { StatusPill, useRefreshSignal } from '@/components/ops/bits';
@@ -120,6 +120,28 @@ function CheckRow({ ok, title, detail }: { ok: boolean; title: string; detail: s
     );
 }
 
+/** Whether generating fills classes' free periods; saved at once, used by the next draft. */
+function FillFreePeriods({ config, onSaved }: { config: TimetableConfig; onSaved: (next: TimetableConfig) => void }) {
+    const api = useApi();
+    const toast = useToast();
+    const toggle = async (next: boolean) => {
+        try {
+            onSaved((await api.patch<{ data: TimetableConfig }>('/api/academics/timetable/config', { fill_free_periods: next })).data);
+            toast.success(next ? 'Free periods will be filled. Generate a new draft to see it.' : 'Free periods will be left free in new drafts.');
+        } catch (err) { toast.error(errorMessage(err, 'Could not save')); }
+    };
+    return (
+        <Card style={{ marginBottom: spacing.sm }}>
+            <ToggleRow
+                label="Fill free periods with extra lessons"
+                description="A class's free periods get extra lessons of its own subjects (maths, languages and sciences first), and a shorter elective takes every period of its option block. Only where the teacher and any room are free, so nobody is booked twice."
+                value={config.rules.fill_free_periods}
+                onValueChange={(v) => void toggle(v)}
+            />
+        </Card>
+    );
+}
+
 /**
  * Check drafts and adjust them class by class (tap a lesson: the grid shows
  * where it can go, then tap the slot to move or swap it), pin lessons,
@@ -179,6 +201,9 @@ export function TimetableBuilder({ plan, onChanged }: { plan?: TimetablePlan | n
     const placedAll = active?.stats.required !== undefined && unplaced.length === 0;
     const short = hours?.short.length ?? 0;
     const clashes = audit ? audit.teacherClashes + audit.roomClashes : 0;
+    // Read from the lessons too, so it stays right after lessons are moved.
+    const free = useMemo(() => (plan ? freePeriods(plan.classes, lessons) : null), [plan, lessons]);
+    const freeCheck = free && active ? freePeriodsCheck(free, active.stats.fillFree ?? false, hours?.extra ?? 0) : null;
 
     /** A new draft from the selected one: its pinned lessons stay, everything else is placed afresh. */
     const reshuffle = async () => {
@@ -235,10 +260,19 @@ export function TimetableBuilder({ plan, onChanged }: { plan?: TimetablePlan | n
         },
     ]);
 
-    if (versions.length === 0) return <EmptyState title="No drafts yet." description="When every part is ready, generate one with the button at the top." />;
+    const fillToggle = config ? <FillFreePeriods config={config} onSaved={setConfig} /> : null;
+    if (versions.length === 0) {
+        return (
+            <View>
+                {fillToggle}
+                <EmptyState title="No drafts yet." description="When every part is ready, generate one with the button at the top." />
+            </View>
+        );
+    }
 
     return (
         <View>
+            {fillToggle}
             <SelectField
                 label="Draft"
                 value={activeId}
@@ -276,6 +310,7 @@ export function TimetableBuilder({ plan, onChanged }: { plan?: TimetablePlan | n
                         title={clashes === 0 ? 'No teacher or room booked twice' : `${clashes} double booking${clashes === 1 ? '' : 's'}`}
                         detail={clashes === 0 ? 'Checked lesson by lesson, across every class and bell, including the times teachers are away.' : 'Move one of the lessons, or reshuffle.'}
                     />
+                    {freeCheck ? <CheckRow ok={freeCheck.ok} title={freeCheck.title} detail={freeCheck.detail} /> : null}
                 </View>
             ) : null}
             {active?.stats.quality ? <QualityCard quality={describeQuality(active.stats.quality)} reshuffling={generating} onReshuffle={() => void reshuffle()} /> : null}

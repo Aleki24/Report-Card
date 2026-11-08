@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { AlertTriangle, CheckCircle2, ChevronDown, Download, Lock, ShieldCheck, Shuffle, Trash2, Unlock, Upload, Users } from 'lucide-react';
+import { AlertTriangle, CalendarCheck, CheckCircle2, ChevronDown, Download, Lock, ShieldCheck, Shuffle, Trash2, Unlock, Upload, Users } from 'lucide-react';
 import { Button, buttonVariants } from '@/components/ui/Button';
 import { ConfirmDialog, Modal } from '@/components/ui/Modal';
 import { FormField, InputField, SelectField } from '@/components/ui/FormField';
@@ -14,7 +14,7 @@ import { timetablePdfUrl } from '@/lib/timetable/pdf-url';
 import { PUBLISH_TIMETABLE_WARNING, VERSION_TONES as STATUS_TONES, lessonClasses, newDraftName, teacherName } from '@/lib/ops/forms/academics';
 import { periodIndexOf, periodsOfLesson, type GridRow } from '@/lib/timetable/layout';
 import { moveHint, type CellHint } from '@/lib/timetable/moves';
-import { auditLessons, hoursCheck } from '@/lib/timetable/checks';
+import { auditLessons, freePeriods, freePeriodsCheck, hoursCheck } from '@/lib/timetable/checks';
 import type { TimetablePlan } from '@/lib/timetable/readiness';
 import { QualityPanel } from './QualityPanel';
 import { TimetableGrid } from './TimetableGrid';
@@ -34,6 +34,35 @@ function Check({ ok, icon: Icon, title, detail }: { ok: boolean; icon: typeof Sh
                 <span className="block text-xs text-muted-foreground">{detail}</span>
             </span>
         </div>
+    );
+}
+
+const CONFIG_URL = '/api/academics/timetable/config';
+
+/** Whether generating fills classes' free periods; saved at once, used by the next draft. */
+function FillFreePeriods({ config, onSaved }: { config: TimetableConfig; onSaved: (next: TimetableConfig) => void }) {
+    const [saving, setSaving] = useState(false);
+    const on = config.rules.fill_free_periods;
+    const toggle = async (next: boolean) => {
+        setSaving(true);
+        try {
+            onSaved(await opsFetch<TimetableConfig>(CONFIG_URL, { method: 'PATCH', json: { fill_free_periods: next } }));
+            toast.success(next ? 'Free periods will be filled. Generate a new draft to see it.' : 'Free periods will be left free in new drafts.');
+        } catch (err) { toast.error(errorText(err)); }
+        finally { setSaving(false); }
+    };
+    return (
+        <label className="flex cursor-pointer items-start justify-between gap-4 rounded-2xl border border-border/70 bg-card p-3 sm:p-4">
+            <span className="min-w-0">
+                <span className="block text-sm font-semibold">Fill free periods with extra lessons</span>
+                <span className="block text-xs text-muted-foreground">
+                    A class’s free periods get extra lessons of its own subjects (maths, languages and sciences first), and a shorter elective takes every
+                    period of its option block. Only where the teacher and any room are free, so nobody is booked twice; each teacher takes at most a
+                    few extras a week, and never more lessons in a row than you allow.
+                </span>
+            </span>
+            <input type="checkbox" role="switch" className="mt-1 size-5 shrink-0 accent-primary" checked={on} disabled={saving} onChange={e => void toggle(e.target.checked)} />
+        </label>
     );
 }
 
@@ -97,6 +126,8 @@ export function TimetableBuilder({ plan, onGenerated }: { plan?: TimetablePlan |
         const loads = plan.classes.flatMap(c => [...c.core, ...c.blocks.flatMap(b => b.loads)].map(l => ({ id: l.id, className: c.name, subject: l.subject, lessons: l.lessons })));
         return loads.length > 0 ? hoursCheck(loads, lessons) : null;
     }, [plan, lessons]);
+    // Read from the lessons too, so it stays right after lessons are moved.
+    const free = useMemo(() => plan ? freePeriods(plan.classes, lessons) : null, [plan, lessons]);
 
     /** A new draft from the selected one: its pinned lessons stay, everything else is placed afresh. */
     const reshuffle = async () => {
@@ -186,8 +217,11 @@ export function TimetableBuilder({ plan, onGenerated }: { plan?: TimetablePlan |
         : short > 0 ? 'Loads changed after this draft was made. Generate a new draft.'
             : hours ? `${hours.placed} lessons in ${active?.stats.placed ?? hours.placed} class periods, as set in Subjects & hours.` : 'As set in Subjects & hours.';
 
+    const freeCheck = free && active ? freePeriodsCheck(free, active.stats.fillFree ?? false, hours?.extra ?? 0) : null;
+
     return (
         <div className="flex flex-col gap-5">
+            {config && <FillFreePeriods config={config} onSaved={setConfig} />}
             {versions.length > 0 && (
                 <section className="flex flex-col gap-3 sm:flex-row sm:items-end">
                     <FormField label="Draft" htmlFor="tt-version" className="sm:max-w-sm sm:flex-1">
@@ -206,7 +240,7 @@ export function TimetableBuilder({ plan, onGenerated }: { plan?: TimetablePlan |
             )}
 
             {active && (
-                <div className="grid gap-3 lg:grid-cols-2">
+                <div className={cn('grid gap-3', freeCheck ? 'lg:grid-cols-3' : 'lg:grid-cols-2')}>
                     <Check ok={placedAll && short === 0} icon={CheckCircle2} title={hoursTitle} detail={hoursDetail} />
                     <Check
                         ok={clashes === 0}
@@ -214,6 +248,7 @@ export function TimetableBuilder({ plan, onGenerated }: { plan?: TimetablePlan |
                         title={clashes === 0 ? 'No teacher or room booked twice' : `${clashes} double booking${clashes === 1 ? '' : 's'}`}
                         detail={clashes === 0 ? 'Checked lesson by lesson, across every class and bell, including the times teachers are away.' : 'Move one of the lessons, or generate again.'}
                     />
+                    {freeCheck && <Check ok={freeCheck.ok} icon={CalendarCheck} title={freeCheck.title} detail={freeCheck.detail} />}
                 </div>
             )}
 
@@ -233,14 +268,16 @@ export function TimetableBuilder({ plan, onGenerated }: { plan?: TimetablePlan |
             {hours && hours.lines.length > 0 && active && (
                 <details className="group rounded-2xl border border-border/70 bg-card shadow-sm">
                     <summary className="flex cursor-pointer items-center justify-between gap-2 p-4 text-sm font-semibold">
-                        Lessons a week, subject by subject ({hours.placed} of {hours.required})
+                        Lessons a week, subject by subject ({hours.placed} of {hours.required}{hours.extra > 0 ? `, ${hours.extra} extra` : ''})
                         <ChevronDown className="size-4 transition-transform group-open:rotate-180" aria-hidden />
                     </summary>
                     <ul className="grid gap-x-6 gap-y-1 border-t border-border/60 p-4 text-sm sm:grid-cols-2 xl:grid-cols-3">
                         {hours.lines.map(l => (
                             <li key={l.loadId} className="flex items-baseline justify-between gap-2">
                                 <span className="truncate"><span className="text-muted-foreground">{l.className} ·</span> {l.subject}</span>
-                                <span className={cn('shrink-0 tabular-nums', l.placed < l.required ? 'font-semibold text-amber-700 dark:text-amber-300' : 'text-emerald-700 dark:text-emerald-300')}>{l.placed}/{l.required}</span>
+                                <span className={cn('shrink-0 tabular-nums', l.placed < l.required ? 'font-semibold text-amber-700 dark:text-amber-300' : 'text-emerald-700 dark:text-emerald-300')}>
+                                    {l.placed}/{l.required}{l.extra > 0 && <span className="ml-1 text-xs font-medium text-sky-700 dark:text-sky-300" title="Extra lessons in periods that would have been free">+{l.extra}</span>}
+                                </span>
                             </li>
                         ))}
                     </ul>

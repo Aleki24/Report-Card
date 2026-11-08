@@ -316,6 +316,7 @@ function SettingsPageInner() {
                 terms={data.terms}
                 saving={busy}
                 onCreate={create}
+                onUpdate={(type, id, span) => patch(type, id, { ...span }).then(saved => saved !== null)}
                 onDelete={(type, id, label) => setDeleting({ type, id, label })}
                 onSetCurrentTerm={setCurrentTerm}
                 onUpdateTermDates={(id, field, value) => void updateTermDates(id, field, value)}

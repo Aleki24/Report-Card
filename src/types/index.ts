@@ -1,6 +1,7 @@
 export type UserRole = 'ADMIN' | 'CLASS_TEACHER' | 'SUBJECT_TEACHER' | 'STAFF' | 'STUDENT' | 'PARENT' | 'PENDING';
 export type ExamType = 'CBC' | '844' | 'MIDTERM' | 'ENDTERM' | 'OPENER';
-export type StudentStatus = 'ACTIVE' | 'TRANSFERRED' | 'GRADUATED' | 'DEACTIVATED';
+/** PENDING: left pending by a promotion (Grade 9s awaiting placement); off the roll, records kept. */
+export type StudentStatus = 'ACTIVE' | 'PENDING' | 'TRANSFERRED' | 'GRADUATED' | 'DEACTIVATED';
 export type SubjectCategory = 'LANGUAGE' | 'MATHEMATICS' | 'SCIENCE' | 'HUMANITY' | 'TECHNICAL';
 export type CbcPathway = 'STEM' | 'SOCIAL_SCIENCES' | 'ARTS_SPORTS';
 

@@ -72,7 +72,13 @@ export const timetableConfigSchema = z.object({
         teacher_off: z.array(teacherOffSchema).max(500).default([]),
         /** A subject's best time of day, where the school wants other than its usual (maths and sciences in the morning). */
         subject_times: z.record(z.string().min(1).max(64), z.enum(SUBJECT_TIMES)).default({}),
-    }).default({ max_consecutive: 4, teacher_off: [], subject_times: {} }),
+        /**
+         * Classes' free periods get extra lessons of their own subjects, and a
+         * shorter elective takes every period of its option block, wherever
+         * no teacher or room would clash. On unless the school turns it off.
+         */
+        fill_free_periods: z.boolean().default(true),
+    }).default({ max_consecutive: 4, teacher_off: [], subject_times: {}, fill_free_periods: true }),
 });
 
 export type TimetableConfig = z.infer<typeof timetableConfigSchema>;
@@ -95,7 +101,7 @@ export const DEFAULT_TIMETABLE_CONFIG: TimetableConfig = {
         { label: 'P8', start: '14:40', end: '15:20', is_break: false },
     ],
     sections: [],
-    rules: { max_consecutive: 4, teacher_off: [], subject_times: {} },
+    rules: { max_consecutive: 4, teacher_off: [], subject_times: {}, fill_free_periods: true },
 };
 
 // ── Sections and clock times ─────────────────────────────────────────
@@ -292,6 +298,12 @@ export interface TimetableVersion {
         placed?: number; required?: number; cost?: number; unplaced?: { label: string; lessons: number }[]; quality?: TimetableQuality;
         /** The draft read back after generating: teachers or rooms booked twice (always none). */
         checks?: { teacherClashes: number; roomClashes: number };
+        /** Free periods were filled when it was generated. */
+        fillFree?: boolean;
+        /** Lessons beyond the loads': extra lessons in free periods, and shorter electives across their whole block. */
+        extraLessons?: number;
+        /** Class periods a week still without a lesson when it was generated. */
+        freeLeft?: number;
     };
     created_at: string;
     published_at: string | null;

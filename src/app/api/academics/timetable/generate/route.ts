@@ -5,7 +5,7 @@ import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { solveTimetable, type PinnedLesson, type SolverRequirement } from '@/lib/timetable/solver';
 import { MAIN_SECTION_ID, minutesOf, type TimetablePeriod } from '@/lib/timetable/config';
 import { availableLessons } from '@/lib/timetable/moves';
-import { auditLessons, timeOfDay } from '@/lib/timetable/checks';
+import { auditLessons, freePeriods, timeOfDay } from '@/lib/timetable/checks';
 import { loadTimetablePlan, loadVersion, type LoadRow, type PlannedLoad } from '@/lib/timetable/server';
 import { blockLabel, planProblem, teacherWeeks } from '@/lib/timetable/blocks';
 import { periodKindMismatch } from '@/lib/ops/forms/academics';
@@ -24,11 +24,20 @@ const bodySchema = z.object({
 const blockId = (streamId: string, n: number) => `block:${streamId}:${n}`;
 const blockLabelOf = (id: string) => blockLabel(Number(id.split(':')[2]));
 
+/**
+ * Which subjects a free period goes to first (see `fillPriority`): the core of
+ * the exams, then the rest. An option block needs every one of its teachers
+ * free, and gives each elective a lesson, so it comes last.
+ */
+const FILL_PRIORITY: Readonly<Record<string, number>> = { MATHEMATICS: 3, LANGUAGE: 3, SCIENCE: 3, HUMANITY: 2, TECHNICAL: 2, CREATIVE: 1 };
+const fillPriorityOf = (category: string | null) => FILL_PRIORITY[(category ?? '').toUpperCase()] ?? 2;
+const BLOCK_FILL_PRIORITY = 1;
+
 /** Builds a new draft timetable from the teaching loads, rooms and day structure. */
 export const POST = route('timetable generate', { module: 'timetable', permission: 'timetable.manage' }, async ({ access, request }) => {
     const body = await parseBody(request, bodySchema);
     const db = createSupabaseAdmin();
-    const [{ config, rows, sectionOf, plans }, { data: rooms, error: roomsError }] = await Promise.all([
+    const [{ config, rows, sectionOf, capacityOf, plans }, { data: rooms, error: roomsError }] = await Promise.all([
         loadTimetablePlan(access.schoolId),
         db.from('rooms').select('id, room_type').eq('school_id', access.schoolId),
     ]);
@@ -73,7 +82,7 @@ export const POST = route('timetable generate', { module: 'timetable', permissio
         for (const l of plan.core) {
             solverReqs.push({
                 id: l.id, streamId: l.streamId, subjectId: l.row.subject_id, teacherId: l.teacherId, lessons: l.lessons,
-                doubles: l.doubles, roomType: l.row.room_type, sectionId, ...prefers([l]),
+                doubles: l.doubles, roomType: l.row.room_type, sectionId, fillPriority: fillPriorityOf(l.category), ...prefers([l]),
             });
         }
         for (const b of plan.blocks) {
@@ -84,7 +93,7 @@ export const POST = route('timetable generate', { module: 'timetable', permissio
             solverReqs.push({
                 id, streamId: plan.streamId, subjectId: id, teacherId: teachers[0] ?? null, coTeacherIds: teachers.slice(1),
                 lessons: b.lessons, doubles: Math.min(...b.loads.map(l => l.doubles)), roomType: null, sectionId,
-                ...prefers(b.loads),
+                fillPriority: BLOCK_FILL_PRIORITY, ...prefers(b.loads),
             });
         }
     }
@@ -110,6 +119,7 @@ export const POST = route('timetable generate', { module: 'timetable', permissio
     }
 
     const toSolver = (periods: readonly TimetablePeriod[]) => periods.map((p, index) => ({ index, isBreak: p.is_break, start: minutesOf(p.start), end: minutesOf(p.end), days: p.days }));
+    const fillFree = config.rules.fill_free_periods;
     // Several shuffles, the best kept (see solveTimetable).
     const result = solveTimetable({
         days: config.days,
@@ -118,7 +128,7 @@ export const POST = route('timetable generate', { module: 'timetable', permissio
         rooms: (rooms ?? []).map(r => ({ id: r.id as string, type: r.room_type as string })),
         pinned,
         unavailable: config.rules.teacher_off.map(o => ({ teacherId: o.teacher_id, day: o.day, start: minutesOf(o.start), end: minutesOf(o.end) })),
-        rules: { maxConsecutive: config.rules.max_consecutive, timeBudgetMs: 12_000, seed: body.seed ?? Date.now() % 2 ** 31 },
+        rules: { maxConsecutive: config.rules.max_consecutive, timeBudgetMs: 12_000, seed: body.seed ?? Date.now() % 2 ** 31, fillFree },
     }, 4);
 
     const byId = new Map(rows.map(r => [r.id, r]));
@@ -130,7 +140,9 @@ export const POST = route('timetable generate', { module: 'timetable', permissio
     };
     const unplaced = result.unplaced.map(u => ({ label: labelOf(u.requirementId), lessons: u.lessons }));
 
-    // A block's slots become one lesson per elective; a shorter elective takes the first of them.
+    // A block's slots become one lesson per elective. A shorter elective takes
+    // every one of them when free periods are filled (its teacher is booked
+    // for the whole block anyway, so nothing can clash), else the first ones.
     const lessonRows: Record<string, unknown>[] = [];
     const slotsOf = new Map<string, typeof result.lessons>();
     for (const l of result.lessons) slotsOf.set(l.requirementId, [...(slotsOf.get(l.requirementId) ?? []), l]);
@@ -142,8 +154,17 @@ export const POST = route('timetable generate', { module: 'timetable', permissio
         const members = blockMembers.get(id);
         if (!members) { slots.forEach(l => lessonRows.push(row(byId.get(id)!, l, l.roomId))); continue; }
         const ordered = [...slots].sort((a, b) => a.day - b.day || a.period - b.period);
-        for (const m of members) ordered.slice(0, m.lessons).forEach(l => lessonRows.push(row(m.row, l, null)));
+        for (const m of members) (fillFree ? ordered : ordered.slice(0, m.lessons)).forEach(l => lessonRows.push(row(m.row, l, null)));
     }
+
+    // Lessons beyond each load's, and the class periods still free.
+    const perLoad = new Map<string, number>();
+    for (const r of lessonRows) perLoad.set(r.requirement_id as string, (perLoad.get(r.requirement_id as string) ?? 0) + 1);
+    const extraLessons = [...perLoad].reduce((n, [id, count]) => n + Math.max(0, count - (byId.get(id)?.lessons_per_week ?? count)), 0);
+    const free = freePeriods(
+        [...plans.values()].map(p => ({ streamId: p.streamId, name: rows.find(r => r.grade_stream_id === p.streamId)?.stream?.full_name ?? 'A class', capacity: capacityOf(p.streamId) })),
+        lessonRows.map(r => ({ grade_stream_id: r.grade_stream_id as string, day: r.day as number, period: r.period as number })),
+    );
 
     // Checked again from the rows themselves, apart from the solver: nobody in two places at once.
     const checks = auditLessons(lessonRows.map(r => ({
@@ -155,7 +176,7 @@ export const POST = route('timetable generate', { module: 'timetable', permissio
         school_id: access.schoolId,
         name: body.name,
         status: 'DRAFT',
-        stats: { ...result.stats, unplaced, checks },
+        stats: { ...result.stats, unplaced, checks, fillFree, extraLessons, freeLeft: free.total },
         created_by: access.userId,
     }).select('*').single();
     if (versionError || !version) throw versionError ?? new Error('version insert failed');
@@ -166,6 +187,6 @@ export const POST = route('timetable generate', { module: 'timetable', permissio
         await db.from('timetable_versions').delete().eq('id', version.id);
         throw err;
     }
-    await audit(access, 'create', 'timetable_versions', version.id, { placed: result.stats.placed, required: result.stats.required });
+    await audit(access, 'create', 'timetable_versions', version.id, { placed: result.stats.placed, required: result.stats.required, extra_lessons: extraLessons, free_left: free.total });
     return version;
 });

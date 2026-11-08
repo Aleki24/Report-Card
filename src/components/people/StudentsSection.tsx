@@ -26,11 +26,12 @@ import {
 
 const PER_PAGE = 20;
 
-/** Status is ACTIVE / TRANSFERRED / GRADUATED / DEACTIVATED; "LEFT" is any but ACTIVE. */
+/** Status is ACTIVE / PENDING / TRANSFERRED / GRADUATED / DEACTIVATED; "LEFT" is any but ACTIVE. */
 const STATUS_FILTERS = [
   { id: 'ALL', label: 'Any status' },
   { id: 'ACTIVE', label: 'Active' },
   { id: 'LEFT', label: 'Not active' },
+  { id: 'PENDING', label: 'Pending promotion' },
   { id: 'TRANSFERRED', label: 'Transferred' },
   { id: 'GRADUATED', label: 'Graduated' },
   { id: 'DEACTIVATED', label: 'Deactivated' },

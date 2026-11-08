@@ -7,12 +7,19 @@
  *   PROMOTE     the next grade is taught here, so learners move up a class.
  *   TRANSITION  the next grade starts a new level learners are placed into
  *               nationally (Grade 9 → Senior School). Staying is never
- *               assumed: the school decides learner by learner, and only a
- *               school that teaches the next grade can keep anyone.
+ *               assumed: where the school teaches the next grade, learners
+ *               are left pending until placement is out, so the rest of the
+ *               school can move up meanwhile.
  *   COMPLETE    candidates of the school's last grade (Grade 12, Form 4), or
  *               a grade whose next grade the school doesn't teach: learners
- *               are archived as graduated.
+ *               graduate and are archived. Where that next grade continues
+ *               the same level (Grade 10 → 11 at a school still adding Senior
+ *               School grades), they are left pending until it is added.
  * Any learner can instead repeat the year or be marked as transferred out.
+ *
+ * Pending learners keep their class and records but leave the roll (class
+ * lists, attendance, fees, SMS). A follow-up step of the same year's
+ * promotion decides them when the school is ready.
  */
 import { z } from 'zod';
 import { bandForGrade, type CurriculumBand, type GradeLike } from './curriculum-bands';
@@ -20,7 +27,7 @@ import { isOfferedGrade } from './classes-overview';
 
 export const PROMOTION_URL = '/api/admin/promotion';
 
-export const PROMOTION_OUTCOMES = ['PROMOTE', 'REPEAT', 'GRADUATE', 'TRANSFER'] as const;
+export const PROMOTION_OUTCOMES = ['PROMOTE', 'REPEAT', 'GRADUATE', 'TRANSFER', 'PENDING'] as const;
 export type PromotionOutcome = (typeof PROMOTION_OUTCOMES)[number];
 
 /**
@@ -48,7 +55,14 @@ export type GradeStep =
         /** Whether the school teaches the next grade, so learners can stay. */
         canStay: boolean;
     }
-    | { kind: 'COMPLETE'; reason: 'FINAL_GRADE' | 'NEXT_NOT_TAUGHT'; nextGradeName: string | null };
+    | { kind: 'COMPLETE'; reason: 'FINAL_GRADE'; nextGradeName: null }
+    | {
+        kind: 'COMPLETE';
+        reason: 'NEXT_NOT_TAUGHT';
+        nextGradeName: string;
+        /** The next grade continues the same level (Grade 10 → 11), so the school is likely still adding it. */
+        sameLevel: boolean;
+    };
 
 export interface StepGrade extends GradeLike {
     id: string;
@@ -81,7 +95,7 @@ export function gradeStep(grade: StepGrade, allGrades: readonly StepGrade[], tau
             canStay: taught,
         };
     }
-    if (!taught) return { kind: 'COMPLETE', reason: 'NEXT_NOT_TAUGHT', nextGradeName: next.name_display };
+    if (!taught) return { kind: 'COMPLETE', reason: 'NEXT_NOT_TAUGHT', nextGradeName: next.name_display, sameLevel: !!band && band === nextBand };
     return { kind: 'PROMOTE', nextGradeId: next.id, nextGradeName: next.name_display };
 }
 
@@ -89,18 +103,27 @@ export function gradeStep(grade: StepGrade, allGrades: readonly StepGrade[], tau
 export const nextGradeId = (step: GradeStep): string | null =>
     step.kind === 'PROMOTE' || (step.kind === 'TRANSITION' && step.canStay) ? step.nextGradeId : null;
 
-/** The outcomes a learner of a grade may be given, most usual first. */
-export function allowedOutcomes(step: GradeStep): readonly PromotionOutcome[] {
-    if (step.kind === 'PROMOTE') return ['PROMOTE', 'REPEAT', 'TRANSFER'];
-    if (step.kind === 'TRANSITION' && step.canStay) return ['PROMOTE', 'GRADUATE', 'REPEAT', 'TRANSFER'];
-    return ['GRADUATE', 'REPEAT', 'TRANSFER'];
+/** Whether a grade's learners can't simply move up, so leaving them pending is offered. */
+const mayWait = (step: GradeStep): boolean => step.kind === 'TRANSITION' || (step.kind === 'COMPLETE' && step.reason === 'NEXT_NOT_TAUGHT');
+
+/**
+ * The outcomes a learner of a grade may be given, most usual first.
+ * `pending` is for learners already left pending: they may stay so.
+ */
+export function allowedOutcomes(step: GradeStep, pending = false): readonly PromotionOutcome[] {
+    const outcomes: PromotionOutcome[] =
+        step.kind === 'PROMOTE' ? ['PROMOTE', 'REPEAT', 'TRANSFER']
+            : step.kind === 'TRANSITION' && step.canStay ? ['PROMOTE', 'GRADUATE', 'PENDING', 'REPEAT', 'TRANSFER']
+                : mayWait(step) ? ['GRADUATE', 'PENDING', 'REPEAT', 'TRANSFER']
+                    : ['GRADUATE', 'REPEAT', 'TRANSFER'];
+    return pending && !outcomes.includes('PENDING') ? [...outcomes, 'PENDING'] : outcomes;
 }
 
-/** What a learner gets unless the admin says otherwise; null must be decided. */
-export function defaultOutcome(step: GradeStep): PromotionOutcome | null {
+/** What a learner gets unless the admin says otherwise. */
+export function defaultOutcome(step: GradeStep): PromotionOutcome {
     if (step.kind === 'PROMOTE') return 'PROMOTE';
-    if (step.kind === 'TRANSITION' && step.canStay) return null;
-    return 'GRADUATE';
+    if (step.kind === 'TRANSITION') return step.canStay ? 'PENDING' : 'GRADUATE';
+    return step.reason === 'NEXT_NOT_TAUGHT' && step.sameLevel ? 'PENDING' : 'GRADUATE';
 }
 
 /** An outcome's name for a learner of this grade. */
@@ -114,10 +137,14 @@ export function outcomeLabel(outcome: PromotionOutcome, step: GradeStep): string
             return 'Repeats';
         case 'TRANSFER':
             return 'Transfers out';
+        case 'PENDING':
+            return step.kind === 'TRANSITION' ? 'Awaits placement'
+                : step.kind === 'COMPLETE' && step.reason === 'NEXT_NOT_TAUGHT' ? `Awaits ${step.nextGradeName}`
+                    : 'Stays pending';
     }
 }
 
-/** Whether the outcome archives the learner (they leave the active roll). */
+/** Whether the outcome archives the learner (they leave the school). */
 export const archivesLearner = (outcome: PromotionOutcome): boolean => outcome === 'GRADUATE' || outcome === 'TRANSFER';
 
 interface StreamLike {
@@ -156,14 +183,16 @@ export type PromotionPlan = z.infer<typeof promotionPlanSchema>;
 
 /**
  * Why a learner's decision can't be applied, or null. `nextStreamIds` are the
- * classes of the grade they would move into.
+ * classes of the grade they would move into; `pending` says the learner is
+ * already pending.
  */
 export function decisionProblem(
     step: GradeStep,
     decision: Pick<PromotionDecision, 'outcome' | 'to_stream_id'>,
     nextStreamIds: ReadonlySet<string>,
+    pending = false,
 ): string | null {
-    if (!allowedOutcomes(step).includes(decision.outcome)) return 'that choice is not open to this grade';
+    if (!allowedOutcomes(step, pending).includes(decision.outcome)) return 'that choice is not open to this grade';
     if (decision.outcome !== 'PROMOTE') return decision.to_stream_id ? 'only a promoted learner changes class' : null;
     if (!decision.to_stream_id) return 'choose the class they move into';
     return nextStreamIds.has(decision.to_stream_id) ? null : 'that class is not in the next grade';
@@ -189,6 +218,8 @@ export interface PromotionGrade {
     name: string;
     curriculum: string;
     step: GradeStep;
+    /** Its learners were left pending by an earlier step of this year's promotion. */
+    pending: boolean;
     classes: PromotionClass[];
     /** Classes of the grade learners move into; empty when nobody can. */
     nextClasses: Pick<PromotionClass, 'id' | 'name' | 'full_name'>[];
@@ -199,19 +230,39 @@ export interface PromotionCounts {
     repeated: number;
     graduated: number;
     transferred: number;
+    pending: number;
 }
 
 export interface PromotionRunSummary extends PromotionCounts {
     id: string;
     created_at: string;
     run_by: string | null;
+    /** It decided learners left pending by an earlier step, so undoing it puts them back to pending. */
+    decidesPending: boolean;
 }
 
+export interface PromotionYear {
+    id: string;
+    name: string;
+}
+
+/**
+ * OPEN     nothing has been run for the year; the plan covers every enrolled learner.
+ * PENDING  it has run, and some learners are still pending; `grades` holds only them.
+ * DONE     it has run and nobody is pending.
+ */
+export type PromotionStage = 'OPEN' | 'PENDING' | 'DONE';
+
 export interface PromotionOverview {
-    /** The year being closed; promotion runs once per academic year. */
-    academicYear: { id: string; name: string } | null;
-    /** This year's promotion, when it has been run (and not undone). */
+    /** The year being closed. */
+    academicYear: PromotionYear | null;
+    /** Every year on record, newest first, so another can be chosen. */
+    years: PromotionYear[];
+    stage: PromotionStage;
+    /** The year's latest step, the one undo reverses. */
     run: PromotionRunSummary | null;
+    /** What the year's promotion has done so far; `pending` is how many learners are still pending. */
+    totals: PromotionCounts | null;
     grades: PromotionGrade[];
 }
 
@@ -220,12 +271,15 @@ const COUNT_KEY: Record<PromotionOutcome, keyof PromotionCounts> = {
     REPEAT: 'repeated',
     GRADUATE: 'graduated',
     TRANSFER: 'transferred',
+    PENDING: 'pending',
 };
 
-/** How many learners get each outcome; undecided ones are not counted. */
-export function countOutcomes(outcomes: Iterable<PromotionOutcome | null>): PromotionCounts {
-    const counts: PromotionCounts = { promoted: 0, repeated: 0, graduated: 0, transferred: 0 };
-    for (const o of outcomes) if (o) counts[COUNT_KEY[o]]++;
+export const emptyCounts = (): PromotionCounts => ({ promoted: 0, repeated: 0, graduated: 0, transferred: 0, pending: 0 });
+
+/** How many learners get each outcome. */
+export function countOutcomes(outcomes: Iterable<PromotionOutcome>): PromotionCounts {
+    const counts = emptyCounts();
+    for (const o of outcomes) counts[COUNT_KEY[o]]++;
     return counts;
 }
 
@@ -240,7 +294,7 @@ export interface PromotionUndoResult {
 // them in its own small hook.
 
 export interface LearnerChoice {
-    outcome: PromotionOutcome | null;
+    outcome: PromotionOutcome;
     /** The class a promoted learner moves into. */
     to: string | null;
 }
@@ -251,14 +305,17 @@ export interface PromotionPlanState {
     classTargets: Readonly<Record<string, string | null>>;
 }
 
-const toFor = (outcome: PromotionOutcome | null, target: string | null): string | null => (outcome === 'PROMOTE' ? target : null);
+const toFor = (outcome: PromotionOutcome, target: string | null): string | null => (outcome === 'PROMOTE' ? target : null);
 
-/** Every learner on their grade's usual step, each class moving to its matching class. */
+/**
+ * Every learner on their grade's usual step, each class moving to its
+ * matching class. Learners already pending stay so until the admin decides.
+ */
 export function initialPlan(grades: readonly PromotionGrade[]): PromotionPlanState {
     const choices: Record<string, LearnerChoice> = {};
     const classTargets: Record<string, string | null> = {};
     for (const grade of grades) {
-        const outcome = defaultOutcome(grade.step);
+        const outcome = grade.pending ? 'PENDING' : defaultOutcome(grade.step);
         const canMove = nextGradeId(grade.step) !== null;
         for (const cls of grade.classes) {
             const target = canMove ? defaultTargetStream(cls, grade.nextClasses) : null;
@@ -272,7 +329,7 @@ export function initialPlan(grades: readonly PromotionGrade[]): PromotionPlanSta
 /** Changes one learner's outcome or class; a newly promoted learner takes their class's target. */
 export function withLearnerChoice(plan: PromotionPlanState, learnerId: string, classId: string, patch: Partial<LearnerChoice>): PromotionPlanState {
     const current = plan.choices[learnerId];
-    const outcome = patch.outcome !== undefined ? patch.outcome : current.outcome;
+    const outcome = patch.outcome ?? current.outcome;
     const to = patch.to !== undefined ? patch.to : current.to ?? plan.classTargets[classId] ?? null;
     return { ...plan, choices: { ...plan.choices, [learnerId]: { outcome, to: toFor(outcome, to) } } };
 }
@@ -298,33 +355,51 @@ export function withClassTarget(plan: PromotionPlanState, grades: readonly Promo
     return { choices, classTargets: { ...plan.classTargets, [classId]: target } };
 }
 
+/** The outcomes open to a grade's learners on this page. */
+export const gradeOutcomes = (grade: PromotionGrade): readonly PromotionOutcome[] => allowedOutcomes(grade.step, grade.pending);
+
 /** Why a learner's choice can't be applied yet, or null. */
 export function choiceProblem(grade: PromotionGrade, choice: LearnerChoice): string | null {
-    if (!choice.outcome) return 'needs a decision';
-    return decisionProblem(grade.step, { outcome: choice.outcome, to_stream_id: choice.to }, new Set(grade.nextClasses.map(c => c.id)));
+    return decisionProblem(grade.step, { outcome: choice.outcome, to_stream_id: choice.to }, new Set(grade.nextClasses.map(c => c.id)), grade.pending);
 }
+
+/** Whether a choice changes nothing: a pending learner left pending. */
+const keepsPending = (grade: PromotionGrade, choice: LearnerChoice): boolean => grade.pending && choice.outcome === 'PENDING';
 
 export interface PromotionPlanSummary {
     counts: PromotionCounts;
-    /** Learners still needing something: a decision (Grade 9s) or a class to move into. */
+    /** Learners still needing something before the plan can run: a class to move into. */
     blocked: number;
+    /** Learners on the page. */
     total: number;
+    /** Learners the plan changes: everyone, except pending learners left pending. */
+    changing: number;
 }
 
 export function planSummary(grades: readonly PromotionGrade[], plan: PromotionPlanState): PromotionPlanSummary {
     let blocked = 0;
+    let total = 0;
+    let changing = 0;
+    const outcomes: PromotionOutcome[] = [];
     for (const grade of grades) {
-        for (const cls of grade.classes) for (const l of cls.learners) if (choiceProblem(grade, plan.choices[l.id])) blocked++;
+        for (const cls of grade.classes) {
+            for (const l of cls.learners) {
+                const choice = plan.choices[l.id];
+                total++;
+                outcomes.push(choice.outcome);
+                if (choiceProblem(grade, choice)) blocked++;
+                if (!keepsPending(grade, choice)) changing++;
+            }
+        }
     }
-    const outcomes = Object.values(plan.choices).map(c => c.outcome);
-    return { counts: countOutcomes(outcomes), blocked, total: outcomes.length };
+    return { counts: countOutcomes(outcomes), blocked, total, changing };
 }
 
-/** The plan as the server takes it: one decision per decided learner. */
+/** The plan as the server takes it: one decision per learner it changes. */
 export function planDecisions(grades: readonly PromotionGrade[], plan: PromotionPlanState): PromotionDecision[] {
     return grades.flatMap(g => g.classes.flatMap(cls => cls.learners.flatMap(l => {
-        const { outcome, to } = plan.choices[l.id];
-        return outcome ? [{ student_id: l.id, from_stream_id: cls.id, outcome, to_stream_id: to }] : [];
+        const choice = plan.choices[l.id];
+        return keepsPending(g, choice) ? [] : [{ student_id: l.id, from_stream_id: cls.id, outcome: choice.outcome, to_stream_id: choice.to }];
     })));
 }
 
@@ -333,60 +408,183 @@ export function planDecisions(grades: readonly PromotionGrade[], plan: Promotion
 /** Hues both apps' palettes define. */
 export type PromotionHue = 'emerald' | 'amber' | 'violet' | 'sky' | 'slate';
 
-export const OUTCOME_ORDER: readonly PromotionOutcome[] = ['PROMOTE', 'GRADUATE', 'REPEAT', 'TRANSFER'];
+export const OUTCOME_ORDER: readonly PromotionOutcome[] = ['PROMOTE', 'PENDING', 'GRADUATE', 'REPEAT', 'TRANSFER'];
 
-export const OUTCOME_COPY: Record<PromotionOutcome, { hue: PromotionHue; count: keyof PromotionCounts; tally: string }> = {
-    PROMOTE: { hue: 'emerald', count: 'promoted', tally: 'Move up' },
-    GRADUATE: { hue: 'violet', count: 'graduated', tally: 'Graduate / leave' },
-    REPEAT: { hue: 'sky', count: 'repeated', tally: 'Repeat' },
-    TRANSFER: { hue: 'slate', count: 'transferred', tally: 'Transfer out' },
+export const OUTCOME_COPY: Record<PromotionOutcome, { hue: PromotionHue; count: keyof PromotionCounts; tally: string; hint: string }> = {
+    PROMOTE: { hue: 'emerald', count: 'promoted', tally: 'Move up', hint: 'stay active' },
+    PENDING: { hue: 'amber', count: 'pending', tally: 'Pending', hint: 'off class lists' },
+    GRADUATE: { hue: 'violet', count: 'graduated', tally: 'Graduate / leave', hint: 'archived' },
+    REPEAT: { hue: 'sky', count: 'repeated', tally: 'Repeat', hint: 'stay active' },
+    TRANSFER: { hue: 'slate', count: 'transferred', tally: 'Transfer out', hint: 'archived' },
 };
 
-export type StepTone = 'MOVES_UP' | 'DECIDE' | 'LEAVES';
+/**
+ * The outcome tallies worth showing: those some grade on the page can take,
+ * and any already counted. A school with no Grade 9 never sees "Pending".
+ */
+export function tallyOutcomes(grades: readonly PromotionGrade[], counts: PromotionCounts): PromotionOutcome[] {
+    return OUTCOME_ORDER.filter(o => counts[OUTCOME_COPY[o].count] > 0 || grades.some(g => gradeOutcomes(g).includes(o)));
+}
+
+export type StepTone = 'MOVES_UP' | 'DECIDE' | 'WAITS' | 'LEAVES';
+
+interface StepCopy {
+    tone: StepTone;
+    hue: PromotionHue;
+    badge: string;
+    target: string;
+    explain: string;
+}
+
+/** How the card of a grade whose learners are already pending reads. */
+function pendingStepCopy(step: GradeStep, gradeName: string): StepCopy {
+    const base = { tone: 'WAITS' as const, hue: 'amber' as const, badge: 'Pending' };
+    switch (step.kind) {
+        case 'PROMOTE':
+            return { ...base, target: step.nextGradeName, explain: `${step.nextGradeName} has classes now, so these learners can move up. Anyone you are not sure of stays pending.` };
+        case 'TRANSITION':
+            return step.canStay
+                ? { ...base, target: `${step.nextGradeName} or leave`, explain: `Once Senior School placement is out, mark who joins your ${step.nextGradeName} and who leaves for ${step.nextLevelName}; leavers are archived as having completed ${gradeName}. Anyone not yet known stays pending.` }
+                : { ...base, target: 'Leave', explain: `Your school has no ${step.nextGradeName} class, so these learners leave for ${step.nextLevelName}. Mark them as leaving, or add ${step.nextGradeName} on the Classes page if some stay.` };
+        case 'COMPLETE':
+            return step.reason === 'NEXT_NOT_TAUGHT'
+                ? { ...base, target: `Awaits ${step.nextGradeName}`, explain: `Your school still has no ${step.nextGradeName} class. Add it on the Classes page to move these learners up, or mark who leaves.` }
+                : { ...base, target: 'Graduate', explain: `Mark these learners as graduated, repeating or leaving, or leave them pending.` };
+    }
+}
 
 /** How a grade's card reads: its badge, where it goes, and a one-line explanation. */
-export function stepCopy(step: GradeStep, gradeName: string): { tone: StepTone; hue: PromotionHue; badge: string; target: string; explain: string } {
+export function stepCopy(grade: Pick<PromotionGrade, 'step' | 'name' | 'pending'>): StepCopy {
+    const { step, name: gradeName } = grade;
+    if (grade.pending) return pendingStepCopy(step, gradeName);
     switch (step.kind) {
         case 'PROMOTE':
             return { tone: 'MOVES_UP', hue: 'emerald', badge: 'Moves up', target: step.nextGradeName, explain: `Learners move up to ${step.nextGradeName}.` };
         case 'TRANSITION':
             return step.canStay
                 ? {
-                    tone: 'DECIDE', hue: 'amber', badge: 'Decide each learner', target: `${step.nextGradeName} or leave`,
-                    explain: `${gradeName} learners are placed into ${step.nextLevelName} nationally, so not all of them stay. Mark who joins your ${step.nextGradeName} and who leaves; leavers are archived as having completed ${gradeName}.`,
+                    tone: 'DECIDE', hue: 'amber', badge: 'Pending placement', target: `${step.nextGradeName} or leave`,
+                    explain: `${gradeName} learners are placed into ${step.nextLevelName} nationally, so not all of them stay. They are left pending while the rest of the school moves up: off class lists, records kept. Once placement is out, come back here to mark who joins your ${step.nextGradeName} and who leaves. You can mark anyone you already know now.`,
                 }
                 : {
                     tone: 'LEAVES', hue: 'violet', badge: 'Completes here', target: 'Archived',
                     explain: `Your school has no ${step.nextGradeName} class, so ${gradeName} learners complete here and leave for ${step.nextLevelName}. They are archived as having completed ${gradeName}.`,
                 };
         case 'COMPLETE':
-            return {
-                tone: 'LEAVES', hue: 'violet', badge: 'Candidates', target: 'Graduated',
-                explain: step.reason === 'FINAL_GRADE'
-                    ? `${gradeName} is the last grade, so candidates graduate and are archived.`
-                    : `Your school has no ${step.nextGradeName} class, so ${gradeName} learners graduate and are archived. Add ${step.nextGradeName} on the Classes page if they should move up instead.`,
-            };
+            if (step.reason === 'FINAL_GRADE') {
+                return { tone: 'LEAVES', hue: 'violet', badge: 'Candidates', target: 'Graduated', explain: `${gradeName} is the last grade, so candidates graduate and are archived.` };
+            }
+            return step.sameLevel
+                ? {
+                    tone: 'WAITS', hue: 'amber', badge: `Awaits ${step.nextGradeName}`, target: 'Pending',
+                    explain: `Your school has no ${step.nextGradeName} class yet, so ${gradeName} learners are left pending: off class lists, records kept. Add ${step.nextGradeName} on the Classes page, then come back here to move them up.`,
+                }
+                : {
+                    tone: 'LEAVES', hue: 'violet', badge: 'Candidates', target: 'Graduated',
+                    explain: `Your school has no ${step.nextGradeName} class, so ${gradeName} learners graduate and are archived. Add ${step.nextGradeName} on the Classes page if they should move up instead.`,
+                };
     }
 }
 
+const n = (v: number) => v.toLocaleString();
+const learners = (v: number) => `${n(v)} learner${v === 1 ? '' : 's'}`;
+
 /** The confirmation before applying a plan, in plain sentences. */
-export function confirmCopy(summary: PromotionPlanSummary): { title: string; lines: string[] } {
-    const { promoted, repeated, graduated, transferred } = summary.counts;
-    const n = (v: number) => v.toLocaleString();
+export function confirmCopy(summary: PromotionPlanSummary, stage: PromotionStage): { title: string; lines: string[] } {
+    const { promoted, repeated, graduated, transferred, pending } = summary.counts;
+    const leave = `${n(graduated + transferred)} leave the school and are archived; any unused sign-in codes stop working.`;
+    const undo = 'You can undo this afterwards if something is wrong.';
+    if (stage === 'PENDING') {
+        return {
+            title: `Decide ${learners(summary.changing)}?`,
+            lines: [
+                `${n(promoted)} join their new class and ${n(repeated)} repeat.`,
+                leave,
+                ...(pending > 0 ? [`${learners(pending)} ${pending === 1 ? 'stays' : 'stay'} pending.`] : []),
+                undo,
+            ],
+        };
+    }
     return {
-        title: `Promote ${n(summary.total)} learner${summary.total === 1 ? '' : 's'}?`,
+        title: `Promote ${learners(summary.total)}?`,
         lines: [
             `${n(promoted)} move up a class and ${n(repeated)} repeat.`,
-            `${n(graduated + transferred)} leave the school and are archived; any unused sign-in codes stop working.`,
-            'You can undo this afterwards if something is wrong.',
+            ...(pending > 0 ? [`${learners(pending)} ${pending === 1 ? 'is' : 'are'} left pending: off class lists until you decide them on this page.`] : []),
+            leave,
+            undo,
         ],
     };
 }
 
-/** A grade whose Grade 9s can't stay because the next grade has no class yet, worth offering to add. */
-export function missingSeniorGrade(grades: readonly PromotionGrade[]): (PromotionGrade & { step: Extract<GradeStep, { kind: 'TRANSITION' }> }) | undefined {
-    return grades.find((g): g is PromotionGrade & { step: Extract<GradeStep, { kind: 'TRANSITION' }> } =>
-        g.step.kind === 'TRANSITION' && !g.step.canStay && isOfferedGrade(g.step.nextGradeName));
+/** The page's one-line description, the same on the web and the phone. */
+export function pageDescription(overview: Pick<PromotionOverview, 'academicYear' | 'stage'> | null): string {
+    if (!overview?.academicYear) return 'Move learners up a class at the end of the year, and archive those who leave.';
+    const year = overview.academicYear.name;
+    switch (overview.stage) {
+        case 'OPEN':
+            return `Close ${year}: learners move up a class, candidates graduate and are archived, and Grade 9s are left pending until Senior School placement is out.`;
+        case 'PENDING':
+            return `${year} is promoted. Decide the pending learners when you are ready; everyone else has already moved up.`;
+        case 'DONE':
+            return `${year} is promoted: learners have moved up a class and those who left are archived.`;
+    }
+}
+
+/** The undo button and its confirmation, for the year's latest step. */
+export function undoCopy(run: PromotionRunSummary): { button: string; title: string; message: string; done: string } {
+    if (run.decidesPending) {
+        const decided = run.promoted + run.repeated + run.graduated + run.transferred;
+        return {
+            button: 'Undo last decisions',
+            title: 'Undo these decisions?',
+            message: `The ${learners(decided)} decided in this step go back to pending, including any archived. Anyone you have moved or edited by hand since is left as they are.`,
+            done: 'Decisions undone',
+        };
+    }
+    return {
+        button: 'Undo promotion',
+        title: 'Undo this promotion?',
+        message: 'Every learner goes back to the class and status they had before it, including those archived or left pending. Anyone you have moved or edited by hand since is left as they are.',
+        done: 'Promotion undone',
+    };
+}
+
+/** The button that applies the plan. */
+export const runLabel = (summary: PromotionPlanSummary, stage: PromotionStage): string =>
+    stage === 'PENDING' ? `Decide ${learners(summary.changing)}` : `Promote ${learners(summary.total)}`;
+
+/** Why the plan can't be applied yet, or the reassurance that it can. */
+export function planStatus(summary: PromotionPlanSummary, stage: PromotionStage): { ready: boolean; text: string } {
+    if (summary.blocked > 0) return { ready: false, text: `${learners(summary.blocked)} still need${summary.blocked === 1 ? 's' : ''} a class to move into.` };
+    if (stage === 'PENDING' && summary.changing === 0) return { ready: false, text: 'Mark what happens to a learner to decide them. Nothing changes until you do.' };
+    if (summary.total === 0) return { ready: false, text: 'There are no learners to promote.' };
+    return { ready: true, text: 'Every learner is decided. Nothing changes until you press the button.' };
+}
+
+/**
+ * A grade whose learners could move up if the school added the next grade's
+ * class (Grade 10 for Grade 9s who stay, Grade 11 for a school still adding
+ * Senior School), worth offering to add.
+ */
+export function nextGradeToAdd(grades: readonly PromotionGrade[]): { nextGradeName: string; title: string; body: string } | null {
+    for (const g of grades) {
+        const step = g.step;
+        if (step.kind === 'TRANSITION' && !step.canStay && isOfferedGrade(step.nextGradeName)) {
+            return {
+                nextGradeName: step.nextGradeName,
+                title: `Do some ${g.name} learners stay for ${step.nextLevelName}?`,
+                body: `Only a school with a ${step.nextGradeName} class can keep them. Add one first, then come back.`,
+            };
+        }
+        if (step.kind === 'COMPLETE' && step.reason === 'NEXT_NOT_TAUGHT' && step.sameLevel && isOfferedGrade(step.nextGradeName)) {
+            return {
+                nextGradeName: step.nextGradeName,
+                title: `Moving ${g.name} up to ${step.nextGradeName}?`,
+                body: `Add a ${step.nextGradeName} class first. Until then ${g.name} learners can be left pending, and moved up here once it exists.`,
+            };
+        }
+    }
+    return null;
 }
 
 /** Whether anyone could stay for Senior School, so they will need placing in a pathway. */

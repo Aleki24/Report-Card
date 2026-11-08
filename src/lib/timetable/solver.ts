@@ -31,9 +31,11 @@
  *
  * Method: most-constrained-first greedy placement with ejection, a repair
  * pass that makes room for anything left over (moving the lessons in the way
- * elsewhere), then simulated annealing (moves and swaps). `solveTimetable`
- * runs several seeds and keeps the best. Pure: no I/O, deterministic for a
- * seed and a time budget.
+ * elsewhere), then simulated annealing (moves and swaps). With `fillFree`, a
+ * last pass gives a class's periods still free an extra lesson of one of its
+ * own subjects, under the same hard rules. `solveTimetable` runs several
+ * seeds and keeps the best. Pure: no I/O, deterministic for a seed and a
+ * time budget.
  */
 
 import type { TimetableQuality } from './config';
@@ -70,6 +72,12 @@ export interface SolverRequirement {
     preferAfternoon?: boolean;
     /** The section whose bell the class follows; the first section when omitted. */
     sectionId?: string;
+    /**
+     * How much the class gains from an extra lesson of it in a free period
+     * (`fillFree`): 0 or omitted never, higher first. Core subjects such as
+     * mathematics and languages rank above the rest.
+     */
+    fillPriority?: number;
 }
 
 export interface SolverRoom { id: string; type: string }
@@ -88,6 +96,8 @@ export interface SolverRules {
     /** Stop improving after this long. */
     timeBudgetMs: number;
     seed: number;
+    /** Give classes' free periods extra lessons, where nobody clashes. */
+    fillFree: boolean;
 }
 
 export interface SolverInput {
@@ -103,15 +113,38 @@ export interface SolverInput {
     rules?: Partial<SolverRules>;
 }
 
-export interface PlacedLesson { requirementId: string; day: number; period: number; roomId: string | null; pinned: boolean }
+export interface PlacedLesson {
+    requirementId: string;
+    day: number;
+    period: number;
+    roomId: string | null;
+    pinned: boolean;
+    /** Beyond the requirement's lessons a week: it fills a period that was free. */
+    extra: boolean;
+}
 
 export interface SolverResult {
     lessons: PlacedLesson[];
     unplaced: { requirementId: string; lessons: number }[];
-    stats: { placed: number; required: number; cost: number; iterations: number; ms: number; attempts: number; quality: TimetableQuality };
+    stats: {
+        placed: number; required: number; cost: number; iterations: number; ms: number; attempts: number; quality: TimetableQuality;
+        /** Free class periods given an extra lesson. */
+        extras: number;
+    };
 }
 
-const DEFAULT_RULES: SolverRules = { maxConsecutive: 4, timeBudgetMs: 2500, seed: 42 };
+const DEFAULT_RULES: SolverRules = { maxConsecutive: 4, timeBudgetMs: 2500, seed: 42, fillFree: false };
+
+/**
+ * Extra lessons one teacher takes on, so filling free periods never piles
+ * work on the few who happen to be free. A week: three, or up to six for a
+ * teacher whose own week is light, never past `FULL_WEEK` lessons in all. A
+ * day: one, then two for the periods nobody could take at one.
+ */
+const EXTRA_PER_TEACHER_WEEK = { least: 3, most: 6 } as const;
+const FULL_WEEK = 30;
+const EXTRA_PER_TEACHER_DAY = [1, 2] as const;
+const extraWeekCap = (load: number) => Math.max(EXTRA_PER_TEACHER_WEEK.least, Math.min(EXTRA_PER_TEACHER_WEEK.most, FULL_WEEK - load));
 
 const COST = {
     /** A subject's lesson on a day beyond its fair share. */
@@ -198,6 +231,8 @@ interface Session {
     bell: Bell;
     length: 1 | 2;
     pinned: boolean;
+    /** Added by the fill pass, beyond the requirement's lessons. */
+    extra: boolean;
     day: number;       // index into days, -1 when unplaced
     slot: number;      // index into the bell's teaching slots, -1 when unplaced
     roomId: string | null;
@@ -258,8 +293,8 @@ function solveOnce(input: SolverInput, rules: SolverRules): SolverResult {
     for (const req of input.requirements) {
         const bell = bellFor(req);
         const doubles = Math.max(0, Math.min(req.doubles, Math.floor(req.lessons / 2)));
-        for (let i = 0; i < doubles; i++) sessions.push({ key: sessions.length, req, bell, length: 2, pinned: false, day: -1, slot: -1, roomId: null });
-        for (let i = 0; i < req.lessons - doubles * 2; i++) sessions.push({ key: sessions.length, req, bell, length: 1, pinned: false, day: -1, slot: -1, roomId: null });
+        for (let i = 0; i < doubles; i++) sessions.push({ key: sessions.length, req, bell, length: 2, pinned: false, extra: false, day: -1, slot: -1, roomId: null });
+        for (let i = 0; i < req.lessons - doubles * 2; i++) sessions.push({ key: sessions.length, req, bell, length: 1, pinned: false, extra: false, day: -1, slot: -1, roomId: null });
     }
     const byKey = sessions;
 
@@ -663,22 +698,160 @@ function solveOnce(input: SolverInput, rules: SolverRules): SolverResult {
         movable.forEach((x, i) => { const [day, slot] = bestState[i]; if (day >= 0) place(x, day, slot, bestRooms[i]); });
     }
 
+    // The seeds are compared on the required lessons alone, before any extras.
+    const cost = totalCost();
+
+    // ── Fill: extra lessons in the periods still free ────────────────────
+    // Each free period of a class, gaps inside its day first, takes one more
+    // lesson of one of its own subjects: never one whose teacher is busy,
+    // away or already given their extras, nor one needing a room when none is
+    // free, nor one that runs a teacher past their longest stretch. Subjects
+    // the class has not had that day come first, then the most deserving
+    // (mathematics, languages, sciences), then the teacher with the lighter
+    // day. A period nobody can take is offered one of the class's own lessons
+    // from elsewhere in the week, and the period that frees is filled instead.
+    const fillFreePeriods = (): number => {
+        const candidates = new Map<string, SolverRequirement[]>();
+        for (const r of input.requirements) {
+            if ((r.fillPriority ?? 0) <= 0 || teachersOf(r).length === 0) continue;
+            candidates.set(r.streamId, [...(candidates.get(r.streamId) ?? []), r]);
+        }
+        const free: { streamId: string; bell: Bell; day: number; slot: number; inside: boolean; tie: number }[] = [];
+        for (const [streamId, g] of streamGrids) {
+            const bell = streamBell.get(streamId);
+            if (!bell || !candidates.has(streamId)) continue;
+            const n = bell.teaching.length;
+            for (let d = 0; d < dayCount; d++) {
+                let lastTaught = -1;
+                for (let t = 0; t < n; t++) if (bell.open[d * n + t] && g[d * n + t] >= 0) lastTaught = t;
+                for (let t = 0; t < n; t++) {
+                    if (bell.open[d * n + t] && g[d * n + t] < 0) free.push({ streamId, bell, day: d, slot: t, inside: t < lastTaught, tie: random() });
+                }
+            }
+        }
+        free.sort((a, b) => Number(b.inside) - Number(a.inside) || a.tie - b.tie);
+
+        const perRequirement = new Map<string, number>();
+        const perTeacher = new Map<string, number>();
+        const perTeacherDay = new Map<string, number>();
+        let dayCap: number = EXTRA_PER_TEACHER_DAY[0];
+        const atLimit = (teacherId: string, day: number) =>
+            (perTeacher.get(teacherId) ?? 0) >= extraWeekCap(teacherLoad.get(teacherId) ?? 0) || (perTeacherDay.get(`${teacherId}|${day}`) ?? 0) >= dayCap;
+        const track = (x: Session) => {
+            sessions.push(x);
+            teachersOf(x.req).forEach(t => teacherSessions.set(t, [...(teacherSessions.get(t) ?? []), x]));
+        };
+        const untrack = (x: Session) => {
+            teachersOf(x.req).forEach(t => teacherSessions.set(t, (teacherSessions.get(t) ?? []).filter(y => y !== x)));
+            sessions.pop();
+        };
+        const overOf = (teachers: readonly string[], day: number) => teachers.reduce((sum, t) => sum + teacherDay(t, day).over, 0);
+        /** A class's lessons of each subject on a day, a double counted once. */
+        const subjectsOn = (streamId: string, bell: Bell, day: number) => {
+            const g = streamGrids.get(streamId)!;
+            const n = bell.teaching.length;
+            const today = new Map<string, number>();
+            let last = -1;
+            for (let t = 0; t < n; t++) {
+                const key = g[day * n + t];
+                if (key >= 0 && key !== last) today.set(byKey[key].req.subjectId, (today.get(byKey[key].req.subjectId) ?? 0) + 1);
+                last = key;
+            }
+            return today;
+        };
+
+        /** Places the best extra lesson a class can take at a free period, if any. */
+        const fillAt = (streamId: string, bell: Bell, day: number, slot: number): boolean => {
+            const today = subjectsOn(streamId, bell, day);
+            let best: { req: SolverRequirement; roomId: string | null; score: number } | null = null;
+            for (const req of candidates.get(streamId) ?? []) {
+                const teachers = teachersOf(req);
+                if (teachers.some(t => atLimit(t, day))) continue;
+                const x: Session = { key: sessions.length, req, bell, length: 1, pinned: false, extra: true, day: -1, slot: -1, roomId: null };
+                if (!shapeFits(x, day, slot)) continue;
+                const { blockers, roomId, hard } = conflictsAt(x, day, slot);
+                if (blockers.size > 0 || hard) continue;
+                const overBefore = overOf(teachers, day);
+                track(x);
+                place(x, day, slot, roomId);
+                const overAfter = overOf(teachers, day);
+                const load = teachers.reduce((sum, t) => sum + teacherDay(t, day).load, 0) / teachers.length;
+                unplace(x);
+                untrack(x);
+                if (overAfter > overBefore) continue;
+                const score = (today.get(req.subjectId) ?? 0) * 12
+                    + (perRequirement.get(req.id) ?? 0) * 6
+                    + (req.preferMorning && !bell.isMorning[slot] ? 2 : 0)
+                    + (req.preferAfternoon && bell.isEarly[slot] ? 2 : 0)
+                    + load
+                    - (req.fillPriority ?? 0) * 4;
+                if (!best || score < best.score) best = { req, roomId, score };
+            }
+            if (!best) return false;
+            const x: Session = { key: sessions.length, req: best.req, bell, length: 1, pinned: false, extra: true, day: -1, slot: -1, roomId: null };
+            track(x);
+            place(x, day, slot, best.roomId);
+            perRequirement.set(best.req.id, (perRequirement.get(best.req.id) ?? 0) + 1);
+            for (const t of teachersOf(best.req)) {
+                perTeacher.set(t, (perTeacher.get(t) ?? 0) + 1);
+                perTeacherDay.set(`${t}|${day}`, (perTeacherDay.get(`${t}|${day}`) ?? 0) + 1);
+            }
+            return true;
+        };
+
+        /**
+         * For a period nobody can take: one of the class's own single lessons
+         * moves into it, where its teacher is free, it stays within its
+         * subject's share of that day and nobody runs too long; the period it
+         * leaves is then filled. Undone when that fails.
+         */
+        const fillByMoving = (streamId: string, bell: Bell, day: number, slot: number): boolean => {
+            const own = sessions.filter(x => x.req.streamId === streamId && x.day >= 0 && !x.pinned && !x.extra && x.length === 1);
+            for (let i = own.length - 1; i > 0; i--) { const j = Math.floor(random() * (i + 1)); [own[i], own[j]] = [own[j], own[i]]; }
+            for (const x of own) {
+                const from = { day: x.day, slot: x.slot, roomId: x.roomId };
+                if (from.day !== day && (subjectsOn(streamId, bell, day).get(x.req.subjectId) ?? 0) + 1 > dailyShare(streamId, x.req.subjectId, bell)) continue;
+                const teachers = teachersOf(x.req);
+                const overBefore = overOf(teachers, day) + (from.day !== day ? overOf(teachers, from.day) : 0);
+                unplace(x);
+                const fit = shapeFits(x, day, slot) ? conflictsAt(x, day, slot) : null;
+                if (fit && fit.blockers.size === 0 && !fit.hard) {
+                    place(x, day, slot, fit.roomId);
+                    const overAfter = overOf(teachers, day) + (from.day !== day ? overOf(teachers, from.day) : 0);
+                    if (overAfter <= overBefore && fillAt(streamId, bell, from.day, from.slot)) return true;
+                    unplace(x);
+                }
+                place(x, from.day, from.slot, from.roomId);
+            }
+            return false;
+        };
+
+        let added = 0;
+        const stillFree = (f: (typeof free)[number]) => streamGrids.get(f.streamId)![f.day * f.bell.teaching.length + f.slot] < 0;
+        for (const cap of EXTRA_PER_TEACHER_DAY) {
+            dayCap = cap;
+            for (const f of free) if (stillFree(f) && fillAt(f.streamId, f.bell, f.day, f.slot)) added++;
+        }
+        for (const f of free) if (stillFree(f) && fillByMoving(f.streamId, f.bell, f.day, f.slot)) added++;
+        return added;
+    };
+    const extras = rules.fillFree ? fillFreePeriods() : 0;
+
     // ── Result ───────────────────────────────────────────────────────────
     const lessons: PlacedLesson[] = [];
     const missing = new Map<string, number>();
     for (const s of sessions) {
         if (s.day < 0) { missing.set(s.req.id, (missing.get(s.req.id) ?? 0) + s.length); continue; }
         for (let k = 0; k < s.length; k++) {
-            lessons.push({ requirementId: s.req.id, day: input.days[s.day], period: s.bell.teaching[s.slot + k], roomId: s.roomId, pinned: s.pinned });
+            lessons.push({ requirementId: s.req.id, day: input.days[s.day], period: s.bell.teaching[s.slot + k], roomId: s.roomId, pinned: s.pinned, extra: s.extra });
         }
     }
-    const cost = totalCost();
     const required = input.requirements.reduce((n, r) => n + r.lessons, 0);
     return {
         lessons,
         unplaced: [...missing.entries()].map(([requirementId, n]) => ({ requirementId, lessons: n })),
         stats: {
-            placed: lessons.length, required, cost: Math.round(cost), iterations, ms: Date.now() - started, attempts: 1,
+            placed: lessons.length - extras, required, cost: Math.round(cost), iterations, ms: Date.now() - started, attempts: 1, extras,
             quality: measureQuality({
                 sessions, dayCount, streamGrids, streamBell, teacherIds, totalLessons: required,
                 teacherLongRuns: (id, d) => teacherDay(id, d).longRuns,
@@ -744,6 +917,8 @@ function measureQuality(q: {
                 if (key === last) continue;
                 last = key;
                 const s = q.sessions[key];
+                // An extra lesson fills a gap; it is not how the subject's own lessons are spread.
+                if (s.extra) continue;
                 const count = (seen.get(s.req.subjectId) ?? 0) + 1;
                 seen.set(s.req.subjectId, count);
                 if (count > q.dailyShare(streamId, s.req.subjectId)) repeatsInDay++;

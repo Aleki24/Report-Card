@@ -6,6 +6,7 @@ import { LoaderCircle, Save, School, UserRound, Users } from 'lucide-react';
 import { FormField, FormGrid, InputField, SelectField, type SelectOption } from '@/components/ui/FormField';
 import { StudentStatus } from '@/lib/schemas';
 import { CLASS_REQUIRED_MESSAGE } from '@/lib/classes';
+import { PENDING_STATUS_HINT, needsClass } from '@/lib/student/status-access';
 import type { StudentProfile } from '@/types/user-profile';
 import { humanize } from '../userMeta';
 import { ProfileSection } from './ProfileParts';
@@ -34,7 +35,7 @@ const studentDetailsSchema = z.object({
     return digits >= 9 && digits <= 12;
   }, 'Use a format like 0712345678'),
   guardian_email: z.union([z.literal(''), z.string().trim().email('Enter a valid email')]),
-}).refine(v => v.status !== 'ACTIVE' || v.grade_stream_id !== '', { path: ['grade_stream_id'], message: CLASS_REQUIRED_MESSAGE });
+}).refine(v => !needsClass(v.status) || v.grade_stream_id !== '', { path: ['grade_stream_id'], message: CLASS_REQUIRED_MESSAGE });
 
 type FormValues = z.input<typeof studentDetailsSchema>;
 type FieldErrors = Partial<Record<keyof FormValues, string>>;
@@ -155,14 +156,14 @@ export function StudentDetailsForm({ profile, onCancel, onSaved }: StudentDetail
           <FormField label="Date of birth" htmlFor={`${id}-date_of_birth`} error={errors.date_of_birth} span="half">
             <InputField {...text('date_of_birth')} type="date" max={new Date().toISOString().slice(0, 10)} />
           </FormField>
-          <FormField label="Enrolment status" htmlFor={`${id}-status`} span="half" hint={values.status === 'ACTIVE' ? undefined : 'Learners who have left can be without a class.'}>
+          <FormField label="Enrolment status" htmlFor={`${id}-status`} span="half" hint={values.status === 'ACTIVE' ? undefined : values.status === 'PENDING' ? PENDING_STATUS_HINT : 'Learners who have left can be without a class.'}>
             <SelectField id={`${id}-status`} value={values.status} onChange={v => set('status')(v as FormValues['status'])} options={STATUS_OPTIONS} placeholder={null} />
           </FormField>
         </FormGrid>
       </ProfileSection>
 
       <ProfileSection title="Class" icon={School}>
-        <FormField label="Class" htmlFor={`${id}-grade_stream_id`} required={values.status === 'ACTIVE'} error={errors.grade_stream_id ?? classes.error ?? undefined}>
+        <FormField label="Class" htmlFor={`${id}-grade_stream_id`} required={needsClass(values.status)} error={errors.grade_stream_id ?? classes.error ?? undefined}>
           <SelectField
             id={`${id}-grade_stream_id`}
             value={values.grade_stream_id}
