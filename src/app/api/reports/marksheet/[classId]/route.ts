@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { safeFileName } from '@/lib/filename';
 import { fetchAllRows } from '@/lib/postgrest';
 import { authorizeClassReport } from '@/lib/reports/report-access';
+import { classLearnersInTerm } from '@/lib/reports/class-history';
 import { termBelongsToSchool } from '@/lib/tenant-scope';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { classTeacherSignoffs } from '@/lib/pdf/classTeacherSignoff';
@@ -84,19 +85,25 @@ export async function GET(
         const combinationId = searchParams.get('combinationId');
         const pathwayFilter = searchParams.get('pathway');
 
-        // 1. Fetch Students in the grade stream (classId = grade_stream_id)
-        let studentsQuery = supabase
-            .from('students')
-            .select('id, admission_number, academic_level_id, current_grade_stream_id, pathway, subject_combination_id, users(first_name, last_name, school_id), grade_streams(full_name, grade_id)')
-            .eq('current_grade_stream_id', classId)
-            // Learners who left (transferred, graduated) are not listed or ranked.
-            .eq('status', 'ACTIVE');
-        if (combinationId) studentsQuery = studentsQuery.eq('subject_combination_id', combinationId);
-        if (pathwayFilter) studentsQuery = studentsQuery.eq('pathway', pathwayFilter);
+        // 1. The class's learners for this term: who was in it then, for a
+        // term of a year already promoted; else the learners in it now.
+        // Learners who left (transferred, graduated) are not listed or ranked.
+        type SheetLearner = {
+            id: string; admission_number: string | null; academic_level_id: string | null; current_grade_stream_id: string | null;
+            pathway: string | null; subject_combination_id: string | null;
+            users: { first_name: string | null; last_name: string | null; school_id: string | null } | null;
+        };
+        const [{ rows: classLearners }, { data: classRow }] = await Promise.all([
+            classLearnersInTerm<SheetLearner>(supabase, {
+                schoolId: userSchoolId, termId, streamId: classId, current: 'active',
+                select: 'id, admission_number, academic_level_id, current_grade_stream_id, pathway, subject_combination_id, users(first_name, last_name, school_id)',
+            }),
+            supabase.from('grade_streams').select('full_name, grade_id').eq('id', classId).maybeSingle(),
+        ]);
+        const students = classLearners.filter(s =>
+            (!combinationId || s.subject_combination_id === combinationId) && (!pathwayFilter || s.pathway === pathwayFilter));
 
-        const { data: students, error: studentsErr } = await studentsQuery;
-
-        if (studentsErr || !students || students.length === 0) {
+        if (students.length === 0) {
             return NextResponse.json({ error: 'No students found in this class' }, { status: 404 });
         }
 
@@ -131,8 +138,9 @@ export async function GET(
 
         // 8-4-4 Forms are graded KCSE-style (points); every CBC grade on CBC levels.
         const firstAcademicLevelId = students[0].academic_level_id;
-        const streamName = (students[0] as any)?.grade_streams?.full_name || '';
-        const gradeId = (students[0] as any)?.grade_streams?.grade_id;
+        // The class's own name and grade: after a promotion its learners of a past term sit in other classes now.
+        const streamName = classRow?.full_name || '';
+        const gradeId = classRow?.grade_id;
         
         // Fetch grade code from grades table
         let gradeLevelCode = '';
@@ -583,7 +591,7 @@ export async function GET(
                 : (gradeSymbolFromScales(classMeanPercentage, gradingScales) ?? '-');
         
         // Label a filtered sheet with its combination code / pathway
-        let classNameLabel = (students[0].grade_streams as any)?.full_name || 'Class';
+        let classNameLabel = streamName || 'Class';
         if (combinationId) {
             const { data: combo } = await supabase
                 .from('subject_combinations')

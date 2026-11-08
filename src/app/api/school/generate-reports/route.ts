@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCaller } from '@/lib/auth-server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
+import { classMembersInTerm, promotedYearOfTerm } from '@/lib/reports/class-history';
 
 export async function POST(request: NextRequest) {
   try {
@@ -51,6 +52,23 @@ export async function POST(request: NextRequest) {
         an admin. The release flag still gates the public QR page a parent
         scans; it no longer gates the school's own staff.
       */
+    }
+
+    // A term of a year already promoted: the class's learners then sit in
+    // other classes now, so the RPC (which reads current classes) would file
+    // this year's learners under last year's term. Their records are kept
+    // from the promotion instead; the cards themselves are built from marks.
+    const promotedYear = await promotedYearOfTerm(supabase, schoolId, term_id);
+    if (promotedYear) {
+      const members = await classMembersInTerm(supabase, schoolId, term_id, [grade_stream_id]);
+      const rows = [...(members?.keys() ?? [])].map(student_id => ({
+        student_id, academic_year_id: promotedYear, term_id, grade_stream_id, generated_at: new Date().toISOString(),
+      }));
+      if (rows.length > 0) {
+        const { error: upsertError } = await supabase.from('report_cards').upsert(rows, { onConflict: 'student_id,academic_year_id,term_id' });
+        if (upsertError) return NextResponse.json({ error: upsertError.message }, { status: 400 });
+      }
+      return NextResponse.json({ success: true, message: 'Reports generated successfully' });
     }
 
     // Call the RPC function

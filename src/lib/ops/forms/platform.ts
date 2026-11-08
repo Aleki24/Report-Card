@@ -41,6 +41,8 @@ export interface ChildOverview {
         comments_principal: string | null;
         terms: { id: string; name: string } | null;
         academic_years: { id: string; name: string } | null;
+        /** The class the learner was in that term (older servers sent none). */
+        grade_streams?: { full_name?: string | null; name?: string | null } | null;
     }[];
     attendance: { id: string; date: string; status: string }[];
     /** The latest terms' fees, for the list. */
@@ -58,8 +60,11 @@ export const ATTENDANCE_TONES: Record<string, PillTone> = { present: 'good', abs
 export const feeBalance = (o: ChildOverview) =>
     o.feeOwed ?? o.fees.reduce((n, f) => n + Math.max(0, Number(f.total_fee) - Number(f.paid_amount)), 0);
 /** "Term 2 2026" for a report card. */
-export const reportTermLabel = (r: ChildOverview['reports'][number]) =>
-    [r.terms?.name, r.academic_years?.name].filter(Boolean).join(' ') || 'Report card';
+export const reportTermLabel = (r: ChildOverview['reports'][number]) => {
+    const term = [r.terms?.name, r.academic_years?.name].filter(Boolean).join(' ') || 'Report card';
+    const className = r.grade_streams?.full_name || r.grade_streams?.name;
+    return className ? `${term} · ${className}` : term;
+};
 export const absences = (o: ChildOverview) => o.attendance.filter(a => a.status === 'absent').length;
 export const rideLine = (ride: NonNullable<ChildOverview['ride']>) =>
     `${ride.route?.name ?? ''} · ${ride.stop?.name ?? 'stop not set'}${ride.stop?.pickup_time ? ` · pick-up ${ride.stop.pickup_time.slice(0, 5)}` : ''}${ride.stop?.dropoff_time ? ` · drop-off ${ride.stop.dropoff_time.slice(0, 5)}` : ''}`;

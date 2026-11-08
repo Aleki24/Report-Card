@@ -14,6 +14,7 @@ import { select844Subjects, getGradeFromPercentageSimple, type SubjectCategory }
 import type { CurrentStudent, StudentTermTrend } from '@/types';
 import { findActiveTermId } from '@/lib/term-calendar';
 import { embedOne } from '@/lib/postgrest';
+import { learnerClassesByYear } from '@/lib/reports/class-history';
 import { STUDENT_ASSIGNMENT_LOOKBACK_DAYS, type StudentAssignment } from '@/lib/assignments';
 
 // ── Profile ─────────────────────────────────────────────────
@@ -250,7 +251,8 @@ export interface StudentReportCardListItem {
  * The learner's report cards, newest first: one for every term with released
  * results, the card /api/reports/student/[id]?term=&year= builds from those
  * marks, with the average the dashboard shows (best seven for 8-4-4). Comments
- * a teacher saved for the term ride along.
+ * a teacher saved for the term ride along. Each names the class the learner
+ * was in that term: after a promotion, the class they moved up from.
  *
  * The list used to be the report_cards rows, which only the comments screen
  * writes: a learner with released results but no saved comments had no card,
@@ -262,17 +264,25 @@ export async function getStudentReportCards(
     trends?: StudentTermTrend[],
 ): Promise<StudentReportCardListItem[]> {
     const supabase = createSupabaseAdmin();
-    const [terms, commentsRes, streamRes] = await Promise.all([
+    const [terms, commentsRes, streamRes, history] = await Promise.all([
         trends ?? getStudentPerformanceTrends(student),
         supabase
             .from('report_cards')
             .select('id, term_id, academic_year_id, comments_class_teacher, comments_principal, behaviour_summary, attendance_present, attendance_total, generated_at, grade_streams ( id, name, full_name )')
             .eq('student_id', student.studentId),
         supabase.from('grade_streams').select('id, name, full_name').eq('id', student.gradeStreamId).maybeSingle(),
+        // The class each promoted year was spent in.
+        learnerClassesByYear(supabase, student.schoolId, [student.studentId]),
     ]);
     if (commentsRes.error) throw commentsRes.error;
     type Stream = StudentReportCardListItem['grade_streams'];
     const saved = new Map((commentsRes.data ?? []).map(rc => [`${rc.term_id}_${rc.academic_year_id}`, rc]));
+    const classByYear = history.get(student.studentId) ?? new Map<string, string>();
+    const pastStreamIds = [...new Set(classByYear.values())].filter(id => id !== student.gradeStreamId);
+    const pastStreams = pastStreamIds.length > 0
+        ? (await supabase.from('grade_streams').select('id, name, full_name').in('id', pastStreamIds)).data ?? []
+        : [];
+    const streamById = new Map<string, NonNullable<Stream>>([...pastStreams, ...(streamRes.data ? [streamRes.data] : [])].map(st => [st.id as string, st as NonNullable<Stream>]));
 
     return [...terms].reverse().filter(t => t.termId && t.yearId).map(t => {
         const rc = saved.get(`${t.termId}_${t.yearId}`);
@@ -289,8 +299,9 @@ export async function getStudentReportCards(
             generated_at: rc?.generated_at ?? null,
             academic_years: { id: t.yearId, name: t.yearName },
             terms: { id: t.termId, name: t.termName },
-            // The class the comments were written for, else the learner's own.
-            grade_streams: embedOne<NonNullable<Stream>>(rc?.grade_streams) ?? (streamRes.data as Stream) ?? null,
+            // The class the learner was in that year (from its promotion), else
+            // the class the comments were written for, else their class now.
+            grade_streams: streamById.get(classByYear.get(t.yearId) ?? '') ?? embedOne<NonNullable<Stream>>(rc?.grade_streams) ?? (streamRes.data as Stream) ?? null,
             report_card_subjects: t.subjects.map(sub => ({
                 id: sub.id,
                 total_score: null,

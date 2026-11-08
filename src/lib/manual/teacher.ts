@@ -75,7 +75,10 @@ export const classTeacherManual: Manual = {
                         { title: 'Add your comments', body: 'Under “Comments on the cards”, write a class teacher remark for each learner (for example “Excellent progress this term”). They print on the cards.' },
                         { title: 'Download', body: '“Generate & download” produces every card in one PDF; “Choose learner” produces one; “Download mark sheet” gives the ranked class list.' },
                     ],
-                    points: ['Sending results to parents by SMS is done by an administrator.'],
+                    points: [
+                        'Sending results to parents by SMS is done by an administrator.',
+                        'After learners move up a class, last year’s cards still print: choose last year’s term and your class as it was then.',
+                    ],
                 },
             ],
         },

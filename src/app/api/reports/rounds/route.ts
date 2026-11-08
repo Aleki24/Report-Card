@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authorizeClassReport } from '@/lib/reports/report-access';
+import { classLearnersInTerm } from '@/lib/reports/class-history';
 import { termBelongsToSchool } from '@/lib/tenant-scope';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { internalError } from '@/lib/api-errors';
@@ -44,12 +45,12 @@ export async function GET(request: NextRequest) {
         }
 
         const supabase = createSupabaseAdmin();
-        const [{ data: stream, error: streamError }, { data: students, error: studentsError }] = await Promise.all([
+        // The class's learners for the term: who was in it then, once its year has been promoted.
+        const [{ data: stream, error: streamError }, { rows: students }] = await Promise.all([
             supabase.from('grade_streams').select('grade_id').eq('id', streamId).maybeSingle(),
-            supabase.from('students').select('id').eq('current_grade_stream_id', streamId),
+            classLearnersInTerm<{ id: string }>(supabase, { schoolId: access.session.schoolId, termId, streamId, select: 'id', current: 'any' }),
         ]);
         if (streamError) return internalError('report rounds stream', streamError);
-        if (studentsError) return internalError('report rounds students', studentsError);
 
         // The class's own exams plus grade-wide ones, as the report routes use.
         let examsQuery = supabase
@@ -63,7 +64,7 @@ export async function GET(request: NextRequest) {
         if (examsError) return internalError('report rounds exams', examsError);
 
         const exams = ((examData ?? []) as ExamRow[]).filter(e => e.exam_type);
-        const studentIds = (students ?? []).map(s => s.id as string);
+        const studentIds = students.map(s => s.id);
         const empty: ReportRoundsResponse = { rounds: [], suggested: null };
         if (exams.length === 0) return NextResponse.json(empty);
 

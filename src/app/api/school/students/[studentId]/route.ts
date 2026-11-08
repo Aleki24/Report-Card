@@ -104,6 +104,7 @@ export async function GET(
       generated_at: rc.generated_at,
       term: rc.terms.name,
       year: rc.academic_years.name,
+      class_name: rc.grade_streams?.full_name || rc.grade_streams?.name || null,
       average: rc.overall_average,
       position: rc.overall_position,
       subjects: rc.report_card_subjects.length,

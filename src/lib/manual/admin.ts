@@ -278,6 +278,7 @@ export const adminManual: Manual = {
                         'Class teacher and principal comments are added under “Comments on the cards” and print on each learner’s card.',
                         'Each report card carries a QR code. Scanning it opens a page that shows the approved results, so parents and others can check a card is genuine.',
                         'Senior School classes can split the class download by subject combination.',
+                        'Last year’s cards stay available after promotion: choose the year, the term and the class as it was then (for example Grade 7 East, 2026). The cards list the learners who were in it, wherever they are now, with that class, its class teacher and its positions.',
                     ],
                 },
                 {
@@ -371,8 +372,9 @@ export const adminManual: Manual = {
                 points: [
                     'Each learner is promoted once a year. “Undo promotion” puts everyone back if something was wrong; after deciding pending learners, “Undo last decisions” puts just those back to pending.',
                     'People shows pending learners under the status “Pending promotion”.',
+                    'Report cards from before the promotion still print for the classes learners were in then, and each learner’s profile lists every term’s card under that class.',
                 ],
-                caution: 'Promote only after report cards for the last term are out: learners’ classes change straight away.',
+                caution: 'Learners’ classes change straight away, so check the last term’s marks are complete before you promote.',
             }],
         },
         {

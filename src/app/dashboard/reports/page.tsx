@@ -26,8 +26,9 @@ interface AcademicYearOption { id: string; name: string }
 
 type Dialog = 'student' | 'sms' | 'compare' | null;
 
-/** A class's learners, loaded once per class and shared by the dialogs. */
-type Roster = { streamId: string; learners: RosterLearner[] | null };
+/** A class's learners for a term, loaded once per class and term and shared by the dialogs. */
+type Roster = { key: string; learners: RosterLearner[] | null };
+const rosterKey = (streamId: string, termId: string) => `${streamId}|${termId}`;
 
 const sameComment = (a: StudentComment, b: StudentComment | undefined) =>
   !!b && a.comments_class_teacher === b.comments_class_teacher && a.comments_principal === b.comments_principal;
@@ -153,37 +154,41 @@ export default function ReportsPage() {
   }, [selectedGradeStream, selectedTerm]);
 
   /*
-    The chosen class's learners, for the learner picker and the SMS dialog.
+    The chosen class's learners for the chosen term, for the learner picker
+    and the SMS dialog: for a term of a year already promoted, the class as it
+    was then (its learners sit in other classes now), else as it is now.
 
     Both used to download every learner in the school, with all their
     relations, and filter to the class in the browser — on every opening.
     The endpoint filters by class itself.
   */
-  const loadRoster = useCallback(async (streamId: string) => {
-    setRoster({ streamId, learners: null });
+  const loadRoster = useCallback(async (streamId: string, termId: string) => {
+    const key = rosterKey(streamId, termId);
+    setRoster({ key, learners: null });
     try {
-      const res = await fetch(`/api/school/data?type=students&grade_stream_id=${encodeURIComponent(streamId)}`, { cache: 'no-store' });
+      const res = await fetch(`/api/reports/roster?${new URLSearchParams({ grade_stream_id: streamId, term_id: termId }).toString()}`, { cache: 'no-store' });
       const json: unknown = await res.json().catch(() => null);
       if (!res.ok) throw new Error(apiErrorMessage(json, 'Could not load this class.'));
       const rows = ((json as { data?: unknown[] } | null)?.data ?? [])
         .map(toRosterLearner)
         .filter((l): l is RosterLearner => l !== null)
         .sort((a, b) => a.name.localeCompare(b.name));
-      setRoster(prev => (prev?.streamId === streamId ? { streamId, learners: rows } : prev));
+      setRoster(prev => (prev?.key === key ? { key, learners: rows } : prev));
     } catch (err) {
-      setRoster(prev => (prev?.streamId === streamId ? { streamId, learners: [] } : prev));
+      setRoster(prev => (prev?.key === key ? { key, learners: [] } : prev));
       toast.error(err instanceof Error ? err.message : 'Could not load this class.');
     }
   }, []);
 
+  const shownRosterKey = selectedGradeStream && selectedTerm ? rosterKey(selectedGradeStream, selectedTerm) : '';
   const openDialog = (next: Exclude<Dialog, null>) => {
-    if ((next === 'student' || next === 'sms') && selectedGradeStream && roster?.streamId !== selectedGradeStream) {
-      void loadRoster(selectedGradeStream);
+    if ((next === 'student' || next === 'sms') && shownRosterKey && roster?.key !== shownRosterKey) {
+      void loadRoster(selectedGradeStream, selectedTerm);
     }
     if (next === 'sms') setSmsResult(null);
     setDialog(next);
   };
-  const learners = roster?.streamId === selectedGradeStream ? roster.learners : null;
+  const learners = shownRosterKey && roster?.key === shownRosterKey ? roster.learners : null;
 
   const handleStudentSelect = (studentId: string) => {
     setDialog(null);

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { classLearnersInTerm } from '@/lib/reports/class-history';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { z } from 'zod';
 import { forbidden, getCaller, type Caller } from '@/lib/auth-server';
@@ -46,18 +47,14 @@ export async function GET(request: NextRequest) {
             return forbidden('Only administrators and the class teacher can view report comments.');
         }
 
-        // Fetch students in the class (scoped to school)
-        const { data: students, error: studentsErr } = await supabase
-            .from('students')
-            .select('id, admission_number, users!inner(first_name, last_name, school_id)')
-            .eq('current_grade_stream_id', gradeStreamId)
-            .eq('users.school_id', schoolId);
+        // The class's learners for the term (scoped to the school): who was in
+        // it then, once its year has been promoted.
+        const { rows: students } = await classLearnersInTerm<{ id: string; admission_number: string | null; users: { first_name: string | null; last_name: string | null } | null }>(supabase, {
+            schoolId, termId, streamId: gradeStreamId, current: 'any',
+            select: 'id, admission_number, users!inner(first_name, last_name, school_id)',
+        });
 
-        if (studentsErr) {
-            return NextResponse.json({ error: studentsErr.message }, { status: 500 });
-        }
-
-        if (!students || students.length === 0) {
+        if (students.length === 0) {
             return NextResponse.json({ data: [] });
         }
 
@@ -140,29 +137,24 @@ export async function POST(request: NextRequest) {
         const supabase = createSupabaseAdmin();
         const studentIds = [...new Set(comments.map(c => c.student_id))];
 
-        // Every learner must be this school's and in this class; the term and
-        // year come from the body too, so they must be this school's as well.
-        const [studentsRes, termRes] = await Promise.all([
-            supabase
-                .from('students')
-                .select('id, users!inner(school_id)')
-                .in('id', studentIds)
-                .eq('current_grade_stream_id', grade_stream_id)
-                .eq('users.school_id', schoolId),
-            supabase
-                .from('terms')
-                .select('id')
-                .eq('id', term_id)
-                .eq('academic_year_id', academic_year_id)
-                .eq('school_id', schoolId)
-                .maybeSingle(),
-        ]);
-        if (studentsRes.error) return internalError('report comments students', studentsRes.error);
-        if ((studentsRes.data ?? []).length !== studentIds.length) {
-            return NextResponse.json({ error: 'Some of these learners are no longer in this class. Reload and try again.' }, { status: 403 });
-        }
+        // The term and year come from the body, so they must be this school's;
+        // every learner must have been in this class that term (this school's
+        // class, so this school's learners).
+        const termRes = await supabase
+            .from('terms')
+            .select('id')
+            .eq('id', term_id)
+            .eq('academic_year_id', academic_year_id)
+            .eq('school_id', schoolId)
+            .maybeSingle();
+        if (termRes.error) return internalError('report comments term', termRes.error);
         if (!termRes.data) {
             return NextResponse.json({ error: 'Term not found' }, { status: 404 });
+        }
+        const { rows: classLearners } = await classLearnersInTerm<{ id: string }>(supabase, { schoolId, termId: term_id, streamId: grade_stream_id, select: 'id', current: 'any' });
+        const inClass = new Set(classLearners.map(l => l.id));
+        if (studentIds.some(id => !inClass.has(id))) {
+            return NextResponse.json({ error: 'Some of these learners are no longer in this class. Reload and try again.' }, { status: 403 });
         }
 
         // The principal's comment is the admin's to write; a class teacher's
