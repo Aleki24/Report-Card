@@ -2,7 +2,7 @@
 
 import PageHeader from '@/components/dashboard/PageHeader';
 import React, { Suspense, useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import { Plus, Search, Edit3, Trash2, Wallet, ArrowUpRight, Clock, AlertTriangle, Upload, FileText, CircleDollarSign, History, Download, Ban, Receipt, Layers, UsersRound, ChartColumn, ScanSearch, BookOpenCheck, Split } from 'lucide-react';
+import { Plus, Search, Edit3, Trash2, Wallet, ArrowUpRight, Clock, AlertTriangle, Upload, FileText, CircleDollarSign, History, Download, Ban, Receipt, Layers, UsersRound, ChartColumn, ScanSearch, BookOpenCheck, Split, HeartPulse } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api-error-message';
@@ -11,13 +11,14 @@ import { ConfirmDialog, Modal } from '@/components/ui/Modal';
 import { PageTabs, useUrlTab, type PageTab } from '@/components/ui/PageTabs';
 import { DataTable, LoadError, StatTile, TermSelect, type TermSelectYear } from '@/components/ui';
 import { FeeAccountDrawer } from '@/components/fees/FeeAccountDrawer';
-import { DefaultersPanel } from '@/components/fees/DefaultersPanel';
+import { DefaultersPanel, type DefaulterFocus } from '@/components/fees/DefaultersPanel';
 import { CollectionsPanel } from '@/components/fees/CollectionsPanel';
 import { BatchEntryPanel } from '@/components/fees/BatchEntryPanel';
 import { VoidPaymentDialog, type VoidTarget } from '@/components/fees/VoidPaymentDialog';
 import { SharePaymentDialog, type ShareTarget } from '@/components/fees/SharePaymentDialog';
 import { PaymentsLogPanel } from '@/components/fees/PaymentsLogPanel';
 import { DayBookPanel } from '@/components/fees/DayBookPanel';
+import { FeesOverviewPanel } from '@/components/fees/FeesOverviewPanel';
 import { UnmatchedQueue } from '@/components/fees/reconcile/UnmatchedQueue';
 import { StatementReconcile } from '@/components/fees/reconcile/StatementReconcile';
 import {
@@ -34,7 +35,7 @@ import { FEATURE_ICONS } from '@/components/ui/featureIcons';
 
 
 
-type FeesMode = 'list' | 'payments' | 'reconcile' | 'daybook' | 'batch' | 'defaulters' | 'collections';
+type FeesMode = 'overview' | 'list' | 'payments' | 'reconcile' | 'daybook' | 'batch' | 'defaulters' | 'collections';
 
 
 
@@ -45,6 +46,8 @@ const receiptUrl = feeReceiptUrl;
 
 
 const FEES_TABS: readonly PageTab<FeesMode>[] = [
+    // Finance staff land here: the health check and this term against last.
+    { id: 'overview', label: 'Overview', icon: HeartPulse, hue: 'rose' },
     { id: 'list', label: 'Fee records', shortLabel: 'Records', icon: FileText, hue: 'emerald' },
     // The school-wide log exposes every receipt; it is admin-only on the server.
     { id: 'payments', label: 'Payments', icon: Receipt, hue: 'blue' },
@@ -57,9 +60,9 @@ const FEES_TABS: readonly PageTab<FeesMode>[] = [
 ];
 
 /** Tabs about the whole school rather than one term's records: no term KPIs over them. */
-const REPORT_MODES: ReadonlySet<FeesMode> = new Set<FeesMode>(['reconcile', 'daybook', 'defaulters', 'collections']);
+const REPORT_MODES: ReadonlySet<FeesMode> = new Set<FeesMode>(['overview', 'reconcile', 'daybook', 'defaulters', 'collections']);
 /** Tabs only finance staff see (school-wide money). */
-const FINANCE_ONLY_MODES: ReadonlySet<FeesMode> = new Set<FeesMode>(['payments', 'reconcile', 'daybook', 'defaulters', 'collections']);
+const FINANCE_ONLY_MODES: ReadonlySet<FeesMode> = new Set<FeesMode>(['overview', 'payments', 'reconcile', 'daybook', 'defaulters', 'collections']);
 
 
 
@@ -86,6 +89,8 @@ function FeesPageInner() {
     const [queueVersion, setQueueVersion] = useState(0);
     // Bumped when a follow-up is written in a fee account: Who owes shows it.
     const [followUpVersion, setFollowUpVersion] = useState(0);
+    // Who owes opened from an overview fix starts on those families (paid nothing, promise broken).
+    const [defaultersFocus, setDefaultersFocus] = useState<DefaulterFocus | undefined>(undefined);
     const visibleTabs = useMemo(
         () => FEES_TABS
             .filter(t => !FINANCE_ONLY_MODES.has(t.id) || canViewAll)
@@ -530,7 +535,7 @@ function FeesPageInner() {
                 }
             />
 
-            <PageTabs tabs={visibleTabs} active={mode} onSelect={changeMode} label="Fees views" idPrefix="fees" />
+            <PageTabs tabs={visibleTabs} active={mode} onSelect={next => { setDefaultersFocus(undefined); changeMode(next); }} label="Fees views" idPrefix="fees" />
 
             {unmatchedCount > 0 && mode !== 'reconcile' && (
                 <div role="status" className="mb-4 flex flex-col gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4 sm:flex-row sm:items-center sm:justify-between">
@@ -585,6 +590,7 @@ function FeesPageInner() {
             </>)}
 
             <div role="tabpanel" id="fees-panel" aria-labelledby={`fees-tab-${mode}`}>
+            {mode === 'overview' && <FeesOverviewPanel onGo={target => { setDefaultersFocus(target.focus); changeMode(target.tab); }} />}
             {mode === 'defaulters' && (
                 <DefaultersPanel
                     streams={gradeStreams}
@@ -592,6 +598,7 @@ function FeesPageInner() {
                     canRemind={canManageFees}
                     onOpenAccount={(studentId, name) => setAccount({ studentId, name })}
                     version={followUpVersion}
+                    initialFocus={defaultersFocus}
                 />
             )}
             {mode === 'collections' && <CollectionsPanel />}

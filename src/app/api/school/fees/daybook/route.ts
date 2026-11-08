@@ -2,15 +2,12 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { HttpError, parseBody, route, type Access } from '@/lib/platform/access';
 import { audit } from '@/lib/platform/audit';
-import { addDays, isIsoDate, schoolDayOf, schoolToday } from '@/lib/dates';
+import { isIsoDate, schoolDayOf, schoolToday } from '@/lib/dates';
 import { methodLabel } from '@/lib/fee-account';
 import { paymentCode, type FeePaymentMethod } from '@/lib/fees';
 import { loadPaymentLog, recorderNames, type PaymentLogEntry } from '@/lib/fees-payment-log';
-import { loadCollections } from '@/lib/fee-reports-server';
-import {
-    DAYBOOK_RECENT_DAYS, dayReviewSchema, moneyDiffers,
-    type DayBook, type DayBookBucket, type DayBookDay, type DayBookPayment,
-} from '@/lib/fee-daybook';
+import { recentDays } from '@/lib/fee-daybook-server';
+import { dayReviewSchema, moneyDiffers, type DayBook, type DayBookBucket, type DayBookPayment } from '@/lib/fee-daybook';
 
 interface ReviewRow { day: string; total: number | string; payments: number; note: string | null; reviewed_by: string | null; reviewed_at: string }
 
@@ -42,18 +39,13 @@ function addTo(map: Map<string, DayBookBucket>, key: string, label: string, amou
 const automaticLabel = (method: string) => (method === 'PESAPAL' ? 'Pesapal (on its own)' : 'M-Pesa Paybill (on its own)');
 
 async function loadDayBook(db: SupabaseClient, access: Pick<Access, 'schoolId' | 'userId'>, day: string): Promise<DayBook> {
-    const today = schoolToday();
-    const from = addDays(today, -(DAYBOOK_RECENT_DAYS - 1));
-    const recentDays = Array.from({ length: DAYBOOK_RECENT_DAYS }, (_, i) => addDays(today, -i));
-    const [entries, collections, reviews] = await Promise.all([
+    const [entries, recent, reviewed] = await Promise.all([
         dayPayments(db, access.schoolId, day),
-        loadCollections(db, access.schoolId, from, today),
-        db.from('fee_day_reviews').select('day, total, payments, note, reviewed_by, reviewed_at').eq('school_id', access.schoolId).in('day', [...new Set([...recentDays, day])]),
+        recentDays(db, access.schoolId),
+        db.from('fee_day_reviews').select('day, total, payments, note, reviewed_by, reviewed_at').eq('school_id', access.schoolId).eq('day', day).maybeSingle<ReviewRow>(),
     ]);
-    if (reviews.error) throw reviews.error;
-    const reviewRows = (reviews.data ?? []) as ReviewRow[];
-    const reviewOf = new Map(reviewRows.map(r => [r.day, r] as const));
-    const review = reviewOf.get(day) ?? null;
+    if (reviewed.error) throw reviewed.error;
+    const review = reviewed.data;
     const names = await recorderNames(db, [...entries, ...(review?.reviewed_by ? [{ recordedBy: review.reviewed_by }] : [])]);
 
     const kept = entries.filter(e => e.status === 'COMPLETED');
@@ -90,12 +82,6 @@ async function loadDayBook(db: SupabaseClient, access: Pick<Access, 'schoolId' |
 
     const recordedBy = new Set(entries.map(e => e.recordedBy).filter((id): id is string => !!id));
     const signed = review ? { total: Number(review.total), payments: review.payments } : null;
-    const byDay = new Map(collections.byDay.map(b => [b.key, b] as const));
-    const recent: DayBookDay[] = recentDays.map(d => {
-        const money = d === day ? received : { amount: byDay.get(d)?.amount ?? 0, count: byDay.get(d)?.count ?? 0 };
-        const r = reviewOf.get(d);
-        return { day: d, ...money, reviewed: !!r, changed: !!r && (moneyDiffers(Number(r.total), money.amount) || r.payments !== money.count) };
-    });
 
     return {
         day,

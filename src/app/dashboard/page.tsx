@@ -247,7 +247,7 @@ const QUICK_ACTIONS: readonly QuickActionItem[] = [
   { label: 'Add staff', href: '/dashboard/people?tab=teachers', icon: I.teachers },
   { label: 'Announcement', href: '/dashboard/announcements', icon: I.announcements },
   { label: 'Assignment', href: '/dashboard/assignments', icon: I.assignments },
-  { label: 'Record payment', href: '/dashboard/fees', icon: I.fees },
+  { label: 'Record payment', href: '/dashboard/fees?view=list', icon: I.fees },
 ];
 
 function RecentActivity({ activities }: { activities: DashboardData['recentActivities'] }) {

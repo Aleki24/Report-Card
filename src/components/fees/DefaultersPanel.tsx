@@ -20,12 +20,15 @@ interface DefaultersPanelProps {
     onOpenAccount: (studentId: string, name: string) => void;
     /** Bumped by the page when a follow-up is written, so the list shows it. */
     version?: number;
+    /** Opened from an overview fix: start on those families. */
+    initialFocus?: DefaulterFocus;
 }
 
 type Load = { status: 'loading' } | { status: 'error'; message: string } | { status: 'ready'; body: DefaultersResponse };
 
 /** Narrowing the list to the families to chase first. */
 type Focus = 'all' | 'nothing' | 'broken' | 'due';
+export type DefaulterFocus = Exclude<Focus, 'all'>;
 const FOCUS: readonly { id: Focus; label: string; test: (d: Defaulter) => boolean }[] = [
     { id: 'all', label: 'Everyone owing', test: () => true },
     { id: 'nothing', label: 'Paid nothing this term', test: d => d.paidThisTerm === 0 },
@@ -51,14 +54,14 @@ function overdueTone(days: number): string {
  * has been due, when they last paid and the parent to call. Opens the
  * learner's account; exports to Excel; texts reminders.
  */
-export function DefaultersPanel({ streams, termId, canRemind, onOpenAccount, version = 0 }: DefaultersPanelProps) {
+export function DefaultersPanel({ streams, termId, canRemind, onOpenAccount, version = 0, initialFocus }: DefaultersPanelProps) {
     const confirm = useConfirm();
     const [streamId, setStreamId] = useState('');
     const [minBalance, setMinBalance] = useState('1');
     const [reload, setReload] = useState(0);
     const [result, setResult] = useState<{ key: string; load: Load } | null>(null);
     const [sending, setSending] = useState(false);
-    const [focus, setFocus] = useState<Focus>('all');
+    const [focus, setFocus] = useState<Focus>(initialFocus ?? 'all');
     const query = new URLSearchParams({ min_balance: String(Math.max(1, Number(minBalance) || 1)), ...(streamId ? { grade_stream_id: streamId } : {}) }).toString();
     const key = `${query}|${reload}|${version}`;
     const load: Load = result?.key === key ? result.load : { status: 'loading' };

@@ -1,14 +1,10 @@
 import React from 'react';
 import { formatKsh } from '@/lib/fee-account';
 import { cn } from '@/lib/utils';
+import type { CollectionBucket } from '@/lib/fee-reports';
 
-/** A sum of money and how many payments made it, under a label. */
-export interface MoneyBucket {
-    key: string;
-    label: string;
-    amount: number;
-    count: number;
-}
+/** A sum of money and how many made it up, under a label. */
+export type MoneyBucket = CollectionBucket;
 
 /** Labelled horizontal bars, one hue: each bar is its share of the largest. */
 export function MoneyBars<B extends MoneyBucket>({ title, rows, label = b => b.label, empty = 'Nothing received.', barClassName = 'bg-emerald-500', className }: {
