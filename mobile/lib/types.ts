@@ -193,6 +193,11 @@ export interface FeePayment {
     phoneNumber: string | null;
     payerName: string | null;
     mpesaReceiptNumber: string | null;
+    /** Bank slip or cheque number (servers before references send none). */
+    reference?: string | null;
+    pesapalConfirmationCode?: string | null;
+    /** Set on one learner's share of a payment split between learners. */
+    splitFromPaymentId?: string | null;
     notes: string | null;
     paidAt: string;
 }

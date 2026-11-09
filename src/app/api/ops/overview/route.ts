@@ -44,7 +44,7 @@ export const GET = route('ops overview', {}, async ({ access }) => {
         ['fees.view', async () => {
             const { data } = await db.from('fee_payments').select('amount').eq('school_id', s).eq('status', 'COMPLETED').gte('paid_at', startOfDay);
             const total = (data ?? []).reduce((n, p) => n + Number(p.amount), 0);
-            return [{ key: 'fees-today', label: 'Fees collected today', value: money(total), hint: `${data?.length ?? 0} payments`, href: '/dashboard/fees', tone: 'default' }];
+            return [{ key: 'fees-today', label: 'Fees collected today', value: money(total), hint: `${data?.length ?? 0} payments`, href: '/dashboard/fees?view=daybook', tone: 'default' }];
         }],
         ['expenses.approve', async () => {
             const n = await countRows('expenses', s, { eq: { status: 'PENDING' } });

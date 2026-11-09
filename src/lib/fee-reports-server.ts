@@ -1,6 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { embedOne, fetchAllRows } from '@/lib/postgrest';
 import { methodLabel } from '@/lib/fee-account';
+import { schoolDayOf, schoolDayRange } from '@/lib/dates';
+import { findActiveTermId } from '@/lib/term-calendar';
+import { followUpSummaries } from '@/lib/fee-followups-server';
 import type { CollectionBucket, CollectionsResponse, Defaulter } from '@/lib/fee-reports';
 
 type One<T> = T | T[] | null;
@@ -8,6 +11,7 @@ type One<T> = T | T[] | null;
 interface FeeRow {
     id: string;
     student_id: string;
+    term_id: string;
     total_fee: number | string;
     paid_amount: number | string;
     due_date: string | null;
@@ -24,6 +28,13 @@ interface FeeRow {
 
 const CHUNK = 150;
 
+/** The school's current term (by its dates, else the one marked current), or null. */
+export async function currentTerm(supabase: SupabaseClient, schoolId: string): Promise<string | null> {
+    const { data, error } = await supabase.from('terms').select('id, name, start_date, end_date, is_current').eq('school_id', schoolId);
+    if (error) throw new Error('Could not load terms');
+    return data && data.length > 0 ? findActiveTermId(data) : null;
+}
+
 /**
  * Learners who owe across all their terms, most owed first. A learner whose
  * terms net to nothing owing (Term 1 overpaid, Term 2 short by the same) is
@@ -32,7 +43,7 @@ const CHUNK = 150;
 export async function loadDefaulters(supabase: SupabaseClient, schoolId: string, opts: { gradeStreamId?: string | null; minBalance?: number; includeLeft?: boolean }): Promise<Defaulter[]> {
     const { rows, error } = await fetchAllRows<FeeRow>(() => supabase
         .from('student_fees')
-        .select('id, student_id, total_fee, paid_amount, due_date, students!inner ( admission_number, status, current_grade_stream_id, guardian_name, guardian_phone, users ( first_name, last_name ), grade_streams ( full_name ) )')
+        .select('id, student_id, term_id, total_fee, paid_amount, due_date, students!inner ( admission_number, status, current_grade_stream_id, guardian_name, guardian_phone, users ( first_name, last_name ), grade_streams ( full_name ) )')
         .eq('school_id', schoolId)
         .order('id'));
     if (error) throw new Error('Could not load fee records');
@@ -56,6 +67,7 @@ export async function loadDefaulters(supabase: SupabaseClient, schoolId: string,
 
     // The last payment and a linked parent for each, a chunk of learners at a time.
     const ids = owing.map(([id]) => id);
+    const [currentTermId, followUps] = await Promise.all([currentTerm(supabase, schoolId), followUpSummaries(supabase, schoolId, ids)]);
     const feeIds = owing.flatMap(([, e]) => e.fees.map(f => f.id));
     const lastPaid = new Map<string, string>();
     const feeOwner = new Map(owing.flatMap(([id, e]) => e.fees.map(f => [f.id, id] as const)));
@@ -90,6 +102,7 @@ export async function loadDefaulters(supabase: SupabaseClient, schoolId: string,
             const owingFees = e.fees.filter(f => Number(f.total_fee) - Number(f.paid_amount) > 0);
             const dues = owingFees.map(f => f.due_date).filter((d): d is string => !!d).sort();
             const contact = parent.get(id);
+            const thisTerm = currentTermId ? e.fees.find(f => f.term_id === currentTermId) : undefined;
             return {
                 studentId: id,
                 name: `${u?.first_name ?? ''} ${u?.last_name ?? ''}`.trim() || 'Learner',
@@ -102,6 +115,8 @@ export async function loadDefaulters(supabase: SupabaseClient, schoolId: string,
                 lastPaymentAt: lastPaid.get(id) ?? null,
                 guardianName: contact?.name ?? (s.guardian_name?.trim() || null),
                 guardianPhone: contact?.phone ?? (s.guardian_phone?.trim() || null),
+                paidThisTerm: thisTerm && Number(thisTerm.total_fee) > 0 ? Number(thisTerm.paid_amount) : null,
+                followUp: followUps.get(id) ?? null,
             };
         })
         .sort((a, b) => b.owed - a.owed);
@@ -114,18 +129,13 @@ interface PaymentRow {
     student_fees: One<{ students: One<{ grade_streams: One<{ id: string; full_name: string }> }> }>;
 }
 
-/** Nairobi calendar day (UTC+3, no daylight saving) of an instant. */
-const nairobiDay = (iso: string) => new Date(new Date(iso).getTime() + 3 * 3_600_000).toISOString().slice(0, 10);
-
 function buckets(map: Map<string, CollectionBucket>, order: (a: CollectionBucket, b: CollectionBucket) => number): CollectionBucket[] {
     return [...map.values()].map(b => ({ ...b, amount: Math.round(b.amount * 100) / 100 })).sort(order);
 }
 
 /** Money that came in between two days (inclusive, Nairobi time), by day, method and class. */
 export async function loadCollections(supabase: SupabaseClient, schoolId: string, from: string, to: string): Promise<CollectionsResponse> {
-    // The window in UTC: Nairobi midnight is 21:00 the day before.
-    const start = new Date(`${from}T00:00:00+03:00`).toISOString();
-    const end = new Date(new Date(`${to}T00:00:00+03:00`).getTime() + 86_400_000).toISOString();
+    const { start, end } = schoolDayRange(from, to);
     const { rows, error } = await fetchAllRows<PaymentRow>(() => supabase
         .from('fee_payments')
         .select('amount, method, paid_at, student_fees ( students ( grade_streams ( id, full_name ) ) )')
@@ -149,7 +159,7 @@ export async function loadCollections(supabase: SupabaseClient, schoolId: string
     for (const p of rows) {
         const amount = Number(p.amount);
         total += amount;
-        const day = nairobiDay(p.paid_at);
+        const day = schoolDayOf(p.paid_at);
         add(byDay, day, day, amount);
         add(byMethod, p.method, methodLabel(p.method), amount);
         const stream = embedOne(embedOne(embedOne(p.student_fees)?.students ?? null)?.grade_streams ?? null);

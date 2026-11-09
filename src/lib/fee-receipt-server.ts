@@ -53,6 +53,7 @@ interface PaymentRow {
     method: string;
     mpesa_receipt_number: string | null;
     pesapal_confirmation_code: string | null;
+    reference: string | null;
     payer_name: string | null;
     phone_number: string | null;
     notes: string | null;
@@ -72,7 +73,7 @@ interface LineRow {
 export async function loadFeeReceipt(supabase: SupabaseClient, paymentId: string): Promise<FeeReceiptRecord | null> {
     const { data: payment, error } = await supabase
         .from('fee_payments')
-        .select('id, school_id, student_fee_id, receipt_number, status, amount, method, mpesa_receipt_number, pesapal_confirmation_code, payer_name, phone_number, notes, paid_at, recorded_by, student_fees ( student_id, term_id )')
+        .select('id, school_id, student_fee_id, receipt_number, status, amount, method, mpesa_receipt_number, pesapal_confirmation_code, reference, payer_name, phone_number, notes, paid_at, recorded_by, student_fees ( student_id, term_id )')
         .eq('id', paymentId)
         .maybeSingle<PaymentRow>();
     if (error) throw new Error('Could not load the payment');
@@ -132,7 +133,7 @@ export async function loadFeeReceipt(supabase: SupabaseClient, paymentId: string
         status: payment.status,
         amount,
         method: payment.method,
-        reference: payment.mpesa_receipt_number ?? payment.pesapal_confirmation_code ?? null,
+        reference: payment.mpesa_receipt_number ?? payment.pesapal_confirmation_code ?? payment.reference ?? null,
         payerName: payment.payer_name,
         phoneNumber: payment.phone_number,
         notes: payment.notes,

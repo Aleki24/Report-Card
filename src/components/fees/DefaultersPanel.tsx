@@ -1,14 +1,16 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { Download, MessageSquare, Phone, UsersRound, Wallet } from 'lucide-react';
+import { CircleOff, Download, MessageSquare, Phone, UsersRound, Wallet } from 'lucide-react';
 import { DataTable, LoadError, StatTile } from '@/components/ui';
 import { useConfirm } from '@/components/ui/ConfirmProvider';
 import { apiErrorMessage } from '@/lib/api-error-message';
 import { cn } from '@/lib/utils';
 import { formatKsh, type FeeReminderSummary } from '@/lib/fee-account';
 import { daysSince, type Defaulter, type DefaultersResponse } from '@/lib/fee-reports';
+import { schoolDayOf } from '@/lib/dates';
+import { PromiseBadge } from './FollowUpBadge';
 
 interface DefaultersPanelProps {
     streams: readonly { id: string; full_name: string }[];
@@ -16,11 +18,30 @@ interface DefaultersPanelProps {
     termId: string;
     canRemind: boolean;
     onOpenAccount: (studentId: string, name: string) => void;
+    /** Bumped by the page when a follow-up is written, so the list shows it. */
+    version?: number;
+    /** Opened from an overview fix: start on those families. */
+    initialFocus?: DefaulterFocus;
 }
 
 type Load = { status: 'loading' } | { status: 'error'; message: string } | { status: 'ready'; body: DefaultersResponse };
 
+/** Narrowing the list to the families to chase first. */
+type Focus = 'all' | 'nothing' | 'broken' | 'due';
+export type DefaulterFocus = Exclude<Focus, 'all'>;
+const FOCUS: readonly { id: Focus; label: string; test: (d: Defaulter) => boolean }[] = [
+    { id: 'all', label: 'Everyone owing', test: () => true },
+    { id: 'nothing', label: 'Paid nothing this term', test: d => d.paidThisTerm === 0 },
+    { id: 'broken', label: 'Promise broken', test: d => d.followUp?.promise?.state === 'BROKEN' },
+    { id: 'due', label: 'Promised', test: d => d.followUp?.promise?.state === 'DUE' },
+];
+
 const shortDate = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+
+function contactedAgo(iso: string): string {
+    const days = daysSince(schoolDayOf(iso));
+    return days === 0 ? 'Contacted today' : days === 1 ? 'Contacted yesterday' : `Contacted ${days} days ago`;
+}
 
 function overdueTone(days: number): string {
     if (days > 60) return 'bg-red-500/12 text-red-700 dark:text-red-400';
@@ -33,15 +54,16 @@ function overdueTone(days: number): string {
  * has been due, when they last paid and the parent to call. Opens the
  * learner's account; exports to Excel; texts reminders.
  */
-export function DefaultersPanel({ streams, termId, canRemind, onOpenAccount }: DefaultersPanelProps) {
+export function DefaultersPanel({ streams, termId, canRemind, onOpenAccount, version = 0, initialFocus }: DefaultersPanelProps) {
     const confirm = useConfirm();
     const [streamId, setStreamId] = useState('');
     const [minBalance, setMinBalance] = useState('1');
     const [reload, setReload] = useState(0);
     const [result, setResult] = useState<{ key: string; load: Load } | null>(null);
     const [sending, setSending] = useState(false);
+    const [focus, setFocus] = useState<Focus>(initialFocus ?? 'all');
     const query = new URLSearchParams({ min_balance: String(Math.max(1, Number(minBalance) || 1)), ...(streamId ? { grade_stream_id: streamId } : {}) }).toString();
-    const key = `${query}|${reload}`;
+    const key = `${query}|${reload}|${version}`;
     const load: Load = result?.key === key ? result.load : { status: 'loading' };
 
     useEffect(() => {
@@ -93,8 +115,10 @@ export function DefaultersPanel({ streams, termId, canRemind, onOpenAccount }: D
         }
     };
 
-    const rows = load.status === 'ready' ? load.body.data : [];
-    const noPhone = rows.filter(r => !r.guardianPhone).length;
+    const all = useMemo(() => (result?.key === key && result.load.status === 'ready' ? result.load.body.data : []), [result, key]);
+    const counts = useMemo(() => Object.fromEntries(FOCUS.map(f => [f.id, all.filter(f.test).length])) as Record<Focus, number>, [all]);
+    const rows = useMemo(() => all.filter(FOCUS.find(f => f.id === focus)?.test ?? (() => true)), [all, focus]);
+    const noPhone = all.filter(r => !r.guardianPhone).length;
 
     return (
         <div className="flex flex-col gap-4">
@@ -122,10 +146,21 @@ export function DefaultersPanel({ streams, termId, canRemind, onOpenAccount }: D
                 <LoadError title="Couldn't load who owes" message={load.message} onRetry={() => setReload(n => n + 1)} />
             ) : (
                 <>
-                    <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-                        <StatTile icon={UsersRound} label="Learners owing" value={load.status === 'ready' ? rows.length : '—'} tone={rows.length > 0 ? 'warn' : 'good'} />
-                        <StatTile icon={Wallet} label="Total owed" value={load.status === 'ready' ? formatKsh(load.body.totalOwed) : '—'} hint="arrears included" tone={rows.length > 0 ? 'warn' : 'good'} />
-                        <StatTile icon={Phone} label="No parent phone" value={load.status === 'ready' ? noPhone : '—'} hint={noPhone > 0 ? 'link parents to remind them' : 'everyone reachable'} tone={noPhone > 0 ? 'bad' : 'good'} className="col-span-2 md:col-span-1" />
+                    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                        <StatTile icon={UsersRound} label="Learners owing" value={load.status === 'ready' ? all.length : '—'} tone={all.length > 0 ? 'warn' : 'good'} />
+                        <StatTile icon={Wallet} label="Total owed" value={load.status === 'ready' ? formatKsh(load.body.totalOwed) : '—'} hint="arrears included" tone={all.length > 0 ? 'warn' : 'good'} />
+                        <StatTile icon={CircleOff} label="Paid nothing" value={load.status === 'ready' ? counts.nothing : '—'} hint="billed this term, nothing in yet" tone={counts.nothing > 0 ? 'bad' : 'good'} />
+                        <StatTile icon={Phone} label="No parent phone" value={load.status === 'ready' ? noPhone : '—'} hint={noPhone > 0 ? 'link parents to remind them' : 'everyone reachable'} tone={noPhone > 0 ? 'bad' : 'good'} />
+                    </div>
+                    <div role="group" aria-label="Who to chase first" className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                        {FOCUS.map(f => (
+                            <button
+                                key={f.id} type="button" aria-pressed={focus === f.id} onClick={() => setFocus(f.id)}
+                                className={cn('shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors', focus === f.id ? 'border-foreground bg-foreground text-background' : 'border-border text-muted-foreground hover:border-foreground/40 hover:text-foreground')}
+                            >
+                                {f.label}{load.status === 'ready' ? ` · ${counts[f.id]}` : ''}
+                            </button>
+                        ))}
                     </div>
                     <DataTable<Defaulter>
                         rows={rows}
@@ -151,7 +186,13 @@ export function DefaultersPanel({ streams, termId, canRemind, onOpenAccount }: D
                                     return <span className={cn('inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold', overdueTone(days))}>{r.oldestDue ? (days > 0 ? `${days} days` : 'Not yet due') : 'No due date'}{r.termsOwing > 1 ? ` · ${r.termsOwing} terms` : ''}</span>;
                                 },
                             },
-                            { key: 'last', header: 'Last paid', hideOnMobile: true, render: r => <span className="text-xs text-muted-foreground">{r.lastPaymentAt ? shortDate(r.lastPaymentAt) : 'Never'}</span> },
+                            { key: 'last', header: 'Last paid', hideOnMobile: true, render: r => <span className="text-xs text-muted-foreground">{r.lastPaymentAt ? shortDate(r.lastPaymentAt) : 'Never'}{r.paidThisTerm === 0 ? <span className="block font-medium text-red-700 dark:text-red-400">nothing this term</span> : null}</span> },
+                            {
+                                key: 'followUp', header: 'Follow-up',
+                                render: r => r.followUp?.promise ? <PromiseBadge promise={r.followUp.promise} />
+                                    : r.followUp?.lastContactAt ? <span className="text-xs text-muted-foreground">{contactedAgo(r.followUp.lastContactAt)}</span>
+                                    : <span className="text-xs text-muted-foreground">Not yet</span>,
+                            },
                             {
                                 key: 'parent', header: 'Parent',
                                 render: r => r.guardianPhone ? (
@@ -162,7 +203,7 @@ export function DefaultersPanel({ streams, termId, canRemind, onOpenAccount }: D
                                 ) : <span className="text-xs font-medium text-red-700 dark:text-red-400">No phone</span>,
                             },
                         ]}
-                        emptyState={<p className="text-sm">Nobody owes over this amount{streamId ? ' in this class' : ''}.</p>}
+                        emptyState={<p className="text-sm">{focus === 'all' ? `Nobody owes over this amount${streamId ? ' in this class' : ''}.` : 'Nobody here right now.'}</p>}
                     />
                 </>
             )}

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { UnmatchedPayments } from './UnmatchedPayments';
+import { useRouter } from 'expo-router';
 import { Text, View } from 'react-native';
 import type { SchoolBankAccount } from '@shared/fees';
 import {
@@ -28,6 +28,7 @@ export function PaymentsSetup() {
     const { colors } = useTheme();
     const api = useApi();
     const toast = useToast();
+    const router = useRouter();
     const [settings, setSettings] = useState<PaymentSettings | null>(null);
     const [form, setForm] = useState<PaymentForm | null>(null);
     const [accounts, setAccounts] = useState<SchoolBankAccount[]>([]);
@@ -140,7 +141,14 @@ export function PaymentsSetup() {
                 <Button label="Add account" loading={busy === 'add'} onPress={addAccount} block />
             </Card>
 
-            <UnmatchedPayments />
+            {/* Money whose account number matched no learner is matched with the rest of the fees work. */}
+            <ListCard>
+                <ListRow
+                    title="Payments waiting to be matched"
+                    subtitle="Paybill payments whose account number matched no learner, each with who it most likely belongs to."
+                    onPress={() => router.push('/staff/fees?tab=unmatched')}
+                />
+            </ListCard>
         </View>
     );
 }

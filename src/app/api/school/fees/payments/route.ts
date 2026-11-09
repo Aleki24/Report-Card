@@ -24,9 +24,10 @@ export async function GET(request: NextRequest) {
         // The screen shows the newest LOG_LIMIT; the export has them all.
         const shown = entries.slice(0, LOG_LIMIT);
         const names = await recorderNames(supabase, shown);
-        const data = shown.map(({ recordedBy, ...entry }) => ({
+        const data = shown.map(({ recordedBy, voidedBy, ...entry }) => ({
             ...entry,
             recordedByName: recordedBy ? names[recordedBy] || null : null,
+            voidedByName: voidedBy ? names[voidedBy] || null : null,
         }));
 
         return NextResponse.json({ data, total: entries.length, truncated: truncated || entries.length > LOG_LIMIT });

@@ -4,6 +4,8 @@ import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import * as XLSX from 'xlsx';
 import { accessOrResponse } from '@/lib/platform/access';
 import { loadPaymentLog, parsePaymentLogFilters, recorderNames } from '@/lib/fees-payment-log';
+import { paymentCode } from '@/lib/fees';
+import { schoolDayOf } from '@/lib/dates';
 
 export const runtime = 'nodejs';
 
@@ -19,7 +21,7 @@ export async function GET(request: NextRequest) {
         const names = await recorderNames(supabase, entries);
 
         const rows = entries.map(p => ({
-            'Date': p.paidAt ? new Date(p.paidAt).toISOString().slice(0, 10) : '',
+            'Date': p.paidAt ? schoolDayOf(p.paidAt) : '',
             'Receipt No.': p.receiptNumber,
             'Student': p.studentName && p.studentName !== '—' ? p.studentName : (p.unmatchedReference ? `(Unmatched: ${p.unmatchedReference})` : ''),
             'Admission No.': p.admissionNumber || '',
@@ -28,7 +30,7 @@ export async function GET(request: NextRequest) {
             'Method': p.method,
             'Source': p.source === 'AUTO' ? 'Auto' : 'Manual',
             'Status': p.status,
-            'M-Pesa/Pesapal Ref': p.mpesaReceiptNumber || p.pesapalConfirmationCode || '',
+            'Reference': paymentCode(p) ?? '',
             'Recorded By': p.recordedBy ? names[p.recordedBy] || '' : '',
             'Notes': p.notes || '',
         }));

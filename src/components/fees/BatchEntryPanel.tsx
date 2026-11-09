@@ -4,7 +4,14 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { RotateCcw, Save } from 'lucide-react';
 import { TermSelect, type TermSelectYear } from '@/components/ui';
 import { cn } from '@/lib/utils';
-import { computeFeeStatus, FEE_PAYMENT_METHODS, type FeePaymentMethod } from '@/lib/fees';
+import { computeFeeStatus, FEE_PAYMENT_METHODS, PAYMENT_REFERENCE, type FeePaymentMethod } from '@/lib/fees';
+
+/**
+ * One method for the whole batch, so only those needing no reference of their
+ * own: every M-Pesa, bank or cheque payment carries its code, entered one by
+ * one or checked in from the statement on Reconcile.
+ */
+const BATCH_METHODS = FEE_PAYMENT_METHODS.filter(m => m !== 'PESAPAL' && !PAYMENT_REFERENCE[m]?.required);
 import {
     BATCH_CONCURRENCY, balanceColor, emptyBatchEntry, feeChanged, formatCurrency, methodLabel, runLimited, statusBadge, toStudentOption,
     type BatchEntry, type FeeRecord, type StreamOption, type StudentApiRow, type StudentOption, type TermOption,
@@ -221,8 +228,9 @@ export function BatchEntryPanel({ streams: gradeStreams, terms, years, canManage
                         <div>
                             <label htmlFor="batch-method" className="mb-2 block text-xs font-medium text-muted-foreground">Payments below were received by</label>
                             <select id="batch-method" className="input-field w-full" value={batchMethod} onChange={e => setBatchMethod(e.target.value as FeePaymentMethod)}>
-                                {FEE_PAYMENT_METHODS.filter(m => m !== 'PESAPAL').map(m => <option key={m} value={m}>{methodLabel(m)}</option>)}
+                                {BATCH_METHODS.map(m => <option key={m} value={m}>{methodLabel(m)}</option>)}
                             </select>
+                            <p className="mt-1 text-[11px] text-muted-foreground">M-Pesa, bank and cheque payments each need their code: record them one by one, or upload the statement on Reconcile.</p>
                         </div>
                     </div>
                 )}

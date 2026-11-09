@@ -2,7 +2,7 @@
 
 import PageHeader from '@/components/dashboard/PageHeader';
 import React, { Suspense, useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import { Plus, Search, Edit3, Trash2, Wallet, ArrowUpRight, Clock, AlertTriangle, Upload, FileText, CircleDollarSign, History, Download, Ban, Receipt, Layers, UsersRound, ChartColumn } from 'lucide-react';
+import { Plus, Search, Edit3, Trash2, Wallet, ArrowUpRight, Clock, AlertTriangle, Upload, FileText, CircleDollarSign, History, Download, Ban, Receipt, Layers, UsersRound, ChartColumn, ScanSearch, BookOpenCheck, Split, HeartPulse } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api-error-message';
@@ -11,10 +11,16 @@ import { ConfirmDialog, Modal } from '@/components/ui/Modal';
 import { PageTabs, useUrlTab, type PageTab } from '@/components/ui/PageTabs';
 import { DataTable, LoadError, StatTile, TermSelect, type TermSelectYear } from '@/components/ui';
 import { FeeAccountDrawer } from '@/components/fees/FeeAccountDrawer';
-import { DefaultersPanel } from '@/components/fees/DefaultersPanel';
+import { DefaultersPanel, type DefaulterFocus } from '@/components/fees/DefaultersPanel';
 import { CollectionsPanel } from '@/components/fees/CollectionsPanel';
 import { BatchEntryPanel } from '@/components/fees/BatchEntryPanel';
+import { VoidPaymentDialog, type VoidTarget } from '@/components/fees/VoidPaymentDialog';
+import { SharePaymentDialog, type ShareTarget } from '@/components/fees/SharePaymentDialog';
 import { PaymentsLogPanel } from '@/components/fees/PaymentsLogPanel';
+import { DayBookPanel } from '@/components/fees/DayBookPanel';
+import { FeesOverviewPanel } from '@/components/fees/FeesOverviewPanel';
+import { UnmatchedQueue } from '@/components/fees/reconcile/UnmatchedQueue';
+import { StatementReconcile } from '@/components/fees/reconcile/StatementReconcile';
 import {
     balanceColor, formatCurrency, methodLabel, statusBadge, timeAgo, todayIso, toStudentOption,
     type FeeRecord, type PendingConfirm, type StreamOption, type StudentApiRow, type StudentOption, type TermOption,
@@ -23,12 +29,13 @@ import Link from 'next/link';
 import { feeReceiptUrl, type FeeAccountLearner, type FeeAccountTerm } from '@/lib/fee-account';
 import { cn } from '@/lib/utils';
 import { findActiveTermId } from '@/lib/term-calendar';
-import { isOverdue, totalOwed, FEE_PAYMENT_METHODS, type FeePayment, type FeePaymentMethod } from '@/lib/fees';
+import { isOverdue, totalOwed, FEE_PAYMENT_METHODS, PAYMENT_REFERENCE, paymentCode, referenceProblem, type FeePayment, type FeePaymentMethod } from '@/lib/fees';
+import { SCHOOL_TIME_ZONE } from '@/lib/dates';
 import { FEATURE_ICONS } from '@/components/ui/featureIcons';
 
 
 
-type FeesMode = 'list' | 'payments' | 'batch' | 'defaulters' | 'collections';
+type FeesMode = 'overview' | 'list' | 'payments' | 'reconcile' | 'daybook' | 'batch' | 'defaulters' | 'collections';
 
 
 
@@ -39,18 +46,23 @@ const receiptUrl = feeReceiptUrl;
 
 
 const FEES_TABS: readonly PageTab<FeesMode>[] = [
+    // Finance staff land here: the health check and this term against last.
+    { id: 'overview', label: 'Overview', icon: HeartPulse, hue: 'rose' },
     { id: 'list', label: 'Fee records', shortLabel: 'Records', icon: FileText, hue: 'emerald' },
     // The school-wide log exposes every receipt; it is admin-only on the server.
     { id: 'payments', label: 'Payments', icon: Receipt, hue: 'blue' },
+    // Matching money to learners: the unmatched queue and statement uploads.
+    { id: 'reconcile', label: 'Reconcile', icon: ScanSearch, hue: 'amber' },
+    { id: 'daybook', label: 'Day book', icon: BookOpenCheck, hue: 'teal' },
     { id: 'batch', label: 'Batch entry', shortLabel: 'Batch', icon: Layers, hue: 'violet' },
     { id: 'defaulters', label: 'Who owes', icon: UsersRound, hue: 'amber' },
     { id: 'collections', label: 'Collections', icon: ChartColumn, hue: 'teal' },
 ];
 
 /** Tabs about the whole school rather than one term's records: no term KPIs over them. */
-const REPORT_MODES: ReadonlySet<FeesMode> = new Set<FeesMode>(['defaulters', 'collections']);
+const REPORT_MODES: ReadonlySet<FeesMode> = new Set<FeesMode>(['overview', 'reconcile', 'daybook', 'defaulters', 'collections']);
 /** Tabs only finance staff see (school-wide money). */
-const FINANCE_ONLY_MODES: ReadonlySet<FeesMode> = new Set<FeesMode>(['payments', 'defaulters', 'collections']);
+const FINANCE_ONLY_MODES: ReadonlySet<FeesMode> = new Set<FeesMode>(['overview', 'payments', 'reconcile', 'daybook', 'defaulters', 'collections']);
 
 
 
@@ -71,7 +83,20 @@ function FeesPageInner() {
     // Recording payments (and matching unmatched Paybill money) is fees.collect:
     // an accountant can, without billing or editing fee records.
     const canCollect = can('fees.collect');
-    const visibleTabs = useMemo(() => FEES_TABS.filter(t => !FINANCE_ONLY_MODES.has(t.id) || canViewAll), [canViewAll]);
+    // Paybill money that could not be matched to a learner, matched on the Reconcile tab.
+    const [unmatchedCount, setUnmatchedCount] = useState(0);
+    // Bumped when a statement is saved: its unmatched lines join the queue.
+    const [queueVersion, setQueueVersion] = useState(0);
+    // Bumped when a follow-up is written in a fee account: Who owes shows it.
+    const [followUpVersion, setFollowUpVersion] = useState(0);
+    // Who owes opened from an overview fix starts on those families (paid nothing, promise broken).
+    const [defaultersFocus, setDefaultersFocus] = useState<DefaulterFocus | undefined>(undefined);
+    const visibleTabs = useMemo(
+        () => FEES_TABS
+            .filter(t => !FINANCE_ONLY_MODES.has(t.id) || canViewAll)
+            .map(t => (t.id === 'reconcile' && unmatchedCount > 0 ? { ...t, badge: unmatchedCount } : t)),
+        [canViewAll, unmatchedCount],
+    );
     const [mode, selectMode] = useUrlTab(visibleTabs, 'view');
     const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm | null>(null);
     const [confirming, setConfirming] = useState(false);
@@ -108,7 +133,8 @@ function FeesPageInner() {
     const [payMethod, setPayMethod] = useState<FeePaymentMethod>('CASH');
     const [payPayerName, setPayPayerName] = useState('');
     const [payPhone, setPayPhone] = useState('');
-    const [payMpesaRef, setPayMpesaRef] = useState('');
+    // The M-Pesa code, bank slip or cheque number.
+    const [payReference, setPayReference] = useState('');
     const [payNotes, setPayNotes] = useState('');
     const [payDate, setPayDate] = useState('');
     const [paySaving, setPaySaving] = useState(false);
@@ -123,13 +149,10 @@ function FeesPageInner() {
     const [historyPayments, setHistoryPayments] = useState<FeePayment[]>([]);
     const [historyLoading, setHistoryLoading] = useState(false);
 
-    // Paybill money that could not be matched to a student; assigned on the Payments tab.
-    const [unmatchedCount, setUnmatchedCount] = useState(0);
-
     useEffect(() => {
         if (!canViewAll) return;
         const controller = new AbortController();
-        fetch('/api/school/fees/unmatched', { cache: 'no-store', signal: controller.signal })
+        fetch('/api/school/fees/unmatched?suggest=0', { cache: 'no-store', signal: controller.signal })
             .then(r => (r.ok ? r.json() : null))
             .then((j: { data?: unknown[] } | null) => setUnmatchedCount(j?.data?.length ?? 0))
             .catch(() => {});
@@ -337,21 +360,21 @@ function FeesPageInner() {
         },
     });
 
-    /** Voids a receipt after confirmation, then refreshes what shows it. */
-    const confirmVoid = (payment: { id: string; receiptNumber: string; amount: number }, feeId: string, after: () => Promise<unknown>) => setPendingConfirm({
-        title: `Void receipt ${payment.receiptNumber}?`,
-        message: `${formatCurrency(payment.amount)} will be taken off the balance it paid. This cannot be undone.`,
-        confirmText: 'Void receipt',
-        run: async () => {
-            try {
-                await requestJson(`/api/school/fees/${feeId}/payments/${payment.id}`, { method: 'DELETE' });
-                toast.success(`Receipt ${payment.receiptNumber} voided`);
-                await after();
-            } catch (err) {
-                toast.error(err instanceof Error ? err.message : 'Failed to void the payment');
-            }
-        },
-    });
+    /** Voids a receipt once a reason is given, then refreshes what shows it. */
+    const [voiding, setVoiding] = useState<{ payment: VoidTarget; feeId: string; after: () => Promise<unknown> } | null>(null);
+    const confirmVoid = (payment: VoidTarget, feeId: string, after: () => Promise<unknown>) => setVoiding({ payment, feeId, after });
+    const voidWithReason = async (reason: string) => {
+        if (!voiding) return;
+        const { payment, feeId, after } = voiding;
+        try {
+            await requestJson(`/api/school/fees/${feeId}/payments/${payment.id}`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason }) });
+            toast.success(`Receipt ${payment.receiptNumber} voided`);
+            setVoiding(null);
+            await after();
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : 'Failed to void the payment');
+        }
+    };
 
     // ── Record payment ──
 
@@ -361,7 +384,7 @@ function FeesPageInner() {
         setPayMethod('CASH');
         setPayPayerName('');
         setPayPhone('');
-        setPayMpesaRef('');
+        setPayReference('');
         setPayNotes('');
         setPayDate(todayIso());
         setPayError('');
@@ -385,6 +408,11 @@ function FeesPageInner() {
             setPayError('Enter a valid amount greater than 0.');
             return;
         }
+        const refProblem = referenceProblem(payMethod, payReference);
+        if (refProblem) {
+            setPayError(refProblem);
+            return;
+        }
         setPaySaving(true);
         setPayError('');
         try {
@@ -396,7 +424,7 @@ function FeesPageInner() {
                     method: payMethod,
                     payer_name: payPayerName || null,
                     phone_number: payPhone || null,
-                    mpesa_receipt_number: payMethod === 'MPESA' ? (payMpesaRef || null) : null,
+                    reference: PAYMENT_REFERENCE[payMethod] ? (payReference.trim() || null) : null,
                     notes: payNotes || null,
                     // Only send a backdate; today's payments keep the exact time.
                     paid_at: payDate && payDate !== todayIso() ? payDate : undefined,
@@ -445,6 +473,14 @@ function FeesPageInner() {
         const fee = historyFee;
         if (!fee) return;
         confirmVoid(payment, fee.id, () => Promise.all([openHistory(fee), fetchFees()]));
+    };
+
+    // One payment for two children that came in under one child's number: part of it moves to the other.
+    const [sharing, setSharing] = useState<ShareTarget | null>(null);
+    const afterShare = () => {
+        setSharing(null);
+        setAccountVersion(v => v + 1);
+        void Promise.all([historyFee ? openHistory(historyFee) : Promise.resolve(), fetchFees()]);
     };
 
 
@@ -499,26 +535,17 @@ function FeesPageInner() {
                 }
             />
 
-            <PageTabs tabs={visibleTabs} active={mode} onSelect={changeMode} label="Fees views" idPrefix="fees" />
+            <PageTabs tabs={visibleTabs} active={mode} onSelect={next => { setDefaultersFocus(undefined); changeMode(next); }} label="Fees views" idPrefix="fees" />
 
-            {unmatchedCount > 0 && (
+            {unmatchedCount > 0 && mode !== 'reconcile' && (
                 <div role="status" className="mb-4 flex flex-col gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4 sm:flex-row sm:items-center sm:justify-between">
                     <p className="text-sm">
-                        <span className="font-semibold">{unmatchedCount} M-Pesa payment{unmatchedCount === 1 ? '' : 's'} not matched to a student.</span>{' '}
-                        <span className="text-muted-foreground">The payer used an account number we couldn&apos;t recognise. Assign it so it counts towards the right balance.</span>
+                        <span className="font-semibold">{unmatchedCount} payment{unmatchedCount === 1 ? '' : 's'} waiting to be matched to a learner.</span>{' '}
+                        <span className="text-muted-foreground">The account number didn&apos;t match anyone. Each one shows who it most likely belongs to; match them this week, before parents ask.</span>
                     </p>
-                    {mode !== 'payments' && (
-                        <button
-                            type="button"
-                            className="btn-secondary w-full shrink-0 sm:w-auto"
-                            onClick={() => {
-                                changeMode('payments');
-                                window.requestAnimationFrame(() => document.getElementById('unmatched-payments')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
-                            }}
-                        >
-                            {canCollect ? 'Assign payments' : 'View payments'}
-                        </button>
-                    )}
+                    <button type="button" className="btn-secondary w-full shrink-0 sm:w-auto" onClick={() => changeMode('reconcile')}>
+                        {canCollect ? 'Match payments' : 'View payments'}
+                    </button>
                 </div>
             )}
 
@@ -563,15 +590,25 @@ function FeesPageInner() {
             </>)}
 
             <div role="tabpanel" id="fees-panel" aria-labelledby={`fees-tab-${mode}`}>
+            {mode === 'overview' && <FeesOverviewPanel onGo={target => { setDefaultersFocus(target.focus); changeMode(target.tab); }} />}
             {mode === 'defaulters' && (
                 <DefaultersPanel
                     streams={gradeStreams}
                     termId={selectedTerm}
                     canRemind={canManageFees}
                     onOpenAccount={(studentId, name) => setAccount({ studentId, name })}
+                    version={followUpVersion}
+                    initialFocus={defaultersFocus}
                 />
             )}
             {mode === 'collections' && <CollectionsPanel />}
+            {mode === 'reconcile' && (
+                <div className="flex flex-col gap-6">
+                    <UnmatchedQueue key={queueVersion} canAssign={canCollect} canSetAside={canManageFees} onChanged={() => void fetchFees()} onCount={setUnmatchedCount} />
+                    <StatementReconcile canCollect={canCollect} onSaved={() => { setQueueVersion(v => v + 1); void fetchFees(); }} />
+                </div>
+            )}
+            {mode === 'daybook' && <DayBookPanel canReview={canManageFees} />}
 
             {/* ════════════════════════════════════════════ */}
             {/* BATCH ENTRY MODE                           */}
@@ -584,10 +621,7 @@ function FeesPageInner() {
             {mode === 'payments' && (
                 <PaymentsLogPanel
                     termId={selectedTerm}
-                    canCollect={canCollect}
                     canVoid={canManageFees}
-                    unmatchedCount={unmatchedCount}
-                    onUnmatchedCountChange={setUnmatchedCount}
                     onChanged={fetchFees}
                     confirmVoid={confirmVoid}
                 />
@@ -811,6 +845,7 @@ function FeesPageInner() {
                         onRecordPayment={canCollect ? payFromAccount : undefined}
                         version={accountVersion}
                         canLinkParents={can('school.manage')}
+                        followUps={canViewAll ? { canWrite: canCollect, canRemove: canManageFees, onChanged: () => setFollowUpVersion(v => v + 1) } : undefined}
                     />
 
                     {/* ── Record Payment ── */}
@@ -856,11 +891,16 @@ function FeesPageInner() {
                                         ))}
                                     </select>
                                 </div>
-                                {payMethod === 'MPESA' && (
+                                {PAYMENT_REFERENCE[payMethod] && (
                                     <div>
-                                        <label htmlFor="pay-ref" className="mb-2 block text-xs font-semibold text-muted-foreground">M-Pesa receipt code</label>
-                                        <input id="pay-ref" type="text" value={payMpesaRef} onChange={e => setPayMpesaRef(e.target.value)} placeholder="e.g. QGX7ZZ99AA" className="input-field w-full" />
-                                        <p className="mt-1 text-[11px] text-muted-foreground">For a paybill payment confirmed by SMS — enter it here until M-Pesa auto-reconciliation is set up.</p>
+                                        <label htmlFor="pay-ref" className="mb-2 block text-xs font-semibold text-muted-foreground">{PAYMENT_REFERENCE[payMethod].label}</label>
+                                        <input
+                                            id="pay-ref" type="text" autoCapitalize="characters" autoComplete="off" spellCheck={false}
+                                            value={payReference} onChange={e => setPayReference(e.target.value)}
+                                            placeholder={PAYMENT_REFERENCE[payMethod].placeholder} required={PAYMENT_REFERENCE[payMethod].required}
+                                            className="input-field w-full font-mono uppercase placeholder:font-sans placeholder:normal-case"
+                                        />
+                                        <p className="mt-1 text-[11px] text-muted-foreground">{PAYMENT_REFERENCE[payMethod].hint}</p>
                                     </div>
                                 )}
                                 <div>
@@ -908,7 +948,7 @@ function FeesPageInner() {
                                                       <th>Receipt</th>
                                                       <th>Date</th>
                                                       <th>Method</th>
-                                                      <th>Transaction Code</th>
+                                                      <th>Reference</th>
                                                       <th>Amount</th>
                                                       <th>Status</th>
                                                       <th />
@@ -918,9 +958,9 @@ function FeesPageInner() {
                                                   {historyPayments.map(p => (
                                                       <tr key={p.id}>
                                                           <td data-label="Receipt" className="font-mono text-xs">{p.receiptNumber}</td>
-                                                          <td data-label="Date" className="text-xs">{new Date(p.paidAt).toLocaleDateString('en-GB')}</td>
+                                                          <td data-label="Date" className="text-xs">{new Date(p.paidAt).toLocaleDateString('en-GB', { timeZone: SCHOOL_TIME_ZONE })}</td>
                                                           <td data-label="Method">{methodLabel(p.method)}</td>
-                                                          <td data-label="Transaction Code" className="font-mono text-xs">{p.mpesaReceiptNumber || p.pesapalConfirmationCode || '—'}</td>
+                                                          <td data-label="Reference" className="font-mono text-xs">{paymentCode(p) ?? '—'}</td>
                                                           <td data-label="Amount" className="font-semibold">{formatCurrency(p.amount)}</td>
                                                           <td data-label="Status">
                                                               {statusBadge(p.status)}
@@ -937,6 +977,15 @@ function FeesPageInner() {
                                                                       >
                                                                           <Receipt size={14} />
                                                                       </a>
+                                                                      {canManageFees && !p.splitFromPaymentId && (
+                                                                          <button
+                                                                              className="btn-icon text-muted-foreground hover:text-foreground"
+                                                                              onClick={() => setSharing({ id: p.id, receiptNumber: p.receiptNumber, amount: p.amount, code: paymentCode(p) })}
+                                                                              title="Share with a brother or sister" aria-label={`Share receipt ${p.receiptNumber} with another learner`}
+                                                                          >
+                                                                              <Split size={14} />
+                                                                          </button>
+                                                                      )}
                                                                       {canManageFees && (
                                                                           <button className="btn-icon text-destructive/80 hover:text-destructive" onClick={() => voidPayment(p)} title="Void Payment">
                                                                               <Ban size={14} />
@@ -955,6 +1004,9 @@ function FeesPageInner() {
                             </div>
                         )}
                     </Modal>
+
+            <VoidPaymentDialog payment={voiding?.payment ?? null} onClose={() => setVoiding(null)} onVoid={voidWithReason} />
+            <SharePaymentDialog payment={sharing} onClose={() => setSharing(null)} onShared={afterShare} />
 
             <ConfirmDialog
                 isOpen={pendingConfirm !== null}

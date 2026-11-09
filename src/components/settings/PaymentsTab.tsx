@@ -2,11 +2,11 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { toast } from 'sonner';
-import { Trash2, Star } from 'lucide-react';
+import Link from 'next/link';
+import { Trash2, Star, ScanSearch } from 'lucide-react';
 import { InfoGuide } from '@/components/ui/InfoGuide';
 import { ConfirmDialog } from '@/components/ui';
 import type { PaymentProvider, SchoolBankAccount } from '@/lib/fees';
-import { UnmatchedPaymentsPanel } from '@/components/fees/UnmatchedPaymentsPanel';
 
 import { KENYA_BANKS, PAYMENT_PROVIDERS as PROVIDERS, paymentSettingsPayload, type PaymentSettings } from '@/lib/payments/settings';
 
@@ -417,7 +417,14 @@ export function PaymentsTab() {
                 </button>
             </div>
 
-            <UnmatchedPaymentsPanel canAssign />
+            {/* Money that came in without a learner is matched with the rest of the fees work. */}
+            <p className="flex items-start gap-2 rounded-xl border border-border/70 bg-muted/30 p-3 text-sm text-muted-foreground">
+                <ScanSearch className="mt-0.5 size-4 shrink-0" aria-hidden />
+                <span>
+                    Paybill payments whose account number matched no learner wait on{' '}
+                    <Link href="/dashboard/fees?view=reconcile" className="font-medium text-primary hover:underline">Fees › Reconcile</Link>, each with the learners it most likely belongs to.
+                </span>
+            </p>
             <ConfirmDialog
                 isOpen={removingAccount !== null}
                 onClose={() => setRemovingAccount(null)}

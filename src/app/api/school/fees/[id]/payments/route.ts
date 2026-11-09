@@ -3,7 +3,8 @@ import { MPESA_RECEIPT_UNIQUE_INDEX, internalError, isUniqueViolation, writeErro
 import { canViewStudentFees } from '@/lib/auth-server';
 import { getAccess, type Access } from '@/lib/platform/access';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
-import { FEE_PAYMENT_METHODS, mapFeePaymentRow, type FeePaymentMethod } from '@/lib/fees';
+import { FEE_PAYMENT_METHODS, mapFeePaymentRow, normalizeReference, referenceProblem, type FeePaymentMethod } from '@/lib/fees';
+import { methodLabel } from '@/lib/fee-account';
 
 interface FeeRecordAccess {
     ok: true;
@@ -73,13 +74,41 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         const { fee } = result;
 
         const body = await request.json();
-        const { amount, method, paid_at, notes, payer_name, phone_number, mpesa_receipt_number } = body;
+        const { amount, method, paid_at, notes, payer_name, phone_number, mpesa_receipt_number, reference } = body;
 
         const amountValue = Number(amount);
         if (!amount || isNaN(amountValue) || amountValue <= 0) {
             return NextResponse.json({ error: 'amount must be a positive number' }, { status: 400 });
         }
         const methodValue: FeePaymentMethod = FEE_PAYMENT_METHODS.includes(method) ? method : 'CASH';
+
+        // Every non-cash payment carries what traces it: the M-Pesa code, the
+        // bank slip or the cheque number. Older app builds send the M-Pesa code
+        // as mpesa_receipt_number.
+        const typed = typeof reference === 'string' ? reference : typeof mpesa_receipt_number === 'string' ? mpesa_receipt_number : null;
+        const refProblem = referenceProblem(methodValue, typed);
+        if (refProblem) return NextResponse.json({ error: refProblem }, { status: 400 });
+        const code = methodValue === 'CASH' || methodValue === 'PESAPAL' ? null : normalizeReference(typed);
+        // The M-Pesa code is unique in the database; a bank slip or cheque
+        // number entered twice is caught here (a split payment's shares carry
+        // their original's reference, so only originals count).
+        if (code && methodValue !== 'MPESA') {
+            const { data: same, error: sameError } = await supabase
+                .from('fee_payments')
+                .select('receipt_number, amount')
+                .eq('school_id', fee.school_id)
+                .eq('method', methodValue)
+                .eq('reference', code)
+                .neq('status', 'CANCELLED')
+                .is('split_from_payment_id', null)
+                .limit(1);
+            if (sameError) throw sameError;
+            if (same && same.length > 0) {
+                return NextResponse.json({
+                    error: `${methodLabel(methodValue)} reference ${code} is already on receipt ${same[0].receipt_number} (KSh ${Number(same[0].amount).toLocaleString()}). If this is a different payment, add the bank’s name to the reference.`,
+                }, { status: 409 });
+            }
+        }
 
         // Backdating is legitimate (recording an old deposit slip); a future
         // date is always a typo — catch it here instead of polluting the ledger.
@@ -107,11 +136,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 notes: notes || null,
                 payer_name: payer_name || null,
                 phone_number: phone_number || null,
-                // M-Pesa codes are upper-case; normalise what a bursar types so
-                // "qhk1..." and "QHK1..." are the same receipt to the unique index.
-                mpesa_receipt_number: methodValue === 'MPESA' && typeof mpesa_receipt_number === 'string' && mpesa_receipt_number.trim()
-                    ? mpesa_receipt_number.trim().toUpperCase()
-                    : null,
+                // Upper case, so "qhk1..." and "QHK1..." are the same receipt to the unique index.
+                mpesa_receipt_number: methodValue === 'MPESA' ? code : null,
+                reference: methodValue === 'MPESA' ? null : code,
                 recorded_by: result.caller.userId,
             })
             .select()

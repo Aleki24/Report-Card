@@ -125,7 +125,7 @@ export function buildTodos(data: DashboardData | null, now: Date = new Date()): 
     todos.push({ key: 'attendance', hue: 'emerald', title: `${plural(unmarked, 'learner')} not on today’s register`, detail: marked === 0 ? 'No register has been taken yet today.' : `${marked.toLocaleString()} marked so far.`, cta: 'Take attendance', href: '/dashboard/attendance' });
   }
   if (data.hasFeeData && data.overdueFeesCount > 0) {
-    todos.push({ key: 'fees', hue: 'orange', title: `${plural(data.overdueFeesCount, 'fee record')} overdue`, detail: 'Past the due date with a balance still owing.', cta: 'Review fees', href: '/dashboard/fees' });
+    todos.push({ key: 'fees', hue: 'orange', title: `${plural(data.overdueFeesCount, 'fee record')} overdue`, detail: 'Past the due date with a balance still owing.', cta: 'Review fees', href: '/dashboard/fees?view=defaulters' });
   }
   return todos;
 }

@@ -6,47 +6,21 @@ import { LoadError, StatTile } from '@/components/ui';
 import { apiErrorMessage } from '@/lib/api-error-message';
 import { cn } from '@/lib/utils';
 import { formatKsh } from '@/lib/fee-account';
-import type { CollectionBucket, CollectionsResponse } from '@/lib/fee-reports';
+import type { CollectionsResponse } from '@/lib/fee-reports';
+import { MoneyBars } from './MoneyBars';
+import { addDays, formatIsoDate, schoolToday } from '@/lib/dates';
 
 type Load = { status: 'loading' } | { status: 'error'; message: string } | { status: 'ready'; body: CollectionsResponse };
 
-/** Today in Nairobi, YYYY-MM-DD. */
-const nairobiToday = () => new Date(Date.now() + 3 * 3_600_000).toISOString().slice(0, 10);
-const addDays = (day: string, n: number) => new Date(Date.parse(`${day}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
 
 const PRESETS: readonly { id: string; label: string; range: () => [string, string] }[] = [
-    { id: 'today', label: 'Today', range: () => [nairobiToday(), nairobiToday()] },
-    { id: 'week', label: 'Last 7 days', range: () => [addDays(nairobiToday(), -6), nairobiToday()] },
-    { id: 'month', label: 'This month', range: () => [`${nairobiToday().slice(0, 8)}01`, nairobiToday()] },
-    { id: 'days30', label: 'Last 30 days', range: () => [addDays(nairobiToday(), -29), nairobiToday()] },
+    { id: 'today', label: 'Today', range: () => [schoolToday(), schoolToday()] },
+    { id: 'week', label: 'Last 7 days', range: () => [addDays(schoolToday(), -6), schoolToday()] },
+    { id: 'month', label: 'This month', range: () => [`${schoolToday().slice(0, 8)}01`, schoolToday()] },
+    { id: 'days30', label: 'Last 30 days', range: () => [addDays(schoolToday(), -29), schoolToday()] },
 ];
 
-const dayLabel = (day: string) => new Date(`${day}T00:00:00`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
-
-/** Labelled horizontal bars, one hue: each bar is its share of the largest. */
-function Bars({ title, rows, label = b => b.label }: { title: string; rows: CollectionBucket[]; label?: (b: CollectionBucket) => string }) {
-    const max = Math.max(1, ...rows.map(r => r.amount));
-    return (
-        <section className="rounded-2xl border border-border/70 bg-card p-4 shadow-sm">
-            <h3 className="mb-3 text-sm font-semibold">{title}</h3>
-            {rows.length === 0 ? <p className="text-sm text-muted-foreground">Nothing received.</p> : (
-                <ul className="flex flex-col gap-2.5">
-                    {rows.map(r => (
-                        <li key={r.key}>
-                            <div className="mb-1 flex items-baseline justify-between gap-3 text-sm">
-                                <span className="min-w-0 truncate">{label(r)}</span>
-                                <span className="shrink-0 font-semibold tabular-nums">{formatKsh(r.amount)} <span className="font-normal text-muted-foreground">· {r.count}</span></span>
-                            </div>
-                            <span className="block h-2 overflow-hidden rounded-full bg-muted" aria-hidden="true">
-                                <span className="block h-full rounded-full bg-emerald-500" style={{ width: `${Math.max(2, (r.amount / max) * 100)}%` }} />
-                            </span>
-                        </li>
-                    ))}
-                </ul>
-            )}
-        </section>
-    );
-}
+const dayLabel = (day: string) => formatIsoDate(day, { weekday: 'short', day: 'numeric', month: 'short' });
 
 /**
  * What came in over a period: the total and number of payments, split by
@@ -113,9 +87,9 @@ export function CollectionsPanel() {
                     </div>
                     {body ? (
                         <div className="grid gap-4 lg:grid-cols-2">
-                            <Bars title="By method" rows={body.byMethod} />
-                            <Bars title="By class" rows={body.byClass} />
-                            {body.byDay.length > 1 && <div className="lg:col-span-2"><Bars title="By day" rows={body.byDay} label={b => dayLabel(b.key)} /></div>}
+                            <MoneyBars title="By method" rows={body.byMethod} />
+                            <MoneyBars title="By class" rows={body.byClass} />
+                            {body.byDay.length > 1 && <div className="lg:col-span-2"><MoneyBars title="By day" rows={body.byDay} label={b => dayLabel(b.key)} /></div>}
                         </div>
                     ) : <div className="h-48 animate-pulse rounded-2xl bg-muted/60" aria-busy="true" />}
                 </>
