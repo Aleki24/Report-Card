@@ -109,9 +109,11 @@ export async function loadTimetablePlan(schoolId: string) {
             .order('id')).then(r => ({ data: r.rows, error: r.error })),
         // Learners' elective choices, read through their class, so blocks follow what is actually taken together.
         fetchAllRows(() => db().from('student_subjects')
-            .select('id, student_id, subject_id, student:students!inner(current_grade_stream_id)')
+            .select('id, student_id, subject_id, student:students!inner(current_grade_stream_id, status)')
             .eq('school_id', schoolId)
             .eq('role', 'ELECTIVE')
+            // Leavers keep their class on record; their choices no longer shape its week.
+            .eq('student.status', 'ACTIVE')
             .order('id')).then(r => ({ data: r.rows, error: r.error })),
         loadTogetherRules(schoolId),
         // The school's offered Senior School combinations stand in for learners' choices until those are recorded.

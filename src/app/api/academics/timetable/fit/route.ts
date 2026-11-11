@@ -46,12 +46,15 @@ export const POST = route('timetable fit class', { module: 'timetable', permissi
         if (!plan.tighter) throw new HttpError(400, 'No grouping of these electives fits the week. Give this class a longer day instead.');
         // Fixed as option blocks after any the school set by hand, so the planner keeps them.
         const first = Math.max(0, ...plan.blocks.filter(b => b.manual).map(b => b.number)) + 1;
-        const results = await Promise.all(plan.tighter.groups.flatMap((g, i) => g.loads.map(l => db.from('timetable_requirements')
+        // A suggested group of one subject is just that subject for the whole class: nothing to fix.
+        const groups = plan.tighter.guessed ? plan.tighter.groups.filter(g => g.loads.length > 1) : plan.tighter.groups;
+        const results = await Promise.all(groups.flatMap((g, i) => g.loads.map(l => db.from('timetable_requirements')
             .update({ option_block: Math.min(12, first + i) })
             .eq('id', l.id).eq('school_id', access.schoolId))));
         const failed = results.find(r => r.error);
         if (failed?.error) throw failed.error;
         await audit(access, 'update', 'timetable_requirements', null, { stream_id, fix, groups: plan.tighter.groups.length });
+        if (plan.tighter.guessed) return { changed: groups.length, message: `${groups.length} group${groups.length === 1 ? '' : 's'} of electives now share a slot. Check that no learner takes two subjects from one group.` };
         return { changed: plan.tighter.groups.length, message: `Electives now run in ${plan.tighter.groups.length} groups. ${plan.tighter.unfit.length} learner${plan.tighter.unfit.length === 1 ? '' : 's'} must change a subject.` };
     }
 

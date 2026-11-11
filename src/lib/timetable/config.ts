@@ -333,6 +333,10 @@ export interface TimetableQuality {
     longTeacherRuns: number;
     /** A class's free period in the middle of its day rather than at the end. */
     midDayGaps?: number;
+    /** Two separate lessons of one subject back to back for a class (three periods in a row with a double). */
+    backToBackSame?: number;
+    /** A class's days with more than three periods of mathematics and sciences on end. */
+    heavyRuns?: number;
 }
 
 const QUALITY_NOTES: readonly { key: Exclude<keyof TimetableQuality, 'score'>; text: (n: number) => string }[] = [
@@ -343,6 +347,8 @@ const QUALITY_NOTES: readonly { key: Exclude<keyof TimetableQuality, 'score'>; t
     { key: 'samePeriodHabits', text: n => `${n} subject${n === 1 ? '' : 's'} stuck in the same period` },
     { key: 'bunchedWeeks', text: n => `${n} subject${n === 1 ? '' : 's'} bunched on neighbouring days` },
     { key: 'longTeacherRuns', text: n => `${n} long teaching run${n === 1 ? '' : 's'} without a break` },
+    { key: 'backToBackSame', text: n => `${n} time${n === 1 ? '' : 's'} a class has separate lessons of one subject back to back` },
+    { key: 'heavyRuns', text: n => `${n} class day${n === 1 ? '' : 's'} with more than three maths and science periods on end` },
     { key: 'midDayGaps', text: n => `${n} free period${n === 1 ? '' : 's'} in the middle of a class’s day` },
 ];
 

@@ -62,7 +62,7 @@ function FitChooser({ c, onApplied }: { c: PlanClass; onApplied: () => void }) {
             <p className="text-sm font-semibold text-rose-700 dark:text-rose-300">{over} lesson{over === 1 ? '' : 's'} more than the week holds ({c.needed} needed, {c.capacity} periods). Pick one way to fix it:</p>
             <div className="grid gap-2 @xl:grid-cols-2 @4xl:grid-cols-3">
                 {day && <FitOption title="Make the day longer" recommended lines={longerDayLines(day)} busy={busy === 'longer-day'} onUse={() => void apply('longer-day', `Make the day longer for ${day.level}?`)} />}
-                {groups && <FitOption title="Fewer elective groups" lines={fewerGroupsLines(groups)} busy={busy === 'fewer-groups'} onUse={() => void apply('fewer-groups', `Run ${c.name}’s electives in ${groups.groups.length} groups?`)} />}
+                {groups && <FitOption title={groups.guessed ? 'Teach some electives at the same time' : 'Fewer elective groups'} lines={fewerGroupsLines(groups)} busy={busy === 'fewer-groups'} onUse={() => void apply('fewer-groups', `Run ${c.name}’s electives in ${groups.groups.length} groups?`)} />}
                 {cuts && (
                     <FitOption
                         title="Teach fewer lessons a week"

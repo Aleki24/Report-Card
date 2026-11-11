@@ -234,40 +234,73 @@ export const MATCH_MINISTRY_CONFIRM = {
 
 export const teacherName = (t: TimetableLesson['teacher']) => (t ? `${t.first_name} ${t.last_name}`.trim() : '');
 
-/** What a cell shows depends on whose timetable it is. */
-const SUBJECT_SHORT: readonly [RegExp, string][] = [
-    [/^christian religious education$/i, 'CRE'],
-    [/^islamic religious education$/i, 'IRE'],
-    [/^hindu religious education$/i, 'HRE'],
-    [/^history and government$/i, 'History & Govt'],
-    [/^information communication technology$/i, 'ICT'],
-    [/^pastoral programme of instruction$/i, 'PPI'],
-    [/^community service learning$/i, 'CSL'],
+/**
+ * The codes Kenyan schools write on a timetable: ENG, MAT, KIS, CHEM. Matched
+ * by name, since schools rename subjects and stored codes vary ("101",
+ * "MATH_JS"). Order matters: the specific names come before the general.
+ */
+const SUBJECT_CODES: readonly [RegExp, string][] = [
+    [/literature/i, 'LIT'], [/english/i, 'ENG'],
+    [/sign language|\bksl\b/i, 'KSL'], [/kiswahili/i, 'KIS'],
+    [/essential math/i, 'E.MAT'], [/core math/i, 'C.MAT'], [/math/i, 'MAT'],
+    [/biology/i, 'BIO'], [/chemistry/i, 'CHEM'], [/physics/i, 'PHY'],
+    [/general science/i, 'G.SCI'], [/integrated science/i, 'INT.SCI'], [/home science/i, 'H.SCI'], [/computer/i, 'COMP'],
+    [/science/i, 'SCI'],
+    [/geography/i, 'GEO'], [/history/i, 'HIST'], [/social studies/i, 'SST'],
+    [/christian/i, 'CRE'], [/islamic/i, 'IRE'], [/hindu/i, 'HRE'], [/religio/i, 'RE'],
+    [/business/i, 'BST'], [/agricultur/i, 'AGR'], [/pre[\s-]?tech/i, 'PTS'],
+    [/creative/i, 'CAS'], [/sports? (and|&) recreation/i, 'S&R'], [/physical education|^pe$/i, 'PE'],
+    [/community service/i, 'CSL'], [/information communication|\bict\b/i, 'ICT'], [/pastoral|\bppi\b/i, 'PPI'],
+    [/french/i, 'FRE'], [/german/i, 'GER'], [/arabic/i, 'ARB'], [/mandarin|chinese/i, 'MAN'], [/indigenous|mother tongue/i, 'IND'],
+    [/music/i, 'MUS'], [/fine art|^art/i, 'ART'], [/theatre|drama/i, 'THE'], [/life skills/i, 'LSK'], [/environment/i, 'ENV'],
+    [/drawing/i, 'D&D'], [/aviation/i, 'AVT'], [/electric/i, 'ELEC'], [/power mechanic/i, 'PWM'], [/wood/i, 'WW'], [/metal/i, 'MW'], [/building/i, 'B&C'],
+    [/guidance|counsel/i, 'G&C'], [/library|reading/i, 'LIB'],
 ];
 
 /**
- * A subject's name as a timetable cell shows it: the name, never a code like
- * "101" or "MATH_JS", with the long religious and compound names shortened.
+ * A subject's timetable code: the usual one for its name, else the letters
+ * its own code starts with ("FASH_SS" gives FASH), else its initials or
+ * first letters.
  */
+export function subjectCode(name: string | null | undefined, code?: string | null): string {
+    const n = (name ?? '').trim().replace(/\s+/g, ' ');
+    if (!n) return 'LESSON';
+    const known = SUBJECT_CODES.find(([re]) => re.test(n));
+    if (known) return known[1];
+    const own = /^[A-Za-z]{2,5}/.exec((code ?? '').trim())?.[0];
+    if (own) return own.toUpperCase();
+    const words = n.split(' ').filter(w => !/^(and|of|in|the|&)$/i.test(w));
+    return (words.length > 1 ? words.map(w => w[0]).join('') : n.slice(0, 4)).toUpperCase();
+}
+
+const codeOf = (l: Pick<TimetableLesson, 'subject'>) => subjectCode(l.subject?.name, l.subject?.code);
+
+/** A subject's name in running text, the long religious names shortened. */
 export function shortSubject(name: string | null | undefined): string {
     const n = (name ?? '').trim().replace(/\s+/g, ' ');
     if (!n) return 'Lesson';
-    const known = SUBJECT_SHORT.find(([re]) => re.test(n));
-    return known ? known[1] : n.replace(/ and /gi, ' & ');
+    return /religious education$/i.test(n) && n.split(' ').length === 3 ? subjectCode(n) : n.replace(/ and /gi, ' & ');
 }
 
+/** What a cell shows depends on whose timetable it is: the subject's code, then who and where. */
 export function cellLines(l: TimetableLesson, mode: GridMode): [string, string] {
-    const subject = shortSubject(l.subject?.name);
+    const subject = codeOf(l);
     if (mode === 'class') return [subject, [teacherName(l.teacher), l.room?.name ?? ''].filter(Boolean).join(' · ')];
     if (mode === 'teacher') return [subject, [l.stream?.full_name ?? '', l.room?.name ?? ''].filter(Boolean).join(' · ')];
     return [subject, [l.stream?.full_name ?? '', teacherName(l.teacher)].filter(Boolean).join(' · ')];
 }
 
-/** A grid cell's two lines for one lesson or an option block's parallel electives. */
+/** A grid cell's two lines for one lesson, or for subjects taught at the same time to different learners. */
 export function slotLines(lessons: readonly TimetableLesson[], mode: GridMode): [string, string] {
     if (lessons.length <= 1) return lessons[0] ? cellLines(lessons[0], mode) : ['', ''];
-    const subjects = lessons.map(l => shortSubject(l.subject?.name)).join(' / ');
-    return [subjects, `${lessons.length} electives in parallel`];
+    return [lessons.map(codeOf).join(' / '), 'Each learner takes one'];
+}
+
+/** The key under a timetable: each code on it and the subject it stands for, A to Z. */
+export function subjectKey(lessons: readonly Pick<TimetableLesson, 'subject'>[]): { code: string; name: string }[] {
+    const seen = new Map<string, string>();
+    lessons.forEach(l => { if (l.subject?.name) seen.set(codeOf(l), l.subject.name.trim()); });
+    return [...seen.entries()].map(([code, name]) => ({ code, name })).sort((x, y) => x.code.localeCompare(y.code));
 }
 
 /** A timetable's week at a glance: lessons (an option block counts once), subjects and school days. */

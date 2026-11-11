@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { ArrowLeftRight, Lock, MoveRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { WEEKDAY_LABELS, WEEKDAY_NAMES, type TimetableConfig, type TimetableLesson } from '@/lib/timetable/config';
-import { slotLines, type GridMode } from '@/lib/ops/forms/academics';
+import { slotLines, subjectKey, type GridMode } from '@/lib/ops/forms/academics';
 import { gridRows, lessonsAt, rowRunsOn, type GridRow } from '@/lib/timetable/layout';
 import type { CellHint } from '@/lib/timetable/moves';
 
@@ -57,6 +57,7 @@ export function TimetableGrid({ config, lessons, mode, selectedId, onCellClick, 
         return config.days.find(d => d >= today) ?? config.days[0];
     });
     const rows = React.useMemo(() => gridRows(config, lessons), [config, lessons]);
+    const codes = React.useMemo(() => subjectKey(lessons), [lessons]);
     const interactive = !!onCellClick;
 
     const cell = (day: number, row: GridRow) => {
@@ -143,6 +144,15 @@ export function TimetableGrid({ config, lessons, mode, selectedId, onCellClick, 
                     ))}
                 </div>
             </div>
+
+            {/* What each subject code stands for */}
+            {codes.length > 0 && (
+                <dl aria-label="Subject codes" className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                    {codes.map(c => (
+                        <div key={c.code} className="flex gap-1.5"><dt className="font-semibold text-foreground">{c.code}</dt><dd>{c.name}</dd></div>
+                    ))}
+                </dl>
+            )}
         </>
     );
 }
