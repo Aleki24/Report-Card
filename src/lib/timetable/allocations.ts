@@ -4,12 +4,19 @@
  *
  * CBC (PP1–Grade 9): KICD timetabling guidelines for the rationalised
  * curriculum (2024). PP 25 lessons of 30 min; Grades 1–3 31 of 30 min;
- * Grades 4–6 35 of 35 min; Grades 7–9 41 of 40 min, with one double lesson
- * only for Integrated Science, Pre-Technical Studies, Agriculture and
- * Creative Arts & Sports. No double lessons below Grade 7.
+ * Grades 4–6 35 of 35 min; Grades 7–9 41 of 40 min. No double lessons below
+ * Grade 7.
  * Senior School (Grade 10+): 40 lessons of 40 min; English, Kiswahili and
  * Mathematics 5 each, CSL 3, PE 3, ICT 2, each elective 5.
  * 8-4-4 secondary: Ministry circular on time allocation (Forms 1–2 and 3–4).
+ *
+ * Double lessons, from Grade 7 up: one a week where a single 40 minutes is
+ * too short for the work, which is how Kenyan secondary schools timetable:
+ * the sciences (practicals), Mathematics (worked problems), the languages
+ * (composition and set books in the upper classes) and the practical
+ * subjects (Agriculture, Computer, Home Science, Pre-Technical, arts and
+ * sports). KICD names the Grade 7–9 practical ones; the rest is school
+ * practice, and a school changes any of them on its teaching loads.
  *
  * Subjects are matched by name (and code), since schools rename them; a
  * subject that matches nothing keeps the school's own default.
@@ -58,7 +65,7 @@ const UPPER_PRIMARY: readonly Rule[] = [
 const JUNIOR_SCHOOL: readonly Rule[] = [
     [/english/, 5],
     [/kiswahili|sign language|\bksl\b/, 4],
-    [/math/, 5],
+    [/math/, 5, 1],
     [/religio|\b[chi]re\b/, 4],
     [/social studies/, 4],
     [/science/, 5, 1],
@@ -68,32 +75,36 @@ const JUNIOR_SCHOOL: readonly Rule[] = [
     [/\bppi\b|pastoral/, 1],
 ];
 
+/** Subjects whose work needs a double: practicals, worked problems, making and performing. */
+const NEEDS_DOUBLE = /math|physics|chemistry|biology|science|agricultur|computer|home science|aviation|electric|power mechanic|wood|metal|building|construction|drawing|design|fine art|\barts?\b|music|theatre|dance|film|sports|media/;
+
 const SENIOR_SCHOOL: readonly Rule[] = [
-    [/^english$|english language/, 5],
-    [/^kiswahili$|kiswahili language|^ksl$/, 5],
+    [/^english$|english language/, 5, 1],
+    [/^kiswahili$|kiswahili language|^ksl$/, 5, 1],
     [/community service/, 3],
     [/physical education|^pe$/, 3],
     [/\bict\b/, 2],
     [/\bppi\b|pastoral/, 1],
     [/guidance|personal study|\blpg\b/, 1],
     // Every elective, Core or Essential Mathematics included.
+    [NEEDS_DOUBLE, 5, 1],
     [/./, 5],
 ];
 
 const SECONDARY_844_LOWER: readonly Rule[] = [
-    [/math/, 6], [/english/, 6], [/kiswahili/, 5],
-    [/chemistry/, 4], [/biology/, 4], [/physics/, 4],
+    [/math/, 6, 1], [/english/, 6, 1], [/kiswahili/, 5],
+    [/chemistry/, 4, 1], [/biology/, 4, 1], [/physics/, 4, 1],
     [/geography/, 3], [/history/, 3], [/religio|\b[chi]re\b/, 3],
     [/business/, 3], [/physical education|life skills|^pe$/, 1],
-    [/agricultur/, 3], [/home science/, 3], [/arabic|french|german/, 3],
+    [/agricultur/, 3, 1], [/home science/, 3, 1], [/computer/, 3, 1], [/arabic|french|german/, 3],
 ];
 
 const SECONDARY_844_UPPER: readonly Rule[] = [
-    [/math/, 7], [/english/, 8], [/kiswahili/, 6],
-    [/chemistry/, 5], [/biology/, 5], [/physics/, 5],
-    [/geography/, 5], [/history/, 4], [/religio|\b[chi]re\b/, 4],
+    [/math/, 7, 1], [/english/, 8, 1], [/kiswahili/, 6, 1],
+    [/chemistry/, 5, 1], [/biology/, 5, 1], [/physics/, 5, 1],
+    [/geography/, 5, 1], [/history/, 4], [/religio|\b[chi]re\b/, 4],
     [/business/, 4], [/physical education|life skills|^pe$/, 2],
-    [/agricultur/, 4], [/home science/, 4], [/arabic|french|german/, 4],
+    [/agricultur/, 4, 1], [/home science/, 4, 1], [/computer/, 4, 1], [/arabic|french|german/, 4],
 ];
 
 const RULES: Partial<Record<CurriculumBand, readonly Rule[]>> = {

@@ -42,7 +42,7 @@ export interface PlanClass {
     /** Loads with nobody to teach them. */
     unassigned: number;
     /** What the option blocks rest on: learners' choices, or the subjects' types. */
-    basis: 'choices' | 'groups' | 'subjects' | 'none';
+    basis: 'choices' | 'none';
     learnersWithChoices: number;
     /** Whose choices the groups follow: learners' own, or the school's offered Grade 10 combinations. */
     choiceSource: 'learners' | 'combinations';
@@ -129,8 +129,11 @@ export const unfitTitle = (c: Pick<PlanClass, 'unfit' | 'choiceSource'>) =>
 /** Why a class does not fit its week, and the ways out, in plain words. */
 export function overloadMessage(c: PlanClass): string {
     const over = c.needed - c.capacity;
-    if ((c.basis === 'choices' || c.basis === 'groups') && c.blocks.length > 0) {
+    if (c.basis === 'choices' && c.blocks.length > 0) {
         return `${c.name} needs ${c.needed} lessons a week but its day has only ${c.capacity}. Its learners’ subject choices mix so much that their electives need ${plural(c.blocks.length, 'separate group')}, and no two of these groups can be taught at the same time. Give ${c.name} a longer day, or lower some lessons a week (${plural(over, 'lesson')} to find).`;
+    }
+    if (c.learnersWithChoices === 0 && c.core.length > 0) {
+        return `${c.name} needs ${c.needed} lessons a week but its day has only ${c.capacity}: ${plural(over, 'lesson')} too many. No learner’s subject choices are recorded for it, so every subject is planned for the whole class: two subjects share a slot only when it is known that nobody takes both. Record each learner’s electives (People, or Subjects › Combinations for Senior School), accept option groups here, give ${c.name} a longer day, or lower some lessons a week.`;
     }
     return `${c.name} needs ${c.needed} lessons a week but its day has only ${c.capacity}: ${plural(over, 'lesson')} too many. Give ${c.name} a longer day, or lower some lessons a week.`;
 }
@@ -139,12 +142,8 @@ export function overloadMessage(c: PlanClass): string {
 export function basisLine(c: PlanClass): string | null {
     if (c.blocks.length === 0) return null;
     const whose = c.choiceSource === 'combinations' ? plural(c.learnersWithChoices, 'offered combination') : `${plural(c.learnersWithChoices, 'learner')}’ recorded choices`;
-    if (c.basis === 'groups') {
-        const who = c.choiceSource === 'combinations' ? 'combination' : 'learner';
-        return `Electives run in ${plural(c.blocks.length, 'subject group')}, one subject from each, built from ${whose}.${c.unfit.length > 0 ? ` ${plural(c.unfit.length, who)} ${c.unfit.length === 1 ? 'has' : 'have'} two subjects in one group.` : ' Every one fits.'}`;
-    }
-    if (c.basis === 'choices') return `Option blocks follow ${whose}: subjects taken together never share a slot.`;
-    return 'No subject choices recorded for this class yet, so electives are grouped by subject type. Record learners’ electives (or the school’s combinations) for groups that match them.';
+    if (c.basis === 'choices') return `Subjects share a slot only where nobody takes both, from ${whose}.`;
+    return 'These groups were set for this class by the school: a learner takes one subject from each.';
 }
 
 /** Blockers and notes from the plan's facts. */

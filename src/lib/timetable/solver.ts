@@ -26,6 +26,11 @@
  *   - a subject not in the same period every day, and its few lessons spread
  *     across the week rather than bunched on neighbouring days;
  *   - a class's free periods at the end of its day, not in the middle;
+ *   - a learner's day that does not wear them out: a subject never in two
+ *     separate lessons back to back (three periods of it in a row with a
+ *     double), no more than `HEAVY_RUN` periods of mathematics and sciences
+ *     on end without a break, and a class's doubles spread over its days
+ *     rather than piled on one;
  *   - no more than `maxConsecutive` lessons in a row for a teacher, and a
  *     teacher's lessons spread evenly across the week.
  *
@@ -155,13 +160,22 @@ const COST = {
     earlyCreative: 3,
     samePeriodRepeat: 3,
     bunchedDays: 8,
-    /** A class's free period with a lesson still to come that day. */
-    midDayGap: 3,
+    /** A class's free period with a lesson still to come that day: idle learners in the middle of the day. */
+    midDayGap: 8,
     /** A class's lessons a day, squared, so its free periods spread over the week. */
     classLoad: 1,
     consecutiveOver: 12,
     imbalance: 2,
+    /** Two separate lessons of one subject back to back for a class. */
+    backToBackSame: 12,
+    /** Each period of mathematics or a science past `HEAVY_RUN` on end. */
+    heavyRun: 6,
+    /** A double on a class's day beyond its fair share of the week's doubles. */
+    crowdedDoubles: 8,
 } as const;
+
+/** Periods of demanding subjects (mathematics, sciences) a class takes on end before it needs something else. */
+const HEAVY_RUN = 3;
 
 /** A gap longer than this between two lessons gives a teacher a rest. */
 const REST_MINUTES = 5;
@@ -390,14 +404,21 @@ function solveOnce(input: SolverInput, rules: SolverRules): SolverResult {
     const dailyShare = (streamId: string, subjectId: string, bell: Bell) =>
         Math.max(1, Math.ceil((sessionsOf.get(subjectKey(streamId, subjectId)) ?? 1) / Math.max(1, daysFor(streamId, subjectId, bell))));
 
-    /** A class's day: a subject past its fair share, subjects at the wrong time of day, and free periods before lessons. */
+    // Each class's doubles in the week, and so its fair share a day.
+    const doublesOf = new Map<string, number>();
+    sessions.forEach(s => { if (s.length === 2) doublesOf.set(s.req.streamId, (doublesOf.get(s.req.streamId) ?? 0) + 1); });
+    const doublesShare = (streamId: string, bell: Bell) => Math.max(1, Math.ceil((doublesOf.get(streamId) ?? 0) / Math.max(1, bell.teachingDays)));
+
+    /** A class's day: a subject past its fair share, subjects at the wrong time of day, free periods before lessons, and what wears learners out. */
     const streamDayCost = (streamId: string, day: number): number => {
         const g = streamGrids.get(streamId);
         const bell = streamBell.get(streamId);
         if (!g || !bell) return 0;
         const n = bell.teaching.length;
         const seen = new Map<string, number>();
-        let cost = 0;
+        const strain = dayStrain(g, bell, day, byKey);
+        let cost = strain.backToBack * COST.backToBackSame + strain.heavyOver * COST.heavyRun
+            + Math.max(0, strain.doubles - doublesShare(streamId, bell)) * COST.crowdedDoubles;
         let last = -1;
         let freeSoFar = 0;
         for (let slot = 0; slot < n; slot++) {
@@ -411,7 +432,8 @@ function solveOnce(input: SolverInput, rules: SolverRules): SolverResult {
             const count = (seen.get(s.req.subjectId) ?? 0) + 1;
             seen.set(s.req.subjectId, count);
             if (count > dailyShare(streamId, s.req.subjectId, bell)) cost += COST.overDailyShare;
-            if (s.req.preferMorning && !bell.isMorning[slot]) cost += COST.morningMiss;
+            // A double after lunch costs both its periods.
+            if (s.req.preferMorning && !bell.isMorning[slot]) cost += COST.morningMiss * s.length;
             if (s.req.preferAfternoon && bell.isEarly[slot]) cost += COST.earlyCreative;
         }
         let load = 0;
@@ -864,6 +886,32 @@ function solveOnce(input: SolverInput, rules: SolverRules): SolverResult {
 }
 
 /**
+ * What wears a class out on one day: separate lessons of one subject back to
+ * back, periods of heavy subjects past `HEAVY_RUN` on end (a break or a free
+ * period ends a run), and its doubles.
+ */
+function dayStrain(g: Int32Array, bell: Bell, day: number, byKey: readonly Session[]): { backToBack: number; heavyOver: number; doubles: number } {
+    const n = bell.teaching.length;
+    let backToBack = 0; let heavyOver = 0; let doubles = 0;
+    let prev = -1; let prevSlot = -1; let run = 0;
+    for (let slot = 0; slot < n; slot++) {
+        const key = bell.open[day * n + slot] ? g[day * n + slot] : -1;
+        if (key < 0) { prev = -1; run = 0; continue; }
+        const s = byKey[key];
+        const joined = prev >= 0 && bell.start[slot] - bell.end[prevSlot] <= REST_MINUTES;
+        if (!joined) run = 0;
+        if (key !== prev) {
+            if (s.length === 2) doubles++;
+            if (joined && byKey[prev].req.subjectId === s.req.subjectId) backToBack++;
+        }
+        if (s.req.preferMorning) { if (++run > HEAVY_RUN) heavyOver++; } else run = 0;
+        prev = key;
+        prevSlot = slot;
+    }
+    return { backToBack, heavyOver, doubles };
+}
+
+/**
  * How bunched a subject's week is: a two-lesson subject on neighbouring days,
  * or three or more days in a row (Mon, Tue, Wed) for a subject on fewer days
  * than that leaves room for. A subject on all but one day has nothing to
@@ -899,9 +947,15 @@ function measureQuality(q: {
 }): TimetableQuality {
     let repeatsInDay = 0; let missedDays = 0; let lateCoreLessons = 0; let earlyCreativeLessons = 0;
     let samePeriodHabits = 0; let bunchedWeeks = 0; let longTeacherRuns = 0; let midDayGaps = 0;
+    let backToBackSame = 0; let heavyRuns = 0;
     for (const [streamId, g] of q.streamGrids) {
         const bell = q.streamBell.get(streamId)!;
         const n = bell.teaching.length;
+        for (let d = 0; d < q.dayCount; d++) {
+            const strain = dayStrain(g, bell, d, q.sessions);
+            backToBackSame += strain.backToBack;
+            if (strain.heavyOver > 0) heavyRuns++;
+        }
         const slotsBySubject = new Map<string, number[]>();
         const daysBySubject = new Map<string, Set<number>>();
         for (let d = 0; d < q.dayCount; d++) {
@@ -940,9 +994,10 @@ function measureQuality(q: {
         }
     }
     for (const id of q.teacherIds) for (let d = 0; d < q.dayCount; d++) longTeacherRuns += q.teacherLongRuns(id, d);
-    const points = repeatsInDay * 4 + missedDays * 3 + lateCoreLessons + earlyCreativeLessons + samePeriodHabits * 2 + bunchedWeeks * 2 + longTeacherRuns * 3 + midDayGaps;
+    const points = repeatsInDay * 4 + missedDays * 3 + lateCoreLessons + earlyCreativeLessons + samePeriodHabits * 2 + bunchedWeeks * 2 + longTeacherRuns * 3 + midDayGaps
+        + backToBackSame * 3 + heavyRuns * 2;
     const score = q.totalLessons === 0 ? 100 : Math.max(0, Math.round(100 - (points / q.totalLessons) * 100));
-    return { score, repeatsInDay, missedDays, lateCoreLessons, earlyCreativeLessons, samePeriodHabits, bunchedWeeks, longTeacherRuns, midDayGaps };
+    return { score, repeatsInDay, missedDays, lateCoreLessons, earlyCreativeLessons, samePeriodHabits, bunchedWeeks, longTeacherRuns, midDayGaps, backToBackSame, heavyRuns };
 }
 
 /** Fewest lessons left out first, then the lowest cost. */

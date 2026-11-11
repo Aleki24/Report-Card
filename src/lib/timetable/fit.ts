@@ -45,6 +45,8 @@ export interface FewerGroups {
     groups: { label: string; subjects: string[]; lessons: number }[];
     /** Learners (or offered combinations) with two subjects in one group. */
     unfit: { name: string; subjects: [string, string] }[];
+    /** Suggested from the kinds of subject: no learner's choices are recorded to check them against. */
+    guessed?: boolean;
 }
 
 export interface ClassFixes {
@@ -59,8 +61,15 @@ export function fewerGroupsLines(f: FewerGroups): string[] {
     const pairs = new Map<string, number>();
     f.unfit.forEach(u => { const k = u.subjects.join(' and '); pairs.set(k, (pairs.get(k) ?? 0) + 1); });
     const who = [...pairs.entries()].map(([k, n]) => `${n} take${n === 1 ? 's' : ''} ${k}`).join(', ');
+    const shared = f.groups.filter(g => g.subjects.length > 1).map(g => g.subjects.join(' / ')).join(' · ');
+    if (f.guessed) {
+        return [
+            `Taught at the same time: ${shared}.`,
+            'No subject choices are recorded for this class, so check each pair: a learner can take only one subject from each. Recording learners’ electives is the sure way.',
+        ];
+    }
     return [
-        f.groups.map(g => `${g.label}: ${g.subjects.join(' / ')}`).join(' · '),
+        `Taught at the same time: ${shared}.`,
         f.unfit.length === 0 ? 'Every learner’s choices still fit.' : `${f.unfit.length} learner${f.unfit.length === 1 ? '' : 's'} must change one subject (${who}).`,
     ];
 }

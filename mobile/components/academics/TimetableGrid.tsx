@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 import { WEEKDAY_LABELS, type TimetableConfig, type TimetableLesson } from '@shared/timetable/config';
-import { slotLines, type GridMode } from '@shared/ops/forms/academics';
+import { slotLines, subjectKey, type GridMode } from '@shared/ops/forms/academics';
 import { gridRows, lessonsAt, rowRunsOn, type GridRow } from '@shared/timetable/layout';
 import type { CellHint } from '@shared/timetable/moves';
 import { radius, spacing, fonts, makeStyles, useTheme } from '@/lib/theme';
@@ -73,8 +73,15 @@ export function TimetableGrid({ config, lessons, mode, selectedId, onCellPress, 
         ) : <View style={styles.cellWrap}>{content}</View>;
     };
 
+    // What each subject code stands for.
+    const codes = subjectKey(lessons);
+    const key = codes.length > 0
+        ? <Text style={styles.key} accessibilityLabel="Subject codes">{codes.map((c) => `${c.code} ${c.name}`).join('  ·  ')}</Text>
+        : null;
+
     if (width >= WEEK_BREAKPOINT) {
         return (
+          <View>
             <ScrollView horizontal contentContainerStyle={{ minWidth: '100%' }}>
                 <View style={styles.week}>
                     <View style={styles.weekRow}>
@@ -94,6 +101,8 @@ export function TimetableGrid({ config, lessons, mode, selectedId, onCellPress, 
                     ))}
                 </View>
             </ScrollView>
+            {key}
+          </View>
         );
     }
 
@@ -117,6 +126,7 @@ export function TimetableGrid({ config, lessons, mode, selectedId, onCellPress, 
                     <View style={{ flex: 1 }}>{cell(phoneDay, r)}</View>
                 </View>
             ))}
+            {key}
         </View>
     );
 }
@@ -135,6 +145,7 @@ const useStyles = makeStyles((colors) => ({
     swapTarget: { borderWidth: 2, borderColor: colors.info },
     blocked: { opacity: 0.35 },
     offDayText: { fontSize: 10, fontFamily: fonts.semibold, color: colors.muted },
+    key: { fontFamily: fonts.regular, fontSize: 11, color: colors.muted, marginTop: spacing.sm, lineHeight: 16 },
     breakRow: { textAlign: 'center', fontSize: 11, fontFamily: fonts.semibold, color: colors.warningText, backgroundColor: colors.warningBg, borderRadius: radius.sm, paddingVertical: 4, marginVertical: 4 },
     phoneRow: { flexDirection: 'row', alignItems: 'stretch', gap: spacing.sm, marginBottom: spacing.sm },
     periodLabel: { fontSize: 12, fontFamily: fonts.bold, color: colors.foreground },

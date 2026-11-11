@@ -7,9 +7,11 @@
  * own teacher. A class's week is then its core lessons plus, for each block,
  * the longest subject in it.
  *
- * A school can put a load in a block by hand (`option_block`); the rest of the
- * electives are blocked automatically, but only when the class would not fit
- * otherwise, so Form 1 and 2 that take every subject stay whole-class. Shared
+ * A school can put a load in a block by hand (`option_block`). The rest are
+ * blocked only from learners' recorded choices: two subjects share a slot
+ * when no learner takes both, never on a guess. A class with no choices
+ * recorded keeps every subject whole-class, and is offered groups to accept
+ * if its week overflows. Shared
  * by the generator, the web and the app, so what the loads page promises is
  * what the generator builds.
  */
@@ -54,9 +56,10 @@ export interface ClassPlan<L extends BlockLoad = BlockLoad> {
     fits: boolean;
     /**
      * What the blocks rest on: learners' recorded subject choices (no learner
-     * has two subjects in one block), or, without them, the subjects' types.
+     * has two subjects in one block), or nothing worked out ('none': only the
+     * school's own groups, if any). Two subjects never share a slot on a guess.
      */
-    basis: 'choices' | 'groups' | 'subjects' | 'none';
+    basis: 'choices' | 'none';
     /** Learners with recorded choices, when the blocks rest on them. */
     learnersWithChoices: number;
     /** Whose choices: learners' own, or (Senior School, none recorded) the school's offered combinations. */
@@ -67,9 +70,11 @@ export interface ClassPlan<L extends BlockLoad = BlockLoad> {
      */
     unfit: { learnerId: string; subjects: [string, string] }[];
     /**
-     * For a class whose learners' choices overflow its week: the electives in
-     * fewer groups that do fit, and the learners who would then have two
-     * subjects in one group (so must change one). Absent when none fits.
+     * For a class that overflows its week: its electives in groups that do
+     * fit, for the school to accept or not. From learners' choices, with the
+     * learners who would then have two subjects in one group (so must change
+     * one); or, with no choices recorded, `guessed` from the kinds of subject.
+     * Absent when no grouping fits.
      */
     tighter?: SubjectGroupsPlan<L>;
 }
@@ -92,28 +97,6 @@ function block<L extends BlockLoad>(number: number, loads: L[], manual: boolean)
         manual,
         teacherClash: new Set(teachers).size < teachers.length,
     };
-}
-
-/**
- * Spread electives over `k` blocks: no teacher twice in a block, subjects of
- * one category (the sciences, say) apart so a learner can take several, and
- * blocks kept about the same size.
- */
-function spread<L extends BlockLoad>(electives: readonly L[], k: number): L[][] {
-    const bins: L[][] = Array.from({ length: k }, () => []);
-    const order = [...electives].sort((a, b) => (a.category ?? '').localeCompare(b.category ?? '') || b.lessons - a.lessons || a.subjectName.localeCompare(b.subjectName));
-    for (const l of order) {
-        let best = 0;
-        let bestScore = Infinity;
-        bins.forEach((bin, i) => {
-            const clash = !!l.teacherId && bin.some(x => x.teacherId === l.teacherId);
-            const sameCategory = bin.filter(x => x.category && x.category === l.category).length;
-            const score = (clash ? 1000 : 0) + sameCategory * 10 + bin.length;
-            if (score < bestScore) { bestScore = score; best = i; }
-        });
-        bins[best].push(l);
-    }
-    return bins.filter(b => b.length > 0);
 }
 
 /**
@@ -199,7 +182,7 @@ export function planClass<L extends BlockLoad>(
         const unfit = choices ? unfitLearners(blocks.map(b => b.loads), choices) : [];
         return {
             streamId, capacity, core, blocks, needed, fits: needed <= capacity, basis,
-            learnersWithChoices: basis === 'subjects' || basis === 'none' ? (manual.size > 0 ? learners : 0) : learners,
+            learnersWithChoices: basis === 'none' ? (manual.size > 0 ? learners : 0) : learners,
             choiceSource, unfit, ...(tighter && needed > capacity ? { tighter } : {}),
         };
     };
@@ -207,68 +190,79 @@ export function planClass<L extends BlockLoad>(
     // Recorded choices say which subjects are electives: anything a learner chose.
     const chosen = (l: L) => !!choices?.get(l.subjectId)?.size;
     const useChoices = learners > 0 && rest.some(chosen);
+    const taken = sum(blocks.map(b => b.lessons));
     // Everyone takes everything while it fits and nobody has chosen: no blocks to work out.
-    if (!useChoices && sum(rest.map(l => l.lessons)) + sum(blocks.map(b => b.lessons)) <= capacity) return finish(rest);
-
-    const elective = (l: L) => (useChoices ? chosen(l) || isElective(l) : isElective(l));
-    const core = rest.filter(l => !elective(l));
-    const electives = rest.filter(elective);
-    let next = Math.max(0, ...blocks.map(b => b.number)) + 1;
+    if (!useChoices && sum(rest.map(l => l.lessons)) + taken <= capacity) return finish(rest);
 
     if (useChoices && choices) {
+        // Two subjects share a slot only when no learner takes both. A subject
+        // nobody chose is taken by the whole class, whatever its type says.
+        const core = rest.filter(l => !chosen(l));
+        const electives = rest.filter(chosen);
         const exact = colourByChoices(electives, choices);
-        const room = capacity - sum(core.map(l => l.lessons)) - sum(blocks.map(b => b.lessons));
+        const room = capacity - sum(core.map(l => l.lessons)) - taken;
         const exactLessons = sum(exact.map(bin => Math.max(...bin.map(l => l.lessons))));
-        const grouped = exactLessons > room ? bestGroups(electives, choices, core.length + blocks.length, exact.length, room, learners) : null;
-        const planned = grouped ? grouped.groups.length : exact.length;
-        // Still over the week: the fewer groups that fit, for the school to weigh against a longer day.
-        if (exactLessons > room && (!grouped || sum(grouped.groups.map(g => g.lessons)) > room)) tighter = fittingGroups(electives, choices, planned, room) ?? undefined;
-        if (grouped) {
-            basis = 'groups';
-            for (const g of grouped.groups) blocks.push({ ...block(next++, g.loads, false), label: g.label });
-            return finish(core);
-        }
+        // Over the week: fewer groups that fit, for the school to weigh (some learners change a subject) against a longer day.
+        if (exactLessons > room) tighter = fittingGroups(electives, choices, exact.length, room) ?? undefined;
         basis = 'choices';
-        for (const bin of exact) blocks.push(block(next++, bin, false));
+        let next = Math.max(0, ...blocks.map(b => b.number)) + 1;
+        for (const bin of exact) if (bin.length > 0) blocks.push(block(next++, bin, false));
         return finish(core);
     }
-    basis = 'subjects';
-    if (electives.length === 0) return finish(core);
 
-    // As many blocks as the week allows: more blocks, more combinations open to learners.
-    const longest = Math.max(...electives.map(l => l.lessons));
-    const room = capacity - sum(core.map(l => l.lessons)) - sum(blocks.map(b => b.lessons));
-    const k = Math.min(electives.length, Math.max(1, Math.floor(room / longest)));
-    for (const bin of spread(electives, k)) blocks.push(block(next++, bin, false));
-    return finish(core);
+    // Nobody's choices are recorded, so nothing says which subjects could share
+    // a slot: every subject stays whole-class, and the class does not fit until
+    // the school records choices, lengthens the day or accepts groups itself.
+    const electives = rest.filter(isElective);
+    const room = capacity - sum(rest.filter(l => !isElective(l)).map(l => l.lessons)) - taken;
+    tighter = guessedGroups(electives, room) ?? undefined;
+    return finish(rest);
 }
 
-/** A learner in ten may have to change a subject before groups are worth it over exact choices. */
-const MAX_UNFIT_SHARE = 0.15;
-
 /**
- * When learners' exact choices need more periods than the week has, the way
- * schools solve it: subject groups learners pick one subject from each
- * (KCSE groups kept together where they can be). Tries from the number of
- * electives most learners take up to one fewer group than exact choices
- * need, and keeps the plan that fits the week, else the shortest, as long
- * as few learners have to change a subject.
+ * Electives in groups by the kind of subject, for a class with no recorded
+ * choices: each science on its own (most learners take two or three), the
+ * humanities together, the technical and business subjects together; then
+ * the cheapest groups merged until the week fits. A suggestion only, since
+ * nothing says who takes what.
  */
-function bestGroups<L extends BlockLoad>(electives: readonly L[], choices: ClassChoices, coreCount: number, exactBlocks: number, room: number, learners: number) {
-    const allowed = Math.max(1, Math.floor(learners * MAX_UNFIT_SHARE));
-    let best: { plan: SubjectGroupsPlan<L>; lessons: number } | null = null;
-    for (let k = electiveSlots(coreCount, choices); k < exactBlocks; k++) {
-        const plan = groupElectives(electives, k, choices, kcseGroup, g => KCSE_GROUP_LABEL[g as KcseGroup]);
-        if (!plan || plan.unfit.length > allowed) continue;
-        const lessons = sum(plan.groups.map(g => g.lessons));
-        const fits = lessons <= room;
-        const better = !best
-            || (fits && best.lessons > room)
-            || (fits === best.lessons <= room && (lessons < best.lessons || (lessons === best.lessons && plan.unfit.length < best.plan.unfit.length)));
-        if (better) best = { plan, lessons };
-        if (lessons <= room) break;
+function guessedGroups<L extends BlockLoad>(electives: readonly L[], room: number): SubjectGroupsPlan<L> | null {
+    if (electives.length < 2) return null;
+    const kindOf = (l: L) => {
+        const kind = kcseGroup(l.subjectName);
+        return kind === 'technical' || kind === 'languages' ? 'applied' : kind;
+    };
+    const bins: L[][] = [];
+    for (const l of [...electives].sort((a, b) => b.lessons - a.lessons || a.subjectName.localeCompare(b.subjectName))) {
+        const kind = kindOf(l);
+        const home = kind && kind !== 'sciences'
+            ? bins.find(b => kindOf(b[0]) === kind && !b.some(x => x.teacherId && x.teacherId === l.teacherId))
+            : undefined;
+        if (home) home.push(l); else bins.push([l]);
     }
-    return best?.plan ?? null;
+    const cost = (b: readonly L[]) => Math.max(...b.map(l => l.lessons));
+    const total = () => sum(bins.map(cost));
+    while (total() > room && bins.length > 1) {
+        // The merge that saves the most periods; sciences are kept apart as long as anything else can merge.
+        let best: { i: number; j: number; score: number } | null = null;
+        for (let i = 0; i < bins.length; i++) for (let j = i + 1; j < bins.length; j++) {
+            if (bins[i].some(a => a.teacherId && bins[j].some(b => b.teacherId === a.teacherId))) continue;
+            const saved = cost(bins[i]) + cost(bins[j]) - Math.max(cost(bins[i]), cost(bins[j]));
+            const sciences = [...bins[i], ...bins[j]].filter(l => kindOf(l) === 'sciences').length;
+            const score = saved * 10 - (sciences > 1 ? 100 : 0) - (bins[i].length + bins[j].length);
+            if (!best || score > best.score) best = { i, j, score };
+        }
+        if (!best) break;
+        bins[best.i].push(...bins.splice(best.j, 1)[0]);
+    }
+    if (total() > room) return null;
+    const groups = bins.map((loads, i) => {
+        const kinds = new Set(loads.map(kindOf));
+        const only = kinds.size === 1 ? [...kinds][0] : null;
+        const label = loads.length === 1 ? loads[0].subjectName : only === 'humanities' ? 'Humanities' : only === 'applied' ? 'Technical & Business' : `Group ${i + 1}`;
+        return { label, loads, lessons: cost(loads) };
+    });
+    return { groups: groups.filter(g => g.loads.length > 0), unfit: [], guessed: true };
 }
 
 /**
@@ -353,6 +347,8 @@ export interface SubjectGroupsPlan<L extends BlockLoad = BlockLoad> {
     groups: SubjectGroup<L>[];
     /** Learners whose recorded choices put two subjects in one group, and which two. */
     unfit: { learnerId: string; subjects: [string, string] }[];
+    /** Suggested from the kinds of subject, with no learner's choices to go on. */
+    guessed?: boolean;
 }
 
 /**

@@ -198,10 +198,10 @@ function FitChooser({ c, onApplied, onEditLoads }: { c: TimetablePlan['classes']
             ) : null}
             {groups ? (
                 <FitOption
-                    title="Fewer elective groups"
+                    title={groups.guessed ? 'Teach some electives at the same time' : 'Fewer elective groups'}
                     lines={fewerGroupsLines(groups)}
                     busy={busy === 'fewer-groups'}
-                    onUse={() => apply('fewer-groups', `Run ${c.name}’s electives in ${groups.groups.length} groups?`, `${groups.unfit.length} learner${groups.unfit.length === 1 ? '' : 's'} would change a subject.`)}
+                    onUse={() => apply('fewer-groups', `Run ${c.name}’s electives in ${groups.groups.length} groups?`, groups.guessed ? 'No choices are recorded, so check that nobody takes two subjects from one group.' : `${groups.unfit.length} learner${groups.unfit.length === 1 ? '' : 's'} would change a subject.`)}
                 />
             ) : null}
             {groups && groups.unfit.length > 0 ? (

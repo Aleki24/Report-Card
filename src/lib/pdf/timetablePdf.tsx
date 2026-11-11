@@ -5,7 +5,7 @@ import { bandForGrade } from '@/lib/curriculum-bands';
 import { WEEKDAY_LABELS, WEEKDAY_NAMES, sectionFor, type TimetableConfig, type TimetableLesson } from '@/lib/timetable/config';
 import { gridRows, lessonsAt, periodsOfLesson, rowRunsOn, type GridRow } from '@/lib/timetable/layout';
 import { availableLessons } from '@/lib/timetable/moves';
-import { shortSubject, teacherName, type GridMode } from '@/lib/ops/forms/academics';
+import { shortSubject, subjectCode, subjectKey, teacherName, type GridMode } from '@/lib/ops/forms/academics';
 
 /**
  * Printable timetables, laid out the way Kenyan schools pin them up: days down
@@ -35,6 +35,8 @@ function fillFor(key: string): string {
 const PAGE = { width: 842, height: 595, margin: 26 } as const;
 const HEADER_H = 50;
 const FOOTER_H = 20;
+/** Room under a grid for the key to its subject codes (two lines). */
+const KEY_H = 26;
 const HEAD_ROW_H = 28;
 const LABEL_W = 58;
 const BREAK_W = 15;
@@ -125,11 +127,13 @@ const lessonWidth = (rows: readonly GridRow[], labelW = LABEL_W) => {
 /** The short teacher label a cell has room for: "J. Otieno". */
 const shortTeacher = (t: TimetableLesson['teacher']) => (t ? `${t.first_name.trim().charAt(0)}. ${t.last_name}`.trim() : '');
 
-/** What a cell says, by whose timetable it is: subject names, never codes. */
+const codeOf = (l: TimetableLesson) => subjectCode(l.subject?.name, l.subject?.code);
+
+/** What a cell says, by whose timetable it is: the subject's code, as schools write timetables, with a key under the grid. */
 function cellText(lessons: readonly TimetableLesson[], mode: GridMode | 'school'): [string, string] {
-    if (lessons.length > 1) return [lessons.map(l => shortSubject(l.subject?.name)).join(' / '), 'Option block'];
+    if (lessons.length > 1) return [lessons.map(codeOf).join(' / '), 'Each learner takes one'];
     const l = lessons[0];
-    const subject = shortSubject(l.subject?.name);
+    const subject = codeOf(l);
     if (mode === 'teacher') return [subject, [l.stream?.full_name, l.room?.name].filter(Boolean).join(' · ')];
     if (mode === 'room') return [subject, [l.stream?.full_name, shortTeacher(l.teacher)].filter(Boolean).join(' · ')];
     return [subject, [shortTeacher(l.teacher), mode === 'class' ? l.room?.name : null].filter(Boolean).join(' · ')];
@@ -179,7 +183,7 @@ const BreakColumn = ({ row, height }: { row: GridRow; height: number }) => (
 function WeekGrid({ config, sheet }: { config: TimetableConfig; sheet: TimetableSheet }) {
     const rows = gridRows(config, sheet.lessons);
     const width = lessonWidth(rows);
-    const avail = PAGE.height - PAGE.margin * 2 - FOOTER_H - HEADER_H - 23 - HEAD_ROW_H;
+    const avail = PAGE.height - PAGE.margin * 2 - FOOTER_H - HEADER_H - 23 - HEAD_ROW_H - KEY_H;
     const rowH = Math.min(78, avail / Math.max(1, config.days.length));
     return (
         <View style={st.table}>
@@ -205,7 +209,7 @@ function DayGrid({ config, sheet }: { config: TimetableConfig; sheet: DaySheet }
     const rows = gridRows(config, all).filter(r => rowRunsOn(r, sheet.day));
     const labelW = 74;
     const width = lessonWidth(rows, labelW);
-    const avail = PAGE.height - PAGE.margin * 2 - FOOTER_H - HEADER_H - 23 - HEAD_ROW_H;
+    const avail = PAGE.height - PAGE.margin * 2 - FOOTER_H - HEADER_H - 23 - HEAD_ROW_H - KEY_H;
     const rowH = Math.max(26, Math.min(56, avail / Math.max(1, sheet.classes.length)));
     return (
         <View style={st.table}>
@@ -224,6 +228,17 @@ function DayGrid({ config, sheet }: { config: TimetableConfig; sheet: DaySheet }
                 </View>
             ))}
         </View>
+    );
+}
+
+/** What each subject code on the page stands for. */
+function CodeKey({ lessons }: { lessons: readonly TimetableLesson[] }) {
+    const codes = subjectKey(lessons);
+    if (codes.length === 0) return null;
+    return (
+        <Text style={{ marginTop: 5, fontSize: 6.5, color: MUTED, lineHeight: 1.35 }}>
+            {codes.map((c, i) => <Text key={c.code}>{i > 0 ? '   ·   ' : ''}<Text style={{ color: INK, fontWeight: 700 }}>{c.code}</Text> {c.name}</Text>)}
+        </Text>
     );
 }
 
@@ -296,6 +311,7 @@ function TimetableDocument({ data }: { data: TimetablePdfData }) {
                     <Watermark />
                     <Header data={data} title={WEEKDAY_NAMES[d.day]} label="Whole school" sub={d.section} />
                     <DayGrid config={data.config} sheet={d} />
+                    <CodeKey lessons={d.classes.flatMap(c => c.lessons)} />
                     <Footer data={data} />
                 </Page>
             ))}
@@ -304,6 +320,7 @@ function TimetableDocument({ data }: { data: TimetablePdfData }) {
                     <Watermark />
                     <Header data={data} title={sheet.title} label={sheet.mode === 'class' ? 'Class' : sheet.mode === 'teacher' ? 'Teacher' : 'Room'} sub={sheet.subtitle} />
                     <WeekGrid config={data.config} sheet={sheet} />
+                    <CodeKey lessons={sheet.lessons} />
                     <Footer data={data} />
                 </Page>
             ))}

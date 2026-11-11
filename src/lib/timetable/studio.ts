@@ -70,6 +70,7 @@ export function buildStudioPlan(input: StudioInput): TimetablePlan {
                         fewerGroups: p.tighter ? {
                             groups: p.tighter.groups.map(g => ({ label: g.label, subjects: g.loads.map(l => l.subjectName), lessons: g.lessons })),
                             unfit: unfitOf(p.tighter.unfit),
+                            ...(p.tighter.guessed ? { guessed: true } : {}),
                         } : null,
                     },
                 }),
