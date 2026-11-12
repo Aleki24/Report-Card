@@ -337,6 +337,12 @@ export interface TimetableQuality {
     backToBackSame?: number;
     /** A class's days with more than three periods of mathematics and sciences on end. */
     heavyRuns?: number;
+    /** Doubles straight after another double, with only a short break between. */
+    doubleAfterDouble?: number;
+    /** Class days with more doubles than their share (one a day while the week allows). */
+    crowdedDoubleDays?: number;
+    /** A class's doubles starting in the same period on more days than needed. */
+    sameDoubleTimes?: number;
 }
 
 const QUALITY_NOTES: readonly { key: Exclude<keyof TimetableQuality, 'score'>; text: (n: number) => string }[] = [
@@ -349,6 +355,9 @@ const QUALITY_NOTES: readonly { key: Exclude<keyof TimetableQuality, 'score'>; t
     { key: 'longTeacherRuns', text: n => `${n} long teaching run${n === 1 ? '' : 's'} without a break` },
     { key: 'backToBackSame', text: n => `${n} time${n === 1 ? '' : 's'} a class has separate lessons of one subject back to back` },
     { key: 'heavyRuns', text: n => `${n} class day${n === 1 ? '' : 's'} with more than three maths and science periods on end` },
+    { key: 'doubleAfterDouble', text: n => `${n} double${n === 1 ? '' : 's'} straight after another double` },
+    { key: 'crowdedDoubleDays', text: n => `${n} class day${n === 1 ? '' : 's'} with more than one double` },
+    { key: 'sameDoubleTimes', text: n => `${n} double${n === 1 ? '' : 's'} at the same time of day as the class's other doubles` },
     { key: 'midDayGaps', text: n => `${n} free period${n === 1 ? '' : 's'} in the middle of a class’s day` },
 ];
 
