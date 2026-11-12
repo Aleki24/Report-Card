@@ -72,7 +72,7 @@ export const studentManual: Manual = {
                 {
                     id: 'my-timetable',
                     title: 'My timetable',
-                    summary: 'If your school uses the timetable, My timetable shows your class’s lessons for the week: each day’s lessons with the subject, teacher and room, and the breaks between them. On a phone it shows one day at a time, starting with today.',
+                    summary: 'If your school uses the timetable, My timetable shows your class’s lessons for the week: each day’s lessons with the subject, teacher and room, and the breaks between them. Each subject has its own colour, a double lesson is one long card, and today’s lesson on now and the next one show at the top. On a phone it shows one day at a time, starting with today.',
                 },
                 {
                     id: 'my-subjects',

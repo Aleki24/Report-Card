@@ -79,8 +79,8 @@ const JUNIOR_SCHOOL: readonly Rule[] = [
 const NEEDS_DOUBLE = /math|physics|chemistry|biology|science|agricultur|computer|home science|aviation|electric|power mechanic|wood|metal|building|construction|drawing|design|fine art|\barts?\b|music|theatre|dance|film|sports|media/;
 
 const SENIOR_SCHOOL: readonly Rule[] = [
-    [/^english$|english language/, 5, 1],
-    [/^kiswahili$|kiswahili language|^ksl$/, 5, 1],
+    [/^english$|english language/, 5],
+    [/^kiswahili$|kiswahili language|^ksl$/, 5],
     [/community service/, 3],
     [/physical education|^pe$/, 3],
     [/\bict\b/, 2],
@@ -92,7 +92,7 @@ const SENIOR_SCHOOL: readonly Rule[] = [
 ];
 
 const SECONDARY_844_LOWER: readonly Rule[] = [
-    [/math/, 6, 1], [/english/, 6, 1], [/kiswahili/, 5],
+    [/math/, 6, 1], [/english/, 6], [/kiswahili/, 5],
     [/chemistry/, 4, 1], [/biology/, 4, 1], [/physics/, 4, 1],
     [/geography/, 3], [/history/, 3], [/religio|\b[chi]re\b/, 3],
     [/business/, 3], [/physical education|life skills|^pe$/, 1],
@@ -100,9 +100,9 @@ const SECONDARY_844_LOWER: readonly Rule[] = [
 ];
 
 const SECONDARY_844_UPPER: readonly Rule[] = [
-    [/math/, 7, 1], [/english/, 8, 1], [/kiswahili/, 6, 1],
+    [/math/, 7, 1], [/english/, 8], [/kiswahili/, 6],
     [/chemistry/, 5, 1], [/biology/, 5, 1], [/physics/, 5, 1],
-    [/geography/, 5, 1], [/history/, 4], [/religio|\b[chi]re\b/, 4],
+    [/geography/, 5], [/history/, 4], [/religio|\b[chi]re\b/, 4],
     [/business/, 4], [/life skills/, 1], [/physical education|^pe$/, 2],
     [/agricultur/, 4, 1], [/home science/, 4, 1], [/computer/, 4, 1], [/arabic|french|german/, 4],
 ];

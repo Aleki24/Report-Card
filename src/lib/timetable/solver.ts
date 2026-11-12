@@ -13,7 +13,8 @@
  *   - a lesson only goes in a period that runs that day (a Friday-only
  *     ninth lesson takes lessons on Friday alone);
  *   - a teacher is never timetabled at a time they cannot teach;
- *   - doubles sit in two back-to-back periods with no break between them;
+ *   - doubles sit in two back-to-back periods with no break between them,
+ *     or across a short break (never lunch) for a subject the school allows;
  *   - lessons needing a room type (a lab) get a free room of that type,
  *     when the school has any rooms of that type;
  *   - pinned lessons stay where they are.
@@ -31,6 +32,11 @@
  *     double), no more than `HEAVY_RUN` periods of mathematics and sciences
  *     on end without a break, and a class's doubles spread over its days
  *     rather than piled on one;
+ *   - doubles as a timetabler places them (each switchable): one a day for
+ *     a class, never one straight after another, at different times of day;
+ *   - the school's own rules (aSc's card relationships): two subjects not on
+ *     the same day or not one after the other, a subject not on two days in
+ *     a row; a "must" weighs four times a "prefer";
  *   - no more than `maxConsecutive` lessons in a row for a teacher, and a
  *     teacher's lessons spread evenly across the week.
  *
@@ -44,6 +50,7 @@
  */
 
 import type { TimetableQuality } from './config';
+import type { DoubleRules, RuleKind, RuleStrength } from './rules';
 
 export interface SolverPeriod {
     /** Position in the section's day, 0-based, breaks included. */
@@ -83,6 +90,20 @@ export interface SolverRequirement {
      * mathematics and languages rank above the rest.
      */
     fillPriority?: number;
+    /** The subjects its lessons stand for, for the school's rules: an option block's electives. Omitted, `subjectId`. */
+    carries?: readonly string[];
+    /** Its doubles may run across a short break (never lunch). */
+    spanShortBreak?: boolean;
+}
+
+/** One of the school's own rules (see `rules.ts`), on subject ids. */
+export interface SolverRelation {
+    kind: RuleKind;
+    /** The rule's one or two subjects, each as every id it has across levels. */
+    subjects: readonly (readonly string[])[];
+    /** The classes it holds for; empty, every class. */
+    streamIds: readonly string[];
+    strength: RuleStrength;
 }
 
 export interface SolverRoom { id: string; type: string }
@@ -103,6 +124,8 @@ export interface SolverRules {
     seed: number;
     /** Give classes' free periods extra lessons, where nobody clashes. */
     fillFree: boolean;
+    /** The built-in rules on doubles, each on unless turned off. */
+    doubles: DoubleRules;
 }
 
 export interface SolverInput {
@@ -115,6 +138,8 @@ export interface SolverInput {
     pinned?: readonly PinnedLesson[];
     /** Times teachers cannot teach. */
     unavailable?: readonly TeacherUnavailable[];
+    /** The school's own rules. */
+    relations?: readonly SolverRelation[];
     rules?: Partial<SolverRules>;
 }
 
@@ -138,7 +163,7 @@ export interface SolverResult {
     };
 }
 
-const DEFAULT_RULES: SolverRules = { maxConsecutive: 4, timeBudgetMs: 2500, seed: 42, fillFree: false };
+const DEFAULT_RULES: SolverRules = { maxConsecutive: 4, timeBudgetMs: 2500, seed: 42, fillFree: false, doubles: { one_a_day: true, not_after_double: true, vary_times: true } };
 
 /**
  * Extra lessons one teacher takes on, so filling free periods never piles
@@ -170,8 +195,15 @@ const COST = {
     backToBackSame: 12,
     /** Each period of mathematics or a science past `HEAVY_RUN` on end. */
     heavyRun: 6,
-    /** A double on a class's day beyond its fair share of the week's doubles. */
-    crowdedDoubles: 8,
+    /** A double on a class's day beyond its fair share of the week's doubles: one a day while the week allows. */
+    crowdedDoubles: 30,
+    /** A double straight after another double, with only a short break between: four periods of deep work on end. */
+    doubleAfterDouble: 40,
+    /** A class's doubles starting in the same period on different days, so every day has the same shape. */
+    sameDoubleTime: 10,
+    /** One of the school's own rules broken: a must, or a preference. */
+    ruleMust: 60,
+    rulePrefer: 15,
 } as const;
 
 /** Periods of demanding subjects (mathematics, sciences) a class takes on end before it needs something else. */
@@ -203,6 +235,8 @@ interface Bell {
     start: number[];
     end: number[];
     canPair: boolean[];
+    /** The slot and the next are parted only by a short break (not lunch): a double may run across it if its subject allows. */
+    canPairOverBreak: boolean[];
     isMorning: boolean[];
     /** The first two lessons of the day. */
     isEarly: boolean[];
@@ -232,6 +266,7 @@ function bellOf(section: SolverSection, days: readonly number[]): Bell {
         start: lessons.map(startOf),
         end: lessons.map(endOf),
         canPair: lessons.map((p, i) => i + 1 < n && lessons[i + 1].index === p.index + 1),
+        canPairOverBreak: lessons.map((p, i) => i + 1 < n && lessons[i + 1].index !== p.index + 1 && !(p.index < lastBreak && lessons[i + 1].index > lastBreak)),
         isMorning: lessons.map(p => p.index < lastBreak),
         isEarly: lessons.map((_, i) => i < 2),
         open,
@@ -339,7 +374,8 @@ function solveOnce(input: SolverInput, rules: SolverRules): SolverResult {
     /** Whether a session's shape fits a slot on a day: the periods run that day, and a double's two are back to back. */
     const shapeFits = (s: Session, day: number, slot: number) => {
         const n = s.bell.teaching.length;
-        if (slot + s.length > n || (s.length === 2 && !s.bell.canPair[slot])) return false;
+        if (slot + s.length > n) return false;
+        if (s.length === 2 && !s.bell.canPair[slot] && !(s.req.spanShortBreak && s.bell.canPairOverBreak[slot])) return false;
         for (let k = 0; k < s.length; k++) if (!s.bell.open[day * n + slot + k]) return false;
         return true;
     };
@@ -408,6 +444,16 @@ function solveOnce(input: SolverInput, rules: SolverRules): SolverResult {
     const doublesOf = new Map<string, number>();
     sessions.forEach(s => { if (s.length === 2) doublesOf.set(s.req.streamId, (doublesOf.get(s.req.streamId) ?? 0) + 1); });
     const doublesShare = (streamId: string, bell: Bell) => Math.max(1, Math.ceil((doublesOf.get(streamId) ?? 0) / Math.max(1, bell.teachingDays)));
+    // The built-in rules on doubles the school keeps, and its own rules by class.
+    const doubleCost = {
+        crowded: rules.doubles.one_a_day ? COST.crowdedDoubles : 0,
+        afterDouble: rules.doubles.not_after_double ? COST.doubleAfterDouble : 0,
+        sameTime: rules.doubles.vary_times ? COST.sameDoubleTime : 0,
+    };
+    const relationsOf = new Map<string, SolverRelation[]>();
+    for (const streamId of new Set(input.requirements.map(r => r.streamId))) {
+        relationsOf.set(streamId, (input.relations ?? []).filter(r => r.streamIds.length === 0 || r.streamIds.includes(streamId)));
+    }
 
     /** A class's day: a subject past its fair share, subjects at the wrong time of day, free periods before lessons, and what wears learners out. */
     const streamDayCost = (streamId: string, day: number): number => {
@@ -418,7 +464,9 @@ function solveOnce(input: SolverInput, rules: SolverRules): SolverResult {
         const seen = new Map<string, number>();
         const strain = dayStrain(g, bell, day, byKey);
         let cost = strain.backToBack * COST.backToBackSame + strain.heavyOver * COST.heavyRun
-            + Math.max(0, strain.doubles - doublesShare(streamId, bell)) * COST.crowdedDoubles;
+            + Math.max(0, strain.doubles - doublesShare(streamId, bell)) * doubleCost.crowded
+            + strain.doubleAfterDouble * doubleCost.afterDouble
+            + ruleCost(dayRuleBreaks(g, bell, day, byKey, relationsOf.get(streamId) ?? []));
         let last = -1;
         let freeSoFar = 0;
         for (let slot = 0; slot < n; slot++) {
@@ -449,12 +497,14 @@ function solveOnce(input: SolverInput, rules: SolverRules): SolverResult {
         const n = bell.teaching.length;
         const slotsBySubject = new Map<string, number[]>();
         const daysBySubject = new Map<string, Set<number>>();
+        const doubleStarts: number[] = [];
         for (let d = 0; d < dayCount; d++) {
             let last = -1;
             for (let slot = 0; slot < n; slot++) {
                 const key = g[d * n + slot];
                 if (key < 0 || key === last) { last = key; continue; }
                 last = key;
+                if (byKey[key].length === 2) doubleStarts.push(slot);
                 const subject = byKey[key].req.subjectId;
                 slotsBySubject.set(subject, [...(slotsBySubject.get(subject) ?? []), slot]);
                 daysBySubject.set(subject, (daysBySubject.get(subject) ?? new Set()).add(d));
@@ -466,6 +516,8 @@ function solveOnce(input: SolverInput, rules: SolverRules): SolverResult {
             slots.forEach(t => counts.set(t, (counts.get(t) ?? 0) + 1));
             counts.forEach(c => { if (c > 1) cost += (c - 1) * COST.samePeriodRepeat; });
         }
+        cost += repeatedStarts(doubleStarts, bell) * doubleCost.sameTime;
+        cost += ruleCost(weekRuleBreaks(g, bell, dayCount, byKey, relationsOf.get(streamId) ?? []));
         for (const [subject, days] of daysBySubject) {
             cost += bunching(days, dayCount) * COST.bunchedDays;
             cost += Math.max(0, Math.min(sessionsOf.get(subjectKey(streamId, subject)) ?? 0, daysFor(streamId, subject, bell)) - days.size) * COST.missedDay;
@@ -617,7 +669,9 @@ function solveOnce(input: SolverInput, rules: SolverRules): SolverResult {
 
     // ── Improvement: simulated annealing ─────────────────────────────────
     // A move takes a lesson to another slot of its class: an empty one, or
-    // one held by another lesson of the same length, which swaps with it.
+    // one held by another lesson of the same length, which swaps with it. A
+    // double also trades places with the single lessons in its way, so where
+    // a class's doubles fall is never fixed by the first layout.
     // The temperature falls with the time left, warms up again when nothing
     // has improved for a while, and the best week seen is the one kept.
     const movable = sessions.filter(s => s.day >= 0 && !s.pinned);
@@ -670,28 +724,34 @@ function solveOnce(input: SolverInput, rules: SolverRules): SolverResult {
         if ((d === a.day && t === a.slot) || !shapeFits(a, d, t)) continue;
         const g = streamGrids.get(a.req.streamId)!;
         const n = a.bell.teaching.length;
-        // Whatever the class has in the target cells must be one lesson of the same length, or nothing.
-        const occupants = new Set<number>();
-        for (let k = 0; k < a.length; k++) { const hit = g[d * n + t + k]; if (hit >= 0 && hit !== a.key) occupants.add(hit); }
-        if (occupants.size > 1) continue;
-        const b = occupants.size === 1 ? byKey[[...occupants][0]] : null;
-        if (b && (b.pinned || b.length !== a.length || b.slot !== t || !shapeFits(b, a.day, a.slot))) continue;
+        // Whatever the class has in the target cells: nothing, one lesson of the same length, or (for a double) single lessons.
+        const occupants: { s: Session; offset: number }[] = [];
+        for (let k = 0; k < a.length; k++) { const hit = g[d * n + t + k]; if (hit >= 0 && hit !== a.key && !occupants.some(o => o.s.key === hit)) occupants.push({ s: byKey[hit], offset: k }); }
+        const swapsSame = occupants.length === 1 && occupants[0].s.length === a.length;
+        if (!swapsSame && occupants.length > 0) {
+            // Singles out of a double's way, onto the double's old cells; never onto cells the double is taking.
+            const overlaps = d === a.day && Math.abs(t - a.slot) < a.length;
+            if (a.length !== 2 || overlaps || occupants.some(o => o.s.length !== 1)) continue;
+        }
+        const others = occupants.map(o => ({ s: o.s, to: { day: a.day, slot: a.slot + o.offset }, from: { day: o.s.day, slot: o.s.slot, roomId: o.s.roomId } }));
+        if (swapsSame && occupants[0].s.slot !== t) continue;
+        if (others.some(o => o.s.pinned || !shapeFits(o.s, o.to.day, o.to.slot))) continue;
 
         const fromA = { day: a.day, slot: a.slot, roomId: a.roomId };
-        const fromB = b ? { day: b.day, slot: b.slot, roomId: b.roomId } : null;
-        const touched = b ? [a, b] : [a];
+        const touched = [a, ...others.map(o => o.s)];
         const days = [fromA.day, d];
         const before = affectedCost(touched, days);
 
         unplace(a);
-        if (b) unplace(b);
+        others.forEach(o => unplace(o.s));
         const fitA = conflictsAt(a, d, t);
         let ok = fitA.blockers.size === 0 && !fitA.hard;
         if (ok) place(a, d, t, fitA.roomId);
-        if (ok && b) {
-            const fitB = conflictsAt(b, fromA.day, fromA.slot);
-            ok = fitB.blockers.size === 0 && !fitB.hard;
-            if (ok) place(b, fromA.day, fromA.slot, fitB.roomId);
+        for (const o of others) {
+            if (!ok) break;
+            const fit = conflictsAt(o.s, o.to.day, o.to.slot);
+            ok = fit.blockers.size === 0 && !fit.hard;
+            if (ok) place(o.s, o.to.day, o.to.slot, fit.roomId);
         }
         let delta = 0;
         const accept = ok && (() => {
@@ -699,10 +759,9 @@ function solveOnce(input: SolverInput, rules: SolverRules): SolverResult {
             return delta <= 0 || random() < Math.exp(-delta / temperature);
         })();
         if (!accept) {
-            unplace(a);
-            if (b) unplace(b);
+            touched.forEach(unplace);
             place(a, fromA.day, fromA.slot, fromA.roomId);
-            if (b && fromB) place(b, fromB.day, fromB.slot, fromB.roomId);
+            others.forEach(o => place(o.s, o.from.day, o.from.slot, o.from.roomId));
             sinceBest++;
             continue;
         }
@@ -880,19 +939,30 @@ function solveOnce(input: SolverInput, rules: SolverRules): SolverResult {
                 dailyShare: (streamId, subjectId) => dailyShare(streamId, subjectId, streamBell.get(streamId)!),
                 sessionsOf: (streamId, subjectId) => sessionsOf.get(subjectKey(streamId, subjectId)) ?? 0,
                 daysFor: (streamId, subjectId) => daysFor(streamId, subjectId, streamBell.get(streamId)!),
+                doublesShare: streamId => doublesShare(streamId, streamBell.get(streamId)!),
+                doubles: rules.doubles,
+                relationsOf: streamId => relationsOf.get(streamId) ?? [],
             }),
         },
     };
 }
 
+interface DayStrain {
+    backToBack: number;
+    heavyOver: number;
+    doubles: number;
+    /** Doubles that follow another double with only a short break between (lunch or a free period parts them). */
+    doubleAfterDouble: number;
+}
+
 /**
  * What wears a class out on one day: separate lessons of one subject back to
  * back, periods of heavy subjects past `HEAVY_RUN` on end (a break or a free
- * period ends a run), and its doubles.
+ * period ends a run), its doubles, and a double straight after another.
  */
-function dayStrain(g: Int32Array, bell: Bell, day: number, byKey: readonly Session[]): { backToBack: number; heavyOver: number; doubles: number } {
+function dayStrain(g: Int32Array, bell: Bell, day: number, byKey: readonly Session[]): DayStrain {
     const n = bell.teaching.length;
-    let backToBack = 0; let heavyOver = 0; let doubles = 0;
+    let backToBack = 0; let heavyOver = 0; let doubles = 0; let doubleAfterDouble = 0;
     let prev = -1; let prevSlot = -1; let run = 0;
     for (let slot = 0; slot < n; slot++) {
         const key = bell.open[day * n + slot] ? g[day * n + slot] : -1;
@@ -903,13 +973,94 @@ function dayStrain(g: Int32Array, bell: Bell, day: number, byKey: readonly Sessi
         if (key !== prev) {
             if (s.length === 2) doubles++;
             if (joined && byKey[prev].req.subjectId === s.req.subjectId) backToBack++;
+            // A short break is not a rest from deep work; only lunch parts two doubles.
+            if (s.length === 2 && prev >= 0 && byKey[prev].length === 2 && bell.isMorning[slot] === bell.isMorning[prevSlot]) doubleAfterDouble++;
         }
         if (s.req.preferMorning) { if (++run > HEAVY_RUN) heavyOver++; } else run = 0;
         prev = key;
         prevSlot = slot;
     }
-    return { backToBack, heavyOver, doubles };
+    return { backToBack, heavyOver, doubles, doubleAfterDouble };
 }
+
+/**
+ * Doubles starting in a period already used by another of the week's doubles,
+ * beyond what the day's possible start periods force: five doubles over four
+ * start periods must share one, not all start first thing.
+ */
+function repeatedStarts(starts: readonly number[], bell: Bell): number {
+    if (starts.length < 2) return 0;
+    const counts = new Map<number, number>();
+    starts.forEach(t => counts.set(t, (counts.get(t) ?? 0) + 1));
+    const fair = Math.ceil(starts.length / Math.max(1, bell.canPair.filter(Boolean).length));
+    let excess = 0;
+    counts.forEach(c => { if (c > fair) excess += c - fair; });
+    return excess;
+}
+
+/** The subjects a lesson stands for: its own, or an option block's electives. */
+const carriesOf = (s: Session): readonly string[] => s.req.carries ?? [s.req.subjectId];
+/** Whether a lesson stands for a subject, given as its ids across levels. */
+const stands = (s: Session, subject: readonly string[] | undefined) => !!subject && carriesOf(s).some(id => subject.includes(id));
+
+interface RuleBreaks { must: number; prefer: number }
+const NO_BREAKS: RuleBreaks = { must: 0, prefer: 0 };
+const addBreak = (into: RuleBreaks, r: SolverRelation) => { if (r.strength === 'must') into.must++; else into.prefer++; };
+
+/** A class's lessons on one day in order, one entry per lesson, with the slot it starts and ends in. */
+function dayLessons(g: Int32Array, bell: Bell, day: number, byKey: readonly Session[]): { s: Session; from: number; to: number }[] {
+    const n = bell.teaching.length;
+    const out: { s: Session; from: number; to: number }[] = [];
+    for (let slot = 0; slot < n; slot++) {
+        const key = bell.open[day * n + slot] ? g[day * n + slot] : -1;
+        if (key < 0) continue;
+        const last = out[out.length - 1];
+        if (last && last.s.key === key) { last.to = slot; continue; }
+        out.push({ s: byKey[key], from: slot, to: slot });
+    }
+    return out;
+}
+
+/**
+ * The school's rules a class breaks on one day: two subjects on the same day
+ * (in separate lessons; an option block running both in parallel is
+ * different learners), or one straight after the other (lunch or a free
+ * period parts them; a short break does not).
+ */
+function dayRuleBreaks(g: Int32Array, bell: Bell, day: number, byKey: readonly Session[], relations: readonly SolverRelation[]): RuleBreaks {
+    if (relations.length === 0) return NO_BREAKS;
+    const today = dayLessons(g, bell, day, byKey);
+    const out = { must: 0, prefer: 0 };
+    for (const r of relations) {
+        const [a, b] = r.subjects;
+        if (r.kind === 'not_same_day') {
+            const withA = today.filter(x => stands(x.s, a));
+            if (withA.some(x => today.some(y => y.s.key !== x.s.key && stands(y.s, b)))) addBreak(out, r);
+        } else if (r.kind === 'not_after') {
+            for (let i = 1; i < today.length; i++) {
+                const prev = today[i - 1]; const next = today[i];
+                if (next.from !== prev.to + 1 || bell.isMorning[prev.to] !== bell.isMorning[next.from]) continue;
+                if ((stands(prev.s, a) && stands(next.s, b)) || (stands(prev.s, b) && stands(next.s, a))) addBreak(out, r);
+            }
+        }
+    }
+    return out;
+}
+
+/** The school's rules a class breaks over its week: a subject on two school days in a row, once for each such pair. */
+function weekRuleBreaks(g: Int32Array, bell: Bell, dayCount: number, byKey: readonly Session[], relations: readonly SolverRelation[]): RuleBreaks {
+    const weekly = relations.filter(r => r.kind === 'no_days_in_row');
+    if (weekly.length === 0) return NO_BREAKS;
+    const days = Array.from({ length: dayCount }, (_, d) => dayLessons(g, bell, d, byKey));
+    const out = { must: 0, prefer: 0 };
+    for (const r of weekly) {
+        const on = days.map(today => today.some(x => stands(x.s, r.subjects[0])));
+        for (let d = 1; d < dayCount; d++) if (on[d] && on[d - 1]) addBreak(out, r);
+    }
+    return out;
+}
+
+const ruleCost = (b: RuleBreaks) => b.must * COST.ruleMust + b.prefer * COST.rulePrefer;
 
 /**
  * How bunched a subject's week is: a two-lesson subject on neighbouring days,
@@ -944,18 +1095,28 @@ function measureQuality(q: {
     dailyShare: (streamId: string, subjectId: string) => number;
     sessionsOf: (streamId: string, subjectId: string) => number;
     daysFor: (streamId: string, subjectId: string) => number;
+    doublesShare: (streamId: string) => number;
+    doubles: DoubleRules;
+    relationsOf: (streamId: string) => readonly SolverRelation[];
 }): TimetableQuality {
     let repeatsInDay = 0; let missedDays = 0; let lateCoreLessons = 0; let earlyCreativeLessons = 0;
     let samePeriodHabits = 0; let bunchedWeeks = 0; let longTeacherRuns = 0; let midDayGaps = 0;
-    let backToBackSame = 0; let heavyRuns = 0;
+    let backToBackSame = 0; let heavyRuns = 0; let doubleAfterDouble = 0; let crowdedDoubleDays = 0; let sameDoubleTimes = 0; let brokenRules = 0;
     for (const [streamId, g] of q.streamGrids) {
         const bell = q.streamBell.get(streamId)!;
         const n = bell.teaching.length;
+        const doubleStarts: number[] = [];
         for (let d = 0; d < q.dayCount; d++) {
             const strain = dayStrain(g, bell, d, q.sessions);
             backToBackSame += strain.backToBack;
+            if (q.doubles.not_after_double) doubleAfterDouble += strain.doubleAfterDouble;
             if (strain.heavyOver > 0) heavyRuns++;
+            if (q.doubles.one_a_day && strain.doubles > q.doublesShare(streamId)) crowdedDoubleDays++;
+            const broken = dayRuleBreaks(g, bell, d, q.sessions, q.relationsOf(streamId));
+            brokenRules += broken.must + broken.prefer;
         }
+        const brokenWeek = weekRuleBreaks(g, bell, q.dayCount, q.sessions, q.relationsOf(streamId));
+        brokenRules += brokenWeek.must + brokenWeek.prefer;
         const slotsBySubject = new Map<string, number[]>();
         const daysBySubject = new Map<string, Set<number>>();
         for (let d = 0; d < q.dayCount; d++) {
@@ -973,6 +1134,7 @@ function measureQuality(q: {
                 const s = q.sessions[key];
                 // An extra lesson fills a gap; it is not how the subject's own lessons are spread.
                 if (s.extra) continue;
+                if (s.length === 2) doubleStarts.push(slot);
                 const count = (seen.get(s.req.subjectId) ?? 0) + 1;
                 seen.set(s.req.subjectId, count);
                 if (count > q.dailyShare(streamId, s.req.subjectId)) repeatsInDay++;
@@ -982,6 +1144,7 @@ function measureQuality(q: {
                 daysBySubject.set(s.req.subjectId, (daysBySubject.get(s.req.subjectId) ?? new Set()).add(d));
             }
         }
+        if (q.doubles.vary_times) sameDoubleTimes += repeatedStarts(doubleStarts, bell);
         for (const slots of slotsBySubject.values()) {
             if (slots.length < 3) continue;
             const counts = new Map<number, number>();
@@ -995,9 +1158,9 @@ function measureQuality(q: {
     }
     for (const id of q.teacherIds) for (let d = 0; d < q.dayCount; d++) longTeacherRuns += q.teacherLongRuns(id, d);
     const points = repeatsInDay * 4 + missedDays * 3 + lateCoreLessons + earlyCreativeLessons + samePeriodHabits * 2 + bunchedWeeks * 2 + longTeacherRuns * 3 + midDayGaps
-        + backToBackSame * 3 + heavyRuns * 2;
+        + backToBackSame * 3 + heavyRuns * 2 + doubleAfterDouble * 4 + crowdedDoubleDays * 3 + sameDoubleTimes + brokenRules * 2;
     const score = q.totalLessons === 0 ? 100 : Math.max(0, Math.round(100 - (points / q.totalLessons) * 100));
-    return { score, repeatsInDay, missedDays, lateCoreLessons, earlyCreativeLessons, samePeriodHabits, bunchedWeeks, longTeacherRuns, midDayGaps, backToBackSame, heavyRuns };
+    return { score, repeatsInDay, missedDays, lateCoreLessons, earlyCreativeLessons, samePeriodHabits, bunchedWeeks, longTeacherRuns, midDayGaps, backToBackSame, heavyRuns, doubleAfterDouble, crowdedDoubleDays, sameDoubleTimes, brokenRules };
 }
 
 /** Fewest lessons left out first, then the lowest cost. */
@@ -1012,7 +1175,7 @@ const better = (a: SolverResult, b: SolverResult) => {
  * subjects differently, so a poor first layout does not decide the result.
  */
 export function solveTimetable(input: SolverInput, attempts = 1): SolverResult {
-    const rules = { ...DEFAULT_RULES, ...input.rules };
+    const rules: SolverRules = { ...DEFAULT_RULES, ...input.rules, doubles: { ...DEFAULT_RULES.doubles, ...input.rules?.doubles } };
     const runs = Math.max(1, Math.floor(attempts));
     const budget = rules.timeBudgetMs / runs;
     let best: SolverResult | null = null;

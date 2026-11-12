@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { route, parseBody } from '@/lib/platform/access';
 import { SUBJECT_TIMES, teacherOffSchema, timetableConfigSchema } from '@/lib/timetable/config';
+import { MAX_RULES, doubleRulesSchema, timetableRuleSchema } from '@/lib/timetable/rules';
 import { loadConfig, saveConfig } from '@/lib/timetable/server';
 
 export const GET = route('timetable config', { module: 'timetable', permission: 'timetable.view' }, ({ access }) => loadConfig(access.schoolId));
@@ -24,9 +25,15 @@ const patchSchema = z.object({
     max_consecutive: z.number().int().min(1).max(12).optional(),
     /** Fill classes' free periods with extra lessons when generating. */
     fill_free_periods: z.boolean().optional(),
+    /** The school's own rules, the whole list. */
+    relations: z.array(timetableRuleSchema).max(MAX_RULES).optional(),
+    /** Built-in rules on doubles to switch on or off. */
+    doubles: doubleRulesSchema.partial().optional(),
+    /** Subjects whose doubles may run across a short break, the whole list. */
+    span_short_break: z.array(z.string().min(1).max(64)).max(200).optional(),
 });
 
-/** PATCH — teachers' times away, subjects' times of day, the longest run of lessons, or filling free periods. */
+/** PATCH — teachers' times away, subjects' times of day, the longest run of lessons, filling free periods, or the school's rules. */
 export const PATCH = route('timetable config rules', { module: 'timetable', permission: 'timetable.manage' }, async ({ access, request }) => {
     const body = await parseBody(request, patchSchema);
     const current = await loadConfig(access.schoolId);
@@ -38,5 +45,8 @@ export const PATCH = route('timetable config rules', { module: 'timetable', perm
     if (body.subject_times) rules.subject_times = { ...rules.subject_times, ...body.subject_times };
     if (body.max_consecutive) rules.max_consecutive = body.max_consecutive;
     if (body.fill_free_periods !== undefined) rules.fill_free_periods = body.fill_free_periods;
+    if (body.relations) rules.relations = body.relations;
+    if (body.doubles) rules.doubles = { ...rules.doubles, ...body.doubles };
+    if (body.span_short_break) rules.span_short_break = [...new Set(body.span_short_break)];
     return saveConfig(access.schoolId, timetableConfigSchema.parse({ ...current, rules }));
 });

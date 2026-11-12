@@ -2,17 +2,19 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { AlertTriangle, ArrowLeft, ArrowRight, BookOpenCheck, CalendarClock, Check, FlaskConical, Layers, Sparkles, Users, type LucideIcon } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ArrowRight, BookOpenCheck, CalendarClock, Check, FlaskConical, Layers, ListChecks, Sparkles, Users, type LucideIcon } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { ResourceManager } from '@/components/ops/ResourceManager';
 import { TimetableBuilder } from '@/components/academics/timetable/TimetableBuilder';
 import { DayStructureEditor } from '@/components/academics/timetable/DayStructureEditor';
 import { HoursStep } from '@/components/academics/timetable/HoursStep';
 import { TeachersStep } from '@/components/academics/timetable/TeachersStep';
+import { RulesStep } from '@/components/academics/timetable/RulesStep';
 import type { TimetableConfig } from '@/lib/timetable/config';
 import { errorText, opsFetch } from '@/lib/ops/client';
 import { humanize } from '@/lib/ops/format';
 import { ROOM_DEFAULTS, ROOM_FIELDS, newDraftName, withBreaksFixed, type Room } from '@/lib/ops/forms/academics';
+import { rulesSummary } from '@/lib/timetable/rules';
 import { daySummary, firstCard, loadsSummary, type Blocker, type StudioCard as StepId, type TimetablePlan } from '@/lib/timetable/readiness';
 import { cn } from '@/lib/utils';
 import { STEP_TONES } from '@/components/ui/tones';
@@ -49,6 +51,7 @@ const STEPS: readonly StepDef[] = [
     { id: 'day', title: 'School day', icon: CalendarClock, intro: 'The days the school runs, when lessons and breaks are, and any levels with their own bell.' },
     { id: 'loads', title: 'Subjects & hours', icon: BookOpenCheck, intro: 'Each class’s subjects and lessons a week, checked against the Ministry (KICD) figures, with elective groups and when subjects are best taught.' },
     { id: 'teachers', title: 'Teachers', icon: Users, intro: 'Each teacher’s week across every class they teach, and the times they cannot teach.' },
+    { id: 'rules', title: 'Rules', icon: ListChecks, intro: 'How double lessons are placed, and rules of your own: subjects kept apart, not on end, or not on days in a row.' },
     { id: 'rooms', title: 'Labs & rooms', icon: FlaskConical, intro: 'Special rooms some lessons need. Optional.' },
     { id: 'drafts', title: 'Generate & publish', icon: Layers, intro: 'Generate a draft, check it, adjust anything by hand, then publish it to teachers and learners.' },
 ];
@@ -112,7 +115,7 @@ function Readiness({ plan, generating, fixing, onGenerate, onOpen, onSetBreaks }
 function StepNav({ current, stateOf, summaryOf, onSelect }: { current: StepId; stateOf: (id: StepId) => StepState; summaryOf: (id: StepId) => string; onSelect: (id: StepId) => void }) {
     return (
         <nav aria-label="Timetable steps" className="-mx-4 overflow-x-auto px-4 [scrollbar-width:none] sm:mx-0 sm:px-0">
-            <ol className="grid min-w-[44rem] grid-cols-5 gap-2">
+            <ol className="grid min-w-[52rem] grid-cols-6 gap-2">
                 {STEPS.map((s, i) => {
                     const state = stateOf(s.id);
                     const tone = STEP_TONES[i % STEP_TONES.length];
@@ -205,6 +208,7 @@ export function TimetableWizard() {
         if (id === 'day') return plan.day.days > 0 && plan.day.lessonsPerDay > 0 ? 'done' : 'todo';
         if (id === 'loads' || id === 'teachers') return plan.loads > 0 ? 'done' : 'todo';
         if (id === 'rooms') return plan.rooms > 0 ? 'done' : 'optional';
+        if (id === 'rules') return 'optional';
         return plan.published ? 'done' : 'todo';
     };
     const away = config.rules.teacher_off.length;
@@ -213,6 +217,7 @@ export function TimetableWizard() {
         if (id === 'loads') return loadsSummary(plan);
         if (id === 'teachers') return plan.teachers.length === 0 ? 'No teachers with loads yet' : `${plan.teachers.length} teachers${away ? ` · ${away} time${away === 1 ? '' : 's'} away` : ''}`;
         if (id === 'rooms') return plan.rooms > 0 ? `${plan.rooms} room${plan.rooms === 1 ? '' : 's'}` : 'Skip if lessons stay in class';
+        if (id === 'rules') return rulesSummary(config);
         return plan.published ? `Live: ${plan.published}` : plan.drafts > 0 ? `${plan.drafts} draft${plan.drafts === 1 ? '' : 's'} to check` : 'Generate your first draft';
     };
     const index = STEPS.findIndex(s => s.id === step);
@@ -237,6 +242,7 @@ export function TimetableWizard() {
                 {step === 'day' && <DayStructureEditor key={dayKey} onSaved={() => void refresh()} />}
                 {step === 'loads' && <HoursStep plan={plan} focus={focus} onChange={() => { setDayKey(k => k + 1); void refresh(); }} />}
                 {step === 'teachers' && <TeachersStep plan={plan} config={config} onChange={() => void refresh()} />}
+                {step === 'rules' && <RulesStep plan={plan} config={config} onChange={() => void refresh()} />}
                 {step === 'rooms' && <Rooms />}
                 {step === 'drafts' && <TimetableBuilder key={builderKey} plan={plan} onGenerated={() => void refresh()} />}
                 <footer className="mt-5 flex items-center justify-between gap-2 border-t border-border/60 pt-4">

@@ -103,7 +103,7 @@ export const leadershipManual: Manual = {
                         { title: 'Start from who teaches what', body: '“Import” creates a load for every subject each teacher is assigned to a class this year, at the Ministry’s lessons a week. “Match the Ministry” sets every subject back to the Ministry’s figure, doubles included.' },
                         { title: 'Check the elective groups', body: 'Two subjects are taught at the same time only when no learner takes both, read from learners’ recorded subject choices (Grade 10 uses the school’s offered combinations until choices are recorded). A class with no choices recorded keeps every subject for the whole class; if its week then overflows, Skulbase suggests groups for you to check and accept, and never applies them by itself.' },
                         { title: 'Add the lessons that are not examined', body: 'A class shows a notice when its level expects lessons its timetable lacks: Physical Education and Life Skills in Forms 1–4; Physical Education, ICT Skills and Community Service Learning in Senior School. Press “Add to the timetable” to add them at the Ministry’s lessons a week, then pick their teachers on the teaching loads.' },
-                        { title: 'Check the double lessons', body: 'From Grade 7 up, the sciences, Mathematics, the languages in the upper classes and the practical subjects get one double lesson a week by default. Change any subject’s doubles on its teaching load.' },
+                        { title: 'Check the double lessons', body: 'From Grade 7 up, Mathematics, the sciences and the practical subjects get one double lesson a week by default; languages and humanities stay single. Skulbase keeps a class to one double a day while the week allows, never puts a double straight after another (only lunch parts them), and moves the doubles to different times of day. Change any subject’s doubles on its teaching load.' },
                         { title: 'Fix a class that does not fit', body: 'A class with more lessons than its week shows ready-made fixes: make the day longer for its level (recommended: every other class keeps its day and no lessons are cut), run its electives in fewer groups (it lists who would have to change a subject), or teach fewer lessons a week. Pick one and press “Use this”.' },
                         { title: 'Say when subjects are best taught', body: 'Mathematics and sciences go before lunch and PE and the arts later unless you choose otherwise. Choose Morning, Afternoon or Any time for any subject; it applies to that subject at every level.' },
                     ],
@@ -118,6 +118,18 @@ export const leadershipManual: Manual = {
                         'A teacher with more lessons than periods stops generating: give some of their classes to another teacher, or free some of their time.',
                         '“Most lessons in a row” is the longest run one teacher teaches without a break.',
                     ],
+                },
+                {
+                    id: 'rules',
+                    title: 'Rules (optional)',
+                    summary: 'How double lessons are placed, and rules of your own, like the card relationships in aSc Timetables. Most schools need none of their own: the built-in rules already spread subjects and doubles well.',
+                    steps: [
+                        { title: 'Keep or change the rules on doubles', body: '“One double a day”, “No double after a double” (a short break does not part two doubles; lunch does) and “Doubles at different times” are on for every school. Turn one off only if your school does it differently.' },
+                        { title: 'Add a rule of your own', body: 'Press “Add a rule” and pick its kind: two subjects not on the same day, never one straight after the other, or a subject not on two days in a row. Pick the subjects, every class or only some, and how firm it is: a “Must” is broken only when nothing else fits; a “Prefer” gives way to a better week.' },
+                        { title: 'Heed “Cannot be kept everywhere”', body: 'A rule that no timetable could keep says so and why: two subjects needing more days between them than the week has, or a subject on more than every other day (an elective is on every day its group is). Skulbase still keeps it where it can, and each draft counts the times a rule was broken.' },
+                        { title: 'Let a practical run across a short break', body: 'Tick a subject under “Doubles across a short break” to let its double run on across a short or tea break. A double never spans lunch.' },
+                    ],
+                    tip: 'Rules apply to the next draft you generate.',
                 },
                 {
                     id: 'rooms',

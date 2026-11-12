@@ -1,8 +1,9 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 import { WEEKDAY_LABELS, type TimetableConfig, type TimetableLesson } from '@shared/timetable/config';
-import { slotLines, subjectKey, type GridMode } from '@shared/ops/forms/academics';
-import { gridRows, lessonsAt, rowRunsOn, type GridRow } from '@shared/timetable/layout';
+import { shortSubject, slotLines, subjectCode, subjectKey, type GridMode } from '@shared/ops/forms/academics';
+import { dayCells, gridRows, lessonsAt, rowRunsOn, subjectColours, type DayCell, type GridRow } from '@shared/timetable/layout';
+import { schoolWeekMinute } from '@shared/dates';
 import type { CellHint } from '@shared/timetable/moves';
 import { radius, spacing, fonts, makeStyles, useTheme } from '@/lib/theme';
 
@@ -15,6 +16,20 @@ interface Props {
     onCellPress?: (day: number, row: GridRow, lesson: TimetableLesson | null) => void;
     /** While a lesson is picked: each cell's move, to show where it can go. */
     hintAt?: (day: number, row: GridRow) => CellHint | null;
+}
+
+/** One colour per subject, as on the web: a soft wash and a strong edge. */
+const SWATCHES = ['#0ea5e9', '#8b5cf6', '#10b981', '#f59e0b', '#f43f5e', '#14b8a6', '#f97316', '#6366f1', '#65a30d', '#d946ef', '#06b6d4', '#ec4899'] as const;
+const BLOCK_SWATCH = '#94a3b8';
+
+/** The school's weekday and minute, ticking each minute, for "today" and "now". */
+function useSchoolNow() {
+    const [now, setNow] = useState(() => schoolWeekMinute());
+    useEffect(() => {
+        const id = setInterval(() => setNow(schoolWeekMinute()), 60_000);
+        return () => clearInterval(id);
+    }, []);
+    return now;
 }
 
 /** Wide enough for the whole week at once (tablets, landscape); phones show a day at a time. */
@@ -31,14 +46,24 @@ export function TimetableGrid({ config, lessons, mode, selectedId, onCellPress, 
     const { colors } = useTheme();
     const styles = useStyles();
     const { width } = useWindowDimensions();
-    // Opens on today (1 = Monday … 7 = Sunday), or the next school day, rather than always on Monday.
-    const [phoneDay, setPhoneDay] = useState(() => {
-        const today = ((new Date().getDay() + 6) % 7) + 1;
-        return config.days.find((d) => d >= today) ?? config.days[0];
-    });
+    const now = useSchoolNow();
+    // Opens on today, or the next school day, rather than always on Monday.
+    const [phoneDay, setPhoneDay] = useState(() => config.days.find((d) => d >= now.day) ?? config.days[0]);
     const rows = useMemo(() => gridRows(config, lessons), [config, lessons]);
+    const codes = useMemo(() => subjectKey(lessons), [lessons]);
+    const colours = useMemo(() => subjectColours(codes.map((c) => c.code), SWATCHES.length), [codes]);
+    const today = config.days.includes(now.day) ? now.day : null;
+    const hueOf = (here: readonly TimetableLesson[]) => {
+        const subjects = new Set(here.map((l) => subjectCode(l.subject?.name, l.subject?.code)));
+        return subjects.size > 1 ? BLOCK_SWATCH : SWATCHES[colours.get([...subjects][0]) ?? 0];
+    };
+    // Reading, a double is one card; editing, each period is a place to tap.
+    const cellsOf = (day: number): DayCell[] => (onCellPress
+        ? rows.map((r) => ({ rows: [r], lessons: r.isBreak || !rowRunsOn(r, day) ? [] : lessonsAt(config, lessons, day, r) }))
+        : dayCells(config, lessons, day, rows));
+    const isNow = (day: number, c: DayCell) => now.day === day && c.rows[0].start <= now.minutes && now.minutes < c.rows[c.rows.length - 1].end;
 
-    const cell = (day: number, row: GridRow) => {
+    const cell = (day: number, row: GridRow, merged?: DayCell) => {
         // A period that runs on some days only (a Friday ninth lesson) is shaded on the others.
         if (!rowRunsOn(row, day)) {
             return (
@@ -47,15 +72,26 @@ export function TimetableGrid({ config, lessons, mode, selectedId, onCellPress, 
                 </View>
             );
         }
-        const here = lessonsAt(config, lessons, day, row);
+        const here = merged?.lessons ?? lessonsAt(config, lessons, day, row);
+        const unique = here.filter((l, i) => here.findIndex((x) => x.subject_id === l.subject_id && x.teacher_id === l.teacher_id) === i);
         const lesson = here[0] ?? null;
         const selected = here.some((l) => l.id === selectedId);
         const hint = selected ? null : hintAt?.(day, row) ?? null;
-        const [top, bottom] = slotLines(here, mode);
+        const [code, bottom] = slotLines(unique, mode);
+        // A phone list has room for the subject's name; the week keeps to codes.
+        const top = merged && unique.length === 1 ? shortSubject(unique[0].subject?.name) : code;
+        const hue = lesson ? hueOf(unique) : colors.border;
+        const span = merged ? merged.rows.length : 1;
+        const on = !!merged && isNow(day, merged);
         const content = lesson ? (
-            <View style={[styles.lesson, here.length > 1 && styles.lessonBlock, selected && styles.lessonSelected, hint?.state === 'swap' && styles.swapTarget]}>
-                <Text style={[styles.lessonTop, selected && { color: colors.white }]} numberOfLines={1}>{here.some((l) => l.locked) ? '🔒 ' : ''}{hint?.state === 'swap' ? '⇄ ' : ''}{top}</Text>
+            <View style={[styles.lesson, { backgroundColor: `${hue}22`, borderLeftColor: hue }, unique.length > 1 && styles.lessonBlock, selected && styles.lessonSelected, hint?.state === 'swap' && styles.swapTarget, on && { borderColor: colors.primary, borderWidth: 2, borderLeftWidth: 4 }]}>
+                <View style={styles.lessonHead}>
+                    <Text style={[styles.lessonTop, selected && { color: colors.white }]} numberOfLines={1}>{here.some((l) => l.locked) ? '🔒 ' : ''}{hint?.state === 'swap' ? '⇄ ' : ''}{top}</Text>
+                    {span > 1 ? <Text style={styles.tag}>Double</Text> : null}
+                    {on ? <Text style={[styles.tag, styles.nowTag]}>Now</Text> : null}
+                </View>
                 {bottom ? <Text style={[styles.lessonBottom, selected && { color: colors.white }]} numberOfLines={1}>{bottom}</Text> : null}
+                {merged ? <Text style={styles.lessonBottom}>{merged.rows[0].time.split('–')[0]}–{merged.rows[merged.rows.length - 1].time.split('–')[1]}</Text> : null}
             </View>
         ) : hint?.state === 'free'
             ? <View style={[styles.free, styles.freeTarget]}><Text style={styles.freeTargetText}>Move here</Text></View>
@@ -73,11 +109,18 @@ export function TimetableGrid({ config, lessons, mode, selectedId, onCellPress, 
         ) : <View style={styles.cellWrap}>{content}</View>;
     };
 
-    // What each subject code stands for.
-    const codes = subjectKey(lessons);
-    const key = codes.length > 0
-        ? <Text style={styles.key} accessibilityLabel="Subject codes">{codes.map((c) => `${c.code} ${c.name}`).join('  ·  ')}</Text>
-        : null;
+    // What each subject code stands for, in its colour.
+    const key = codes.length > 0 ? (
+        <View style={styles.key} accessibilityLabel="Subject codes">
+            {codes.map((c) => (
+                <View key={c.code} style={styles.keyItem}>
+                    <View style={[styles.keyDot, { backgroundColor: SWATCHES[colours.get(c.code) ?? 0] }]} />
+                    <Text style={styles.keyCode}>{c.code}</Text>
+                    <Text style={styles.keyName}>{c.name}</Text>
+                </View>
+            ))}
+        </View>
+    ) : null;
 
     if (width >= WEEK_BREAKPOINT) {
         return (
@@ -86,7 +129,7 @@ export function TimetableGrid({ config, lessons, mode, selectedId, onCellPress, 
                 <View style={styles.week}>
                     <View style={styles.weekRow}>
                         <Text style={[styles.weekHead, styles.periodCol]}>PERIOD</Text>
-                        {config.days.map((d) => <Text key={d} style={[styles.weekHead, styles.dayCol]}>{WEEKDAY_LABELS[d].toUpperCase()}</Text>)}
+                        {config.days.map((d) => <Text key={d} style={[styles.weekHead, styles.dayCol, today === d && { color: colors.primary }]}>{WEEKDAY_LABELS[d].toUpperCase()}{today === d ? ' · TODAY' : ''}</Text>)}
                     </View>
                     {rows.map((r) => r.isBreak ? (
                         <Text key={r.key} style={styles.breakRow}>{r.label} · {r.time}</Text>
@@ -111,19 +154,18 @@ export function TimetableGrid({ config, lessons, mode, selectedId, onCellPress, 
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dayTabs} accessibilityRole="tablist">
                 {config.days.map((d) => (
                     <Pressable key={d} onPress={() => setPhoneDay(d)} accessibilityRole="tab" accessibilityState={{ selected: phoneDay === d }} style={[styles.dayTab, phoneDay === d && styles.dayTabOn]}>
-                        <Text style={[styles.dayTabText, phoneDay === d && { color: colors.white }]}>{WEEKDAY_LABELS[d]}</Text>
+                        <Text style={[styles.dayTabText, phoneDay === d && { color: colors.white }]}>{WEEKDAY_LABELS[d]}{today === d ? ' •' : ''}</Text>
                     </Pressable>
                 ))}
             </ScrollView>
-            {rows.filter((r) => rowRunsOn(r, phoneDay)).map((r) => r.isBreak ? (
-                <Text key={r.key} style={styles.breakRow}>{r.label} · {r.time}</Text>
+            {cellsOf(phoneDay).filter((c) => rowRunsOn(c.rows[0], phoneDay)).map((c) => c.rows[0].isBreak ? (
+                <Text key={c.rows[0].key} style={styles.breakRow}>{c.rows[0].label} · {c.rows[0].time}</Text>
             ) : (
-                <View key={r.key} style={styles.phoneRow}>
-                    <View style={{ width: 72 }}>
-                        <Text style={styles.periodLabel}>{r.label}</Text>
-                        <Text style={styles.periodTime}>{r.time}</Text>
+                <View key={c.rows[0].key} style={styles.phoneRow}>
+                    <View style={{ width: 56 }}>
+                        <Text style={styles.periodLabel}>{c.rows.map((r) => r.label).join('–')}</Text>
                     </View>
-                    <View style={{ flex: 1 }}>{cell(phoneDay, r)}</View>
+                    <View style={{ flex: 1, minHeight: c.rows.length > 1 ? 72 : 56 }}>{cell(phoneDay, c.rows[0], c)}</View>
                 </View>
             ))}
             {key}
@@ -133,10 +175,13 @@ export function TimetableGrid({ config, lessons, mode, selectedId, onCellPress, 
 
 const useStyles = makeStyles((colors) => ({
     cellWrap: { minHeight: 48, flex: 1 },
-    lesson: { flex: 1, justifyContent: 'center', borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: 6, backgroundColor: colors.infoBg },
+    lesson: { flex: 1, justifyContent: 'center', borderRadius: radius.md, borderLeftWidth: 4, paddingHorizontal: spacing.sm, paddingVertical: 6, backgroundColor: colors.infoBg },
+    lessonHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    tag: { fontSize: 10, fontFamily: fonts.semibold, color: colors.foreground, backgroundColor: colors.card, borderRadius: 6, paddingHorizontal: 5, overflow: 'hidden' },
+    nowTag: { marginLeft: 'auto', backgroundColor: colors.primary, color: colors.white },
     lessonSelected: { backgroundColor: colors.primary },
-    lessonBlock: { backgroundColor: `${colors.primary}14`, borderWidth: 1, borderColor: `${colors.primary}40` },
-    lessonTop: { fontSize: 12, fontFamily: fonts.bold, color: colors.foreground },
+    lessonBlock: { borderStyle: 'dashed' },
+    lessonTop: { flexShrink: 1, fontSize: 13, fontFamily: fonts.bold, color: colors.foreground },
     lessonBottom: { fontFamily: fonts.regular, fontSize: 10, color: colors.muted },
     free: { flex: 1, minHeight: 48, borderRadius: radius.sm, borderWidth: 1, borderStyle: 'dashed', borderColor: colors.border },
     offDay: { alignItems: 'center', justifyContent: 'center', borderRadius: radius.sm, backgroundColor: colors.mutedBg },
@@ -145,7 +190,11 @@ const useStyles = makeStyles((colors) => ({
     swapTarget: { borderWidth: 2, borderColor: colors.info },
     blocked: { opacity: 0.35 },
     offDayText: { fontSize: 10, fontFamily: fonts.semibold, color: colors.muted },
-    key: { fontFamily: fonts.regular, fontSize: 11, color: colors.muted, marginTop: spacing.sm, lineHeight: 16 },
+    key: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: spacing.sm },
+    keyItem: { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderColor: colors.border, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
+    keyDot: { width: 8, height: 8, borderRadius: 4 },
+    keyCode: { fontSize: 11, fontFamily: fonts.bold, color: colors.foreground },
+    keyName: { fontSize: 11, fontFamily: fonts.regular, color: colors.muted },
     breakRow: { textAlign: 'center', fontSize: 11, fontFamily: fonts.semibold, color: colors.warningText, backgroundColor: colors.warningBg, borderRadius: radius.sm, paddingVertical: 4, marginVertical: 4 },
     phoneRow: { flexDirection: 'row', alignItems: 'stretch', gap: spacing.sm, marginBottom: spacing.sm },
     periodLabel: { fontSize: 12, fontFamily: fonts.bold, color: colors.foreground },
