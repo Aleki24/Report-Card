@@ -14,6 +14,7 @@ import {
     IMPORT_LOADS_NOTE, LOAD_DEFAULTS, LOAD_FIELDS, MATCH_MINISTRY_CONFIRM, MINISTRY_LOADS_NOTE, importLoadsMessage, loadLessonsLabel,
     type ImportLoadsResult, type TeachingLoad as Load,
 } from '@/lib/ops/forms/academics';
+import { missingLine } from '@/lib/timetable/essentials';
 import { basisLine, overloadMessage, subjectTimeRows, type PlanClass, type PlanLoad, type SubjectTimeRow, type TimetablePlan } from '@/lib/timetable/readiness';
 import { fewerGroupsLines, longerDayLines } from '@/lib/timetable/fit';
 import { SUBJECT_TIME_LABELS } from '@/lib/timetable/checks';
@@ -118,6 +119,17 @@ function ClassCard({ c, onApplied }: { c: PlanClass; onApplied: () => void }) {
     const offMinistry = loads.filter(l => l.ministry !== null && l.ministry !== l.lessons).length;
     const handPicked = c.blocks.some(b => b.manual && b.label.startsWith('Option '));
     const [busy, setBusy] = useState(false);
+    const [adding, setAdding] = useState(false);
+    // Non-examined lessons the level expects (PE, Life Skills, ICT, CSL) that nobody put on this class's timetable.
+    const addMissing = async () => {
+        setAdding(true);
+        try {
+            const r = await opsFetch<{ message: string }>('/api/academics/timetable/essentials', { method: 'POST', json: { stream_id: c.streamId } });
+            toast.success(r.message);
+            onApplied();
+        } catch (err) { toast.error(errorText(err)); }
+        finally { setAdding(false); }
+    };
     const automatic = async () => {
         setBusy(true);
         try { toast.success((await applyFix(c.streamId, 'auto-groups')).message); onApplied(); }
@@ -158,6 +170,12 @@ function ClassCard({ c, onApplied }: { c: PlanClass; onApplied: () => void }) {
                     </div>
                 )}
             </div>
+            {c.missing && c.missing.length > 0 && (
+                <div className="mt-2 flex flex-col gap-2 rounded-xl border border-amber-500/30 bg-amber-500/[0.06] p-2.5 text-xs sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-amber-800 dark:text-amber-200">Not on this timetable: <span className="font-semibold">{missingLine(c.missing)}</span>. Every learner at this level takes {c.missing.length === 1 ? 'it' : 'them'}.</p>
+                    <Button size="xs" variant="outline" className="shrink-0 self-start sm:self-auto" onClick={() => void addMissing()} disabled={adding}>{adding ? 'Adding…' : 'Add to the timetable'}</Button>
+                </div>
+            )}
             {c.fits && basisLine(c) && <p className="mt-2 text-xs text-muted-foreground">{basisLine(c)}</p>}
             {!c.fits && <FitChooser c={c} onApplied={onApplied} />}
             {c.unfit.length > 0 && (

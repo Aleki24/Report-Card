@@ -7,6 +7,7 @@
 
 import { BAND_LABELS, type CurriculumBand } from '../curriculum-bands';
 import { ministryAllocation } from './allocations';
+import { missingEssentials } from './essentials';
 import { teacherWeeks, type ClassPlan } from './blocks';
 import { timeOfDay } from './checks';
 import { lessonsOn, weeklyLessons, type TimetableConfig, type TimetablePeriod } from './config';
@@ -63,7 +64,9 @@ export function buildStudioPlan(input: StudioInput): TimetablePlan {
         .map(p => {
             const band = bandOf(p.streamId);
             const loads = [...p.core, ...p.blocks.flatMap(b => b.loads)];
+            const missing = missingEssentials(band, loads[0]?.row.stream?.grade ?? null, loads.map(l => l.subjectName));
             return {
+                ...(missing.length > 0 ? { missing } : {}),
                 ...(p.fits ? {} : {
                     fixes: {
                         ...classFixes(config, band, fitClassOf(p)),

@@ -103,7 +103,7 @@ const SECONDARY_844_UPPER: readonly Rule[] = [
     [/math/, 7, 1], [/english/, 8, 1], [/kiswahili/, 6, 1],
     [/chemistry/, 5, 1], [/biology/, 5, 1], [/physics/, 5, 1],
     [/geography/, 5, 1], [/history/, 4], [/religio|\b[chi]re\b/, 4],
-    [/business/, 4], [/physical education|life skills|^pe$/, 2],
+    [/business/, 4], [/life skills/, 1], [/physical education|^pe$/, 2],
     [/agricultur/, 4, 1], [/home science/, 4, 1], [/computer/, 4, 1], [/arabic|french|german/, 4],
 ];
 
