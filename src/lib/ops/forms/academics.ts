@@ -11,7 +11,7 @@ import { today } from '../format';
 import { CBC_LEVELS, EVENT_AUDIENCES, EVENT_TYPES, ROOM_TYPES } from '../resources/academics';
 import type { PaperAction, PaperStatus, PrintStatus } from '../../academics/exam-papers';
 import {
-    CURRICULUM_BANDS, SECTION_PRESETS, WEEKDAY_LABELS, lessonLength, lessonsOn, minutesOf, weeklyLessons,
+    CURRICULUM_BANDS, LATEST_LESSON_END, SECTION_PRESETS, USUAL_LAST_END, WEEKDAY_LABELS, lessonLength, lessonsOn, minutesOf, weeklyLessons,
     type TimetableConfig, type TimetableLesson, type TimetablePeriod, type TimetableVersion,
 } from '../../timetable/config';
 import type { CurriculumBand } from '../../curriculum-bands';
@@ -404,6 +404,7 @@ export function bellOrderProblem(periods: readonly TimetablePeriod[]): string | 
         const p = periods[i];
         if (p.end <= p.start) return `${p.label} ends before it starts.`;
         if (i > 0 && p.start < periods[i - 1].end) return `${p.label} starts before ${periods[i - 1].label} ends.`;
+        if (!p.is_break && p.end > LATEST_LESSON_END) return `${p.label} ends at ${p.end}: lessons in Kenya end by 5 pm (${USUAL_LAST_END} at most schools). Remove it or start the day earlier.`;
     }
     return null;
 }
