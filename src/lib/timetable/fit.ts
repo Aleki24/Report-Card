@@ -11,9 +11,18 @@
  * Pure, so the studio (web and app) shows exactly what the apply step does.
  */
 import { BAND_LABELS, type CurriculumBand } from '../curriculum-bands';
+import { ministryAllocation } from './allocations';
 import { USUAL_LAST_END, daysLabel, hhmmOf, lessonLength, minutesOf, sectionFor, spreadDays, weeklyLessons, type TimetableConfig, type TimetablePeriod } from './config';
 
-export interface FitLoad { id: string; subject: string; lessons: number }
+export interface FitLoad {
+    id: string;
+    subject: string;
+    lessons: number;
+    /** The Ministry's lessons a week for it at the class's level, when it sets one. */
+    ministry?: number | null;
+    /** `CORE` subjects are taught to the whole class; anything else is an elective. */
+    subjectType?: string | null;
+}
 
 /** The parts of a class's plan the fixes need. */
 export interface FitClass {
@@ -23,9 +32,21 @@ export interface FitClass {
     blocks: readonly { lessons: number; loads: readonly FitLoad[] }[];
 }
 
+/** A planned load as the fixes read it: its row, when there is one, names its level for the Ministry's figure. */
+interface PlannedFitLoad {
+    id: string;
+    subjectName: string;
+    lessons: number;
+    subjectType?: string | null;
+    row?: { subject?: { name: string | null; code?: string | null } | null; stream?: { grade?: { code: string | null; name_display: string | null } | null } | null };
+}
+
 /** A planned class as the fixes see it. */
-export const fitClassOf = (p: { capacity: number; needed: number; core: readonly { id: string; subjectName: string; lessons: number }[]; blocks: readonly { lessons: number; loads: readonly { id: string; subjectName: string; lessons: number }[] }[] }): FitClass => {
-    const load = (l: { id: string; subjectName: string; lessons: number }) => ({ id: l.id, subject: l.subjectName, lessons: l.lessons });
+export const fitClassOf = (p: { capacity: number; needed: number; core: readonly PlannedFitLoad[]; blocks: readonly { lessons: number; loads: readonly PlannedFitLoad[] }[] }): FitClass => {
+    const load = (l: PlannedFitLoad): FitLoad => ({
+        id: l.id, subject: l.subjectName, lessons: l.lessons, subjectType: l.subjectType ?? null,
+        ministry: l.row?.subject ? ministryAllocation(l.row.stream?.grade ?? null, l.row.subject)?.lessons ?? null : null,
+    });
     return { capacity: p.capacity, needed: p.needed, core: p.core.map(load), blocks: p.blocks.map(b => ({ lessons: b.lessons, loads: b.loads.map(load) })) };
 };
 
@@ -74,13 +95,26 @@ export function fewerGroupsLines(f: FewerGroups): string[] {
     ];
 }
 
-/** Compulsory subjects keep at least four lessons a week, others three. */
-const floorOf = (subject: string) => (/english|kiswahili|math/i.test(subject) ? 4 : 3);
+/** Lessons that are not examined: the first to give way after anything above the Ministry's figure. */
+const NOT_EXAMINED = /physical education|^p\.?e\.?$|life skills|pastoral|\bppi\b|guidance|community service|\bict skills?\b|games|clubs|library/i;
+/** The subjects every learner sits: never cut below four lessons. */
+const COMPULSORY = /english|kiswahili|math/i;
+/** How far below its usual figure a subject may be cut. */
+const MOST_BELOW = 2;
 
 /**
- * The fewest one-lesson cuts that bring the week within its periods. A block
- * shortens when its longest subjects do; the subject (or block) with the most
- * lessons is cut first, electives before whole-class subjects on a tie.
+ * The gentlest one-lesson cuts that bring the week within its periods, the
+ * way a deputy would make them:
+ *
+ * 1. anything above the Ministry's figure, back down to it;
+ * 2. lessons that are not examined (PE, Life Skills), down to one;
+ * 3. electives (a block shortens when its longest subjects do);
+ * 4. whole-class subjects last.
+ *
+ * Within each, the subject with the most lessons first, and one cut each
+ * before any subject gives a second. None goes more than `MOST_BELOW` under
+ * its usual figure (the Ministry's, else the school's own), and English,
+ * Kiswahili and Mathematics never under four.
  */
 export function fewerLessons(c: FitClass): LessonCut[] | null {
     let over = c.needed - c.capacity;
@@ -88,15 +122,27 @@ export function fewerLessons(c: FitClass): LessonCut[] | null {
     const lessons = new Map<string, number>();
     [...c.core, ...c.blocks.flatMap(b => b.loads)].forEach(l => lessons.set(l.id, l.lessons));
     const valueOf = (ls: readonly FitLoad[]) => Math.max(...ls.map(l => lessons.get(l.id) ?? 0));
+    const usual = (l: FitLoad) => Math.min(l.lessons, l.ministry ?? l.lessons);
+    const floorOf = (l: FitLoad) => NOT_EXAMINED.test(l.subject.trim()) ? 1
+        : Math.max(COMPULSORY.test(l.subject) ? 4 : 2, usual(l) - MOST_BELOW);
     const items = [
         ...c.blocks.map(b => ({ loads: b.loads, elective: true })),
-        ...c.core.map(l => ({ loads: [l], elective: false })),
+        ...c.core.map(l => ({ loads: [l], elective: l.subjectType != null && l.subjectType !== 'CORE' })),
     ];
+    /** What one more cut to an item costs the class: lower is gentler. */
+    const harm = (it: (typeof items)[number], value: number) => {
+        const longest = it.loads.filter(l => (lessons.get(l.id) ?? 0) === value);
+        if (longest.every(l => l.ministry != null && value > l.ministry)) return 0;
+        const cut = Math.max(...longest.map(l => l.lessons - value));
+        const kind = longest.every(l => NOT_EXAMINED.test(l.subject.trim())) ? 1 : it.elective ? 3 : 6;
+        return kind + cut * 4;
+    };
     while (over > 0) {
         const candidates = items
-            .map(it => ({ it, value: valueOf(it.loads), floor: Math.max(...it.loads.map(l => floorOf(l.subject))) }))
-            .filter(x => x.value > x.floor)
-            .sort((a, b) => b.value - a.value || Number(b.it.elective) - Number(a.it.elective));
+            .map(it => ({ it, value: valueOf(it.loads) }))
+            .filter(x => cuttable(x.it.loads, x.value))
+            .map(x => ({ ...x, harm: harm(x.it, x.value) }))
+            .sort((a, b) => a.harm - b.harm || b.value - a.value || Number(b.it.elective) - Number(a.it.elective));
         const pick = candidates[0];
         if (!pick) return null;
         pick.it.loads.forEach(l => { if (lessons.get(l.id) === pick.value) lessons.set(l.id, pick.value - 1); });
@@ -105,6 +151,11 @@ export function fewerLessons(c: FitClass): LessonCut[] | null {
     return [...c.core, ...c.blocks.flatMap(b => b.loads)]
         .filter(l => lessons.get(l.id) !== l.lessons)
         .map(l => ({ id: l.id, subject: l.subject, from: l.lessons, to: lessons.get(l.id) ?? l.lessons }));
+
+    /** Whether the item's longest subjects can each lose a lesson and stay at or above their floor. */
+    function cuttable(loads: readonly FitLoad[], value: number) {
+        return loads.filter(l => (lessons.get(l.id) ?? 0) === value).every(l => value - 1 >= floorOf(l));
+    }
 }
 
 /**
