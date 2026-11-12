@@ -8,6 +8,7 @@ import {
 } from '@shared/timetable/readiness';
 import { SUBJECT_TIMES, WEEKDAY_LABELS, WEEKDAY_NAMES, type SubjectTime, type TeacherOff, type TimetableConfig } from '@shared/timetable/config';
 import { fewerGroupsLines, longerDayLines } from '@shared/timetable/fit';
+import { missingLine } from '@shared/timetable/essentials';
 import { SUBJECT_TIME_LABELS } from '@shared/timetable/checks';
 import { dayParts, offLabel, offPhrase, type DayPart } from '@shared/timetable/away';
 import {
@@ -236,6 +237,22 @@ function FitChooser({ c, onApplied, onEditLoads }: { c: TimetablePlan['classes']
 function ClassFit({ plan, onApplied, onEditLoads }: { plan: TimetablePlan; onApplied: () => void; onEditLoads: (className: string) => void }) {
     const { colors } = useTheme();
     const styles = useStyles();
+    const api = useApi();
+    const toast = useToast();
+    const [adding, setAdding] = useState<string | null>(null);
+    // Non-examined lessons the level expects (PE, Life Skills, ICT, CSL) that are not on a class's timetable.
+    const addMissing = async (streamId: string) => {
+        setAdding(streamId);
+        try {
+            const r = await api.post<{ data: { message: string } }>('/api/academics/timetable/essentials', { stream_id: streamId });
+            toast.success(r.data.message);
+            onApplied();
+        } catch (err) {
+            toast.error(errorMessage(err, 'Could not add them'));
+        } finally {
+            setAdding(null);
+        }
+    };
     return (
         <View>
             {plan.classes.map((c) => (
@@ -251,6 +268,14 @@ function ClassFit({ plan, onApplied, onEditLoads }: { plan: TimetablePlan; onApp
                             : `Differs from the Ministry: ${c.offMinistry.map((o) => `${o.subject} ${o.lessons} (KICD ${o.ministry})`).join(' · ')}`}
                     </Text>
                     <Text style={styles.fitLine}>Whole class: {c.core.map((l) => `${l.subject} ${l.lessons}`).join(' · ') || '—'}</Text>
+                    {c.missing && c.missing.length > 0 ? (
+                        <View style={[styles.block, { backgroundColor: colors.warningBg }]}>
+                            <Text style={[styles.fitLine, { color: colors.warningText }]}>Not on this timetable: {missingLine(c.missing)}. Every learner at this level takes {c.missing.length === 1 ? 'it' : 'them'}.</Text>
+                            <ButtonRow align="start">
+                                <Button size="sm" variant="secondary" label="Add to the timetable" loading={adding === c.streamId} onPress={() => void addMissing(c.streamId)} />
+                            </ButtonRow>
+                        </View>
+                    ) : null}
                     {c.fits && basisLine(c) ? <Text style={styles.fitLine}>{basisLine(c)}</Text> : null}
                     {!c.fits ? <FitChooser c={c} onApplied={onApplied} onEditLoads={() => onEditLoads(c.name)} /> : null}
                     {c.unfit.length > 0 ? (

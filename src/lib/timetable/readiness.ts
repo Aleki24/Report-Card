@@ -4,6 +4,7 @@
  * instead of failing at the last step.
  */
 
+import { missingLine, type MissingLesson } from './essentials';
 import type { ClassFixes } from './fit';
 import type { SubjectTime } from './config';
 
@@ -54,6 +55,8 @@ export interface PlanClass {
     level: string | null;
     /** For a class that does not fit: the two ready-made ways to make it fit. */
     fixes?: ClassFixes;
+    /** Non-examined lessons its level expects (PE, Life Skills, ICT, CSL) that are not on its timetable. */
+    missing?: MissingLesson[];
 }
 
 /** A teacher's whole week across every class and level they teach. */
@@ -175,6 +178,7 @@ export function assess(plan: Omit<TimetablePlan, 'blockers' | 'notes'>): Pick<Ti
                 details: c.unfit.map(u => `${u.name}: ${u.subjects.join(' and ')}`),
             });
         }
+        if (c.missing?.length) notes.push({ card: 'loads', streamId: c.streamId, message: `${c.name} has no ${missingLine(c.missing)} on its timetable. Open it to add ${c.missing.length === 1 ? 'it' : 'them'}.` });
         if (c.unassigned > 0) notes.push({ card: 'loads', streamId: c.streamId, message: `${c.name}: ${plural(c.unassigned, 'load')} without a teacher.` });
         if (c.offMinistry.length > 0) {
             notes.push({ card: 'loads', streamId: c.streamId, message: `${c.name}: ${c.offMinistry.map(o => `${o.subject} ${o.lessons} (Ministry ${o.ministry})`).join(', ')}.` });
