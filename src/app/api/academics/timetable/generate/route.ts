@@ -69,6 +69,7 @@ export const POST = route('timetable generate', { module: 'timetable', permissio
 
     // Whole-class loads as they are; each option block as one requirement booking all its teachers.
     const solverReqs: SolverRequirement[] = [];
+    const spansBreak = new Set(config.rules.span_short_break);
     const blockMembers = new Map<string, PlannedLoad[]>();
     const memberBlock = new Map<string, string>();
     // The school's choice of time of day for a subject, else its category's usual.
@@ -83,6 +84,7 @@ export const POST = route('timetable generate', { module: 'timetable', permissio
             solverReqs.push({
                 id: l.id, streamId: l.streamId, subjectId: l.row.subject_id, teacherId: l.teacherId, lessons: l.lessons,
                 doubles: l.doubles, roomType: l.row.room_type, sectionId, fillPriority: fillPriorityOf(l.category), ...prefers([l]),
+                spanShortBreak: spansBreak.has(l.row.subject_id),
             });
         }
         for (const b of plan.blocks) {
@@ -94,6 +96,9 @@ export const POST = route('timetable generate', { module: 'timetable', permissio
                 id, streamId: plan.streamId, subjectId: id, teacherId: teachers[0] ?? null, coTeacherIds: teachers.slice(1),
                 lessons: b.lessons, doubles: Math.min(...b.loads.map(l => l.doubles)), roomType: null, sectionId,
                 fillPriority: BLOCK_FILL_PRIORITY, ...prefers(b.loads),
+                carries: b.loads.map(l => l.row.subject_id),
+                // The block's double runs over a short break only if every elective in it may.
+                spanShortBreak: b.loads.every(l => spansBreak.has(l.row.subject_id)),
             });
         }
     }
@@ -128,7 +133,8 @@ export const POST = route('timetable generate', { module: 'timetable', permissio
         rooms: (rooms ?? []).map(r => ({ id: r.id as string, type: r.room_type as string })),
         pinned,
         unavailable: config.rules.teacher_off.map(o => ({ teacherId: o.teacher_id, day: o.day, start: minutesOf(o.start), end: minutesOf(o.end) })),
-        rules: { maxConsecutive: config.rules.max_consecutive, timeBudgetMs: 12_000, seed: body.seed ?? Date.now() % 2 ** 31, fillFree },
+        relations: config.rules.relations.map(r => ({ kind: r.kind, subjects: r.subject_ids, streamIds: r.stream_ids, strength: r.strength })),
+        rules: { maxConsecutive: config.rules.max_consecutive, timeBudgetMs: 12_000, seed: body.seed ?? Date.now() % 2 ** 31, fillFree, doubles: config.rules.doubles },
     }, 4);
 
     const byId = new Map(rows.map(r => [r.id, r]));

@@ -71,7 +71,7 @@ export interface TeacherWeek {
     classes: string[];
 }
 
-export type StudioCard = 'day' | 'loads' | 'teachers' | 'rooms' | 'drafts';
+export type StudioCard = 'day' | 'loads' | 'teachers' | 'rules' | 'rooms' | 'drafts';
 
 /** A fix the studio can apply in one tap instead of sending the school to an editor. */
 export type QuickFix = 'set-breaks';

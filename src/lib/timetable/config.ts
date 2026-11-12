@@ -4,6 +4,7 @@
  */
 import { z } from 'zod';
 import { BAND_LABELS, type CurriculumBand } from '../curriculum-bands';
+import { DEFAULT_DOUBLE_RULES, MAX_RULES, doubleRulesSchema, timetableRuleSchema } from './rules';
 
 export const WEEKDAYS = [1, 2, 3, 4, 5, 6, 7] as const;
 export const WEEKDAY_LABELS: Record<number, string> = { 1: 'Mon', 2: 'Tue', 3: 'Wed', 4: 'Thu', 5: 'Fri', 6: 'Sat', 7: 'Sun' };
@@ -78,7 +79,13 @@ export const timetableConfigSchema = z.object({
          * no teacher or room would clash. On unless the school turns it off.
          */
         fill_free_periods: z.boolean().default(true),
-    }).default({ max_consecutive: 4, teacher_off: [], subject_times: {}, fill_free_periods: true }),
+        /** The school's own rules (aSc's card relationships): subjects apart, not on end, not on days in a row. */
+        relations: z.array(timetableRuleSchema).max(MAX_RULES).default([]),
+        /** The built-in rules on doubles, each on unless turned off. */
+        doubles: doubleRulesSchema.default(DEFAULT_DOUBLE_RULES),
+        /** Subjects whose doubles may run across a short break (never lunch). */
+        span_short_break: z.array(z.string().min(1).max(64)).max(200).default([]),
+    }).default({ max_consecutive: 4, teacher_off: [], subject_times: {}, fill_free_periods: true, relations: [], doubles: DEFAULT_DOUBLE_RULES, span_short_break: [] }),
 });
 
 export type TimetableConfig = z.infer<typeof timetableConfigSchema>;
@@ -101,7 +108,7 @@ export const DEFAULT_TIMETABLE_CONFIG: TimetableConfig = {
         { label: 'P8', start: '14:40', end: '15:20', is_break: false },
     ],
     sections: [],
-    rules: { max_consecutive: 4, teacher_off: [], subject_times: {}, fill_free_periods: true },
+    rules: { max_consecutive: 4, teacher_off: [], subject_times: {}, fill_free_periods: true, relations: [], doubles: DEFAULT_DOUBLE_RULES, span_short_break: [] },
 };
 
 // ── Sections and clock times ─────────────────────────────────────────
@@ -343,6 +350,8 @@ export interface TimetableQuality {
     crowdedDoubleDays?: number;
     /** A class's doubles starting in the same period on more days than needed. */
     sameDoubleTimes?: number;
+    /** Times the school's own rules are broken (a must or a preference). */
+    brokenRules?: number;
 }
 
 const QUALITY_NOTES: readonly { key: Exclude<keyof TimetableQuality, 'score'>; text: (n: number) => string }[] = [
@@ -357,6 +366,7 @@ const QUALITY_NOTES: readonly { key: Exclude<keyof TimetableQuality, 'score'>; t
     { key: 'heavyRuns', text: n => `${n} class day${n === 1 ? '' : 's'} with more than three maths and science periods on end` },
     { key: 'doubleAfterDouble', text: n => `${n} double${n === 1 ? '' : 's'} straight after another double` },
     { key: 'crowdedDoubleDays', text: n => `${n} class day${n === 1 ? '' : 's'} with more than one double` },
+    { key: 'brokenRules', text: n => `${n} time${n === 1 ? '' : 's'} one of your own rules is broken` },
     { key: 'sameDoubleTimes', text: n => `${n} double${n === 1 ? '' : 's'} at the same time of day as the class's other doubles` },
     { key: 'midDayGaps', text: n => `${n} free period${n === 1 ? '' : 's'} in the middle of a class’s day` },
 ];

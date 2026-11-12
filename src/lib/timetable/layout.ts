@@ -82,3 +82,36 @@ export const lessonAt = (config: TimetableConfig, lessons: readonly TimetableLes
 export function periodIndexOf(config: TimetableConfig, lesson: Pick<TimetableLesson, 'stream'>, row: GridRow): number {
     return periodsOfLesson(config, lesson).findIndex(p => minutesOf(p.start) === row.start && minutesOf(p.end) === row.end);
 }
+
+/** One cell of a day: a lesson's period, or a double's two back-to-back periods merged. */
+export interface DayCell {
+    rows: GridRow[];
+    lessons: TimetableLesson[];
+}
+
+/** What makes two periods one lesson: the same subjects with the same teachers. */
+const lessonSignature = (here: readonly TimetableLesson[]) => here.map(l => `${l.subject_id}:${l.teacher_id ?? ''}`).sort().join('|');
+
+/**
+ * A day's rows as cells, a double's two periods merged into one: back to back
+ * with no break between, the same subjects and teachers. A break or a period
+ * not running that day stays its own cell.
+ */
+export function dayCells(config: TimetableConfig, lessons: readonly TimetableLesson[], day: number, rows: readonly GridRow[]): DayCell[] {
+    const out: DayCell[] = [];
+    for (const row of rows) {
+        const here = row.isBreak || !runsOn(row, day) ? [] : lessonsAt(config, lessons, day, row);
+        const last = out[out.length - 1];
+        const lastRow = last?.rows[last.rows.length - 1];
+        const joins = !!last && last.rows.length === 1 && here.length > 0 && last.lessons.length > 0 && !lastRow!.isBreak
+            && row.start - lastRow!.end <= 5 && lessonSignature(last.lessons) === lessonSignature(here);
+        if (joins) { last.rows.push(row); last.lessons.push(...here); continue; }
+        out.push({ rows: [row], lessons: here });
+    }
+    return out;
+}
+
+/** Each subject on a timetable gets its own colour, by its code A to Z; `palette` is how many colours there are. */
+export function subjectColours(codes: readonly string[], palette: number): Map<string, number> {
+    return new Map([...new Set(codes)].sort((a, b) => a.localeCompare(b)).map((code, i) => [code, i % palette]));
+}

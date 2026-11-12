@@ -120,6 +120,18 @@ export const leadershipManual: Manual = {
                     ],
                 },
                 {
+                    id: 'rules',
+                    title: 'Rules (optional)',
+                    summary: 'How double lessons are placed, and rules of your own, like the card relationships in aSc Timetables. Most schools need none of their own: the built-in rules already spread subjects and doubles well.',
+                    steps: [
+                        { title: 'Keep or change the rules on doubles', body: '“One double a day”, “No double after a double” (a short break does not part two doubles; lunch does) and “Doubles at different times” are on for every school. Turn one off only if your school does it differently.' },
+                        { title: 'Add a rule of your own', body: 'Press “Add a rule” and pick its kind: two subjects not on the same day, never one straight after the other, or a subject not on two days in a row. Pick the subjects, every class or only some, and how firm it is: a “Must” is broken only when nothing else fits; a “Prefer” gives way to a better week.' },
+                        { title: 'Heed “Cannot be kept everywhere”', body: 'A rule that no timetable could keep says so and why: two subjects needing more days between them than the week has, or a subject on more than every other day (an elective is on every day its group is). Skulbase still keeps it where it can, and each draft counts the times a rule was broken.' },
+                        { title: 'Let a practical run across a short break', body: 'Tick a subject under “Doubles across a short break” to let its double run on across a short or tea break. A double never spans lunch.' },
+                    ],
+                    tip: 'Rules apply to the next draft you generate.',
+                },
+                {
                     id: 'rooms',
                     title: 'Labs & rooms (optional)',
                     summary: 'Add labs, the computer room or the hall only if some lessons need them, and set “Needs a room type” on those loads. Every other lesson stays in the class’s own room, and no room is ever booked twice.',

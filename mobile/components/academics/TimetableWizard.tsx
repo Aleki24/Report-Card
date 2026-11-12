@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
-import { AlertTriangle, BookOpenCheck, CalendarClock, CalendarOff, CheckCircle2, ChevronDown, FlaskConical, Info, Layers, Plus, Users, type LucideIcon } from 'lucide-react-native';
+import { AlertTriangle, BookOpenCheck, CalendarClock, CalendarOff, CheckCircle2, ChevronDown, FlaskConical, Info, Layers, ListChecks, Plus, Users, type LucideIcon } from 'lucide-react-native';
 import { humanize, personName } from '@shared/ops/format';
 import {
     LIGHT_LOAD, basisLine, unfitTitle, daySummary, firstCard, isLightLoad, loadsSummary, subjectTimeRows,
@@ -26,6 +26,8 @@ import { askConfirm, confirmAlert } from '@/lib/confirm';
 import { fonts, makeStyles, radius, spacing, useTheme } from '@/lib/theme';
 import { DayStructureEditor, TimetableBuilder } from './TimetablePanels';
 import { TaughtTogether } from './TaughtTogether';
+import { TimetableRules } from './TimetableRules';
+import { rulesSummary } from '@shared/timetable/rules';
 
 /** Teaching loads: which teacher takes which subject with which class, and how often. */
 function Loads({ onChange, filter }: { onChange: () => void; filter: string }) {
@@ -571,6 +573,7 @@ export function TimetableWizard() {
         if (card === 'day') return plan.day.days > 0 && plan.day.lessonsPerDay > 0 ? 'done' : 'todo';
         if (card === 'loads' || card === 'teachers') return plan.loads > 0 ? 'done' : 'todo';
         if (card === 'rooms') return plan.rooms > 0 ? 'done' : 'optional';
+        if (card === 'rules') return 'optional';
         return plan.published ? 'done' : 'todo';
     };
     const toggle = (card: StudioCardId) => setOpen((o) => (o === card ? null : card));
@@ -620,6 +623,9 @@ export function TimetableWizard() {
             </StudioCard>
             <StudioCard viewRef={cardRef('teachers')} icon={Users} title="Teachers" summary={plan.teachers.length === 0 ? 'No teachers with loads yet' : `${plan.teachers.length} teachers${away ? ` · ${away} time${away === 1 ? '' : 's'} away` : ''}`} state={stateOf('teachers')} open={open === 'teachers'} onToggle={() => toggle('teachers')}>
                 <TeachersPanel plan={plan} config={config} onChange={() => void refresh()} />
+            </StudioCard>
+            <StudioCard viewRef={cardRef('rules')} icon={ListChecks} title="Rules" summary={rulesSummary(config)} state={stateOf('rules')} open={open === 'rules'} onToggle={() => toggle('rules')}>
+                <TimetableRules plan={plan} config={config} onChange={() => void refresh()} />
             </StudioCard>
             <StudioCard viewRef={cardRef('rooms')} icon={FlaskConical} title="Labs & rooms" summary={plan.rooms > 0 ? `${plan.rooms} room${plan.rooms === 1 ? '' : 's'}` : 'Optional — skip if lessons stay in class'} state={stateOf('rooms')} open={open === 'rooms'} onToggle={() => toggle('rooms')}>
                 <Rooms />

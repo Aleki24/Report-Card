@@ -36,6 +36,13 @@ export function schoolDayOf(instant: string | Date): string {
   return schoolClock(instant).slice(0, 10);
 }
 
+/** The school's weekday (1 = Monday … 7 = Sunday) and minutes past midnight at an instant: where "now" falls on a timetable. */
+export function schoolWeekMinute(instant: string | Date = new Date()): { day: number; minutes: number } {
+  const clock = schoolClock(instant);
+  const day = new Date(`${clock.slice(0, 10)}T00:00:00Z`).getUTCDay();
+  return { day: day === 0 ? 7 : day, minutes: Number(clock.slice(11, 13)) * 60 + Number(clock.slice(14, 16)) };
+}
+
 /** The school's wall-clock time, `HH:MM:SS`, of an instant. */
 export function schoolTimeOf(instant: string | Date): string {
   return schoolClock(instant).slice(11, 19);
