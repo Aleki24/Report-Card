@@ -27,7 +27,16 @@ export const periodSchema = z.object({
     days: z.array(weekdaySchema).min(1).max(7).refine(d => new Set(d).size === d.length, 'Each day once').optional(),
 }).refine(p => p.end > p.start, { message: 'A period must end after it starts', path: ['end'] });
 
+/**
+ * When lessons end in Kenya: 16:40 at most schools, and never after 5 pm.
+ * The bell refuses a lesson past `LATEST_LESSON_END`; a longer day Skulbase
+ * adds itself stops at `USUAL_LAST_END`.
+ */
+export const LATEST_LESSON_END = '17:00';
+export const USUAL_LAST_END = '16:40';
+
 const periodsSchema = z.array(periodSchema).min(1).max(20)
+    .refine(ps => ps.every(p => p.is_break || p.end <= LATEST_LESSON_END), `Lessons in Kenya end by 5 pm (${USUAL_LAST_END} at most schools). Remove the later lessons or start the day earlier.`)
     .refine(ps => ps.some(p => !p.is_break), 'At least one teaching period')
     .refine(ps => ps.every((p, i) => i === 0 || p.start >= ps[i - 1].end), 'Periods must be in order without overlapping');
 

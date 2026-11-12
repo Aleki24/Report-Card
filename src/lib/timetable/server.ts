@@ -5,7 +5,7 @@ import { embedOne, fetchAllRows } from '@/lib/postgrest';
 import { planClasses, type BlockLoad } from './blocks';
 import { syncLoadTeachers } from './assignments';
 import { BUILT_IN_TOGETHER, togetherGroups, type TogetherRule } from './together';
-import { DEFAULT_TIMETABLE_CONFIG, LESSON_SELECT, sectionFor, timetableConfigSchema, weeklyLessons, type TimetableConfig, type TimetableLesson } from './config';
+import { DEFAULT_TIMETABLE_CONFIG, LATEST_LESSON_END, LESSON_SELECT, sectionFor, timetableConfigSchema, weeklyLessons, type TimetableConfig, type TimetableLesson } from './config';
 
 const db = () => createSupabaseAdmin();
 
@@ -36,8 +36,13 @@ export async function loadConfig(schoolId: string): Promise<TimetableConfig> {
     if (error) throw error;
     if (!data) return DEFAULT_TIMETABLE_CONFIG;
     // Sections are kept inside `rules` (a JSON column), so no schema change was needed for them.
-    const { sections, ...rules } = (data.rules ?? {}) as { sections?: unknown };
-    const parsed = timetableConfigSchema.safeParse({ ...data, rules, sections: sections ?? [] });
+    const { sections, ...rules } = (data.rules ?? {}) as { sections?: { periods?: unknown }[] };
+    // A bell saved before lessons were capped at 5 pm keeps its day, less the lessons after it.
+    const capped = (periods: unknown) => (Array.isArray(periods) ? periods.filter((p: { is_break?: boolean; end?: string }) => p.is_break || (p.end ?? '') <= LATEST_LESSON_END) : periods);
+    const parsed = timetableConfigSchema.safeParse({
+        ...data, periods: capped(data.periods), rules,
+        sections: (Array.isArray(sections) ? sections : []).map(sec => ({ ...sec, periods: capped(sec.periods) })),
+    });
     return parsed.success ? parsed.data : DEFAULT_TIMETABLE_CONFIG;
 }
 

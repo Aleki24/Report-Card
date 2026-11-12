@@ -11,7 +11,7 @@
  * Pure, so the studio (web and app) shows exactly what the apply step does.
  */
 import { BAND_LABELS, type CurriculumBand } from '../curriculum-bands';
-import { daysLabel, hhmmOf, lessonLength, minutesOf, sectionFor, spreadDays, type TimetableConfig, type TimetablePeriod } from './config';
+import { USUAL_LAST_END, daysLabel, hhmmOf, lessonLength, minutesOf, sectionFor, spreadDays, weeklyLessons, type TimetableConfig, type TimetablePeriod } from './config';
 
 export interface FitLoad { id: string; subject: string; lessons: number }
 
@@ -108,9 +108,10 @@ export function fewerLessons(c: FitClass): LessonCut[] | null {
 }
 
 /**
- * A bell with `extra` more lessons a week: a period that runs on some days
- * only runs on more of them first, then new periods follow the last one, each
- * as long as the bell's usual lesson, the last on only the days it takes.
+ * A bell with up to `extra` more lessons a week: a period that runs on some
+ * days only runs on more of them first, then new periods follow the last one,
+ * each as long as the bell's usual lesson, the last on only the days it
+ * takes. Never past `USUAL_LAST_END`: a school day in Kenya ends by 16:40.
  */
 export function extendedPeriods(periods: readonly TimetablePeriod[], extra: number, schoolDays: readonly number[]): TimetablePeriod[] {
     const out = periods.map(p => ({ ...p }));
@@ -128,7 +129,8 @@ export function extendedPeriods(periods: readonly TimetablePeriod[], extra: numb
     const length = lessonLength(periods);
     let t = minutesOf(periods[periods.length - 1]?.end ?? '16:00');
     let n = periods.filter(p => !p.is_break).length;
-    while (left > 0 && schoolDays.length > 0) {
+    const latest = minutesOf(USUAL_LAST_END);
+    while (left > 0 && schoolDays.length > 0 && t + length <= latest) {
         const on = Math.min(left, schoolDays.length);
         out.push({ label: `P${++n}`, start: hhmmOf(t), end: hhmmOf(t + length), is_break: false, ...(on < schoolDays.length ? { days: spreadDays(on, schoolDays) } : {}) });
         t += length;
@@ -170,6 +172,8 @@ export function longerDay(config: TimetableConfig, band: CurriculumBand | null, 
     if (over <= 0 || !band || config.days.length === 0) return null;
     const before = sectionFor(config, band).periods;
     const after = sectionFor(withLongerDay(config, band, over), band).periods;
+    // Only a fix if the week fits by 16:40; past that, fewer lessons or groups it is.
+    if (weeklyLessons(after, config.days) - weeklyLessons(before, config.days) < over) return null;
     return { extra: over, changes: bellChanges(before, after, config.days), level: BAND_LABELS[band] };
 }
 
