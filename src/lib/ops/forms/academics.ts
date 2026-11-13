@@ -598,7 +598,7 @@ export function activityPreset(config: TimetableConfig, kind: ActivityKind): Tim
     const last = minutesOf(lessons[lessons.length - 1]?.end ?? '16:00');
     const latest = minutesOf(LATEST_ACTIVITY_END);
     const after = (day: number) => ({ days: [day], start: hhmmOf(Math.min(last, latest - 30)), end: hhmmOf(Math.min(last + 60, latest)) });
-    const when = kind === 'assembly' ? { days: [1], start: hhmmOf(Math.max(0, first - 20)), end: hhmmOf(first) }
+    const when = kind === 'assembly' ? { days: [...config.days], start: hhmmOf(Math.max(0, first - 20)), end: hhmmOf(first) }
         : kind === 'games' ? after(3)
         : kind === 'clubs' ? after(4)
         : { days: [config.days[0] ?? 1], start: hhmmOf(last), end: hhmmOf(Math.min(last + 40, latest)) };

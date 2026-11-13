@@ -24,7 +24,7 @@ function Block({ title, hint, children }: { title: string; hint: string; childre
         <section className="flex flex-col gap-3">
             <div>
                 <h3 className="text-sm font-semibold">{title}</h3>
-                <p className="text-sm text-muted-foreground">{hint}</p>
+                {hint && <p className="text-sm text-muted-foreground">{hint}</p>}
             </div>
             {children}
         </section>
@@ -166,7 +166,7 @@ export function RulesStep({ plan, config, onChange }: { plan: TimetablePlan; con
 
     return (
         <div className="flex flex-col gap-6">
-            <Block title="Built-in rules on doubles" hint="How Skulbase places double lessons, as a timetabler would. Turn one off only if your school does it differently.">
+            <Block title="Double lessons" hint="">
                 <ul className="grid gap-2 md:grid-cols-3">
                     {DOUBLE_RULE_COPY.map(r => (
                         <li key={r.key}>
@@ -183,9 +183,9 @@ export function RulesStep({ plan, config, onChange }: { plan: TimetablePlan; con
                 </ul>
             </Block>
 
-            <Block title="Your rules" hint="Rules of your own for how subjects sit in the week. A “must” is broken only when nothing else fits; a “prefer” gives way to a better week.">
+            <Block title="Your rules" hint="">
                 {relations.length === 0 && !adding && (
-                    <p className="rounded-xl border border-dashed border-border p-4 text-center text-sm text-muted-foreground">No rules of your own yet. Most schools need none: add one only for something your school insists on.</p>
+                    <p className="rounded-xl border border-dashed border-border p-4 text-center text-sm text-muted-foreground">No rules yet.</p>
                 )}
                 {relations.length > 0 && (
                     <ul className="flex flex-col gap-2">
@@ -215,7 +215,7 @@ export function RulesStep({ plan, config, onChange }: { plan: TimetablePlan; con
             </Block>
 
             {withDoubles.length > 0 && (
-                <Block title="Doubles across a short break" hint="A double never spans lunch. Tick a subject to let its double run on across a short break, for a practical that needs the time.">
+                <Block title="Doubles across a short break" hint="Never across lunch.">
                     <ul className="flex flex-wrap gap-2">
                         {withDoubles.map(s => {
                             const on = s.ids.every(id => spans.includes(id));

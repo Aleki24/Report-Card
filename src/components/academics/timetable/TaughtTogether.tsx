@@ -74,7 +74,7 @@ export function TaughtTogether({ onChange }: { onChange: () => void }) {
         <section className="flex flex-col gap-3 rounded-xl border border-border p-4">
             <div>
                 <h3 className="flex items-center gap-2 text-sm font-semibold"><Link2 className="size-4 text-primary" aria-hidden />Subjects taught at the same time</h3>
-                <p className="mt-0.5 text-xs text-muted-foreground">Learners take one subject from each group, so its subjects share a slot. Add your school’s own option groups here.</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">Learners take one subject from each group.</p>
             </div>
             <div className="grid gap-3 md:grid-cols-2">
                 <div>

@@ -20,7 +20,6 @@ export function ActivitiesEditor({ config, update }: { config: TimetableConfig; 
     return (
         <View>
             <SectionLabel>Assembly, games and clubs</SectionLabel>
-            <Text style={{ fontSize: 12, color: colors.muted, marginBottom: spacing.sm }}>They show on every timetable, and no lesson is put in their time.</Text>
             {config.rules.activities.map((a) => {
                 const taken = lessonsTakenBy(config, a);
                 const problem = activityProblem(a);
@@ -55,8 +54,8 @@ export function ActivitiesEditor({ config, update }: { config: TimetableConfig; 
                         {problem
                             ? <Notice tone="danger" message={problem} />
                             : taken.length > 0
-                                ? <Notice tone="warning" message={`Takes ${taken.map((t) => `${t.lessons} lesson${t.lessons === 1 ? '' : 's'} a week from ${t.name}`).join(', ')}. Check those classes still fit.`} />
-                                : <Text style={{ fontSize: 12, color: colors.muted }}>Outside the lessons: no lesson time is lost.</Text>}
+                                ? <Notice tone="warning" message={`Takes ${taken.map((t) => `${t.lessons} lesson${t.lessons === 1 ? '' : 's'} a week from ${t.name}`).join(', ')}.`} />
+                                : null}
                         <ButtonRow>
                             <Button size="sm" variant="danger" label={`Remove ${a.label}`} onPress={() => update((c) => withActivityRemoved(c, a.id))} />
                         </ButtonRow>

@@ -119,7 +119,7 @@ export interface TimetablePdfData {
 }
 
 const lessonWidth = (rows: readonly GridRow[], labelW = LABEL_W) => {
-    const teaching = rows.filter(r => !r.isBreak).length;
+    const teaching = rows.filter(r => !r.isBreak || r.activity).length;
     const breaks = rows.length - teaching;
     return (PAGE.width - PAGE.margin * 2 - 2 - labelW - breaks * BREAK_W) / Math.max(1, teaching);
 };
@@ -162,7 +162,7 @@ function HeadRow({ rows, width, corner }: { rows: GridRow[]; width: number; corn
     return (
         <View style={[st.row, { height: HEAD_ROW_H, borderBottomWidth: 1, borderBottomColor: LINE }]}>
             <View style={[st.rowLabel, { backgroundColor: '#F1F5F9' }]}><Text style={{ fontSize: 6.5, color: MUTED, textTransform: 'uppercase', letterSpacing: 0.8 }}>{corner}</Text></View>
-            {rows.map(r => r.isBreak
+            {rows.map(r => r.isBreak && !r.activity
                 ? <View key={r.key} style={[st.breakCol, { backgroundColor: '#FDE68A' }]} />
                 : (
                     <View key={r.key} style={[st.headCell, { width, backgroundColor: '#F1F5F9' }]}>
@@ -191,9 +191,11 @@ function WeekGrid({ config, sheet }: { config: TimetableConfig; sheet: Timetable
             {config.days.map((d, di) => (
                 <View key={d} style={[st.row, { height: rowH }, di > 0 ? { borderTopWidth: 1, borderTopColor: LINE } : {}]} wrap={false}>
                     <View style={st.rowLabel}><Text style={st.rowLabelText}>{WEEKDAY_LABELS[d]}</Text></View>
-                    {rows.map(r => r.isBreak
-                        // A break's name once, at the top; an activity's (Assembly) on each day it runs.
-                        ? ((r.activity ? rowRunsOn(r, d) : di === 0) ? <View key={r.key} style={[st.breakCol, { height: rowH }]}><Text style={st.breakText}>{r.label}</Text></View> : <View key={r.key} style={[st.breakCol, { height: rowH }]} />)
+                    {rows.map(r => r.activity
+                        // Assembly is a period of its own: its name on the days it runs.
+                        ? <OffDay key={r.key} width={width} height={rowH} label={rowRunsOn(r, d) ? r.label : undefined} />
+                        : r.isBreak
+                        ? (di === 0 ? <View key={r.key} style={[st.breakCol, { height: rowH }]}><Text style={st.breakText}>{r.label}</Text></View> : <View key={r.key} style={[st.breakCol, { height: rowH }]} />)
                         : rowRunsOn(r, d)
                             ? <Cell key={r.key} lessons={lessonsAt(config, sheet.lessons, d, r)} width={width} mode={sheet.mode} height={rowH} />
                             : <OffDay key={r.key} width={width} height={rowH} label={r.taken?.[d]} />)}
@@ -216,14 +218,16 @@ function DayGrid({ config, sheet }: { config: TimetableConfig; sheet: DaySheet }
         <View style={st.table}>
             <View style={[st.row, { height: HEAD_ROW_H, borderBottomWidth: 1, borderBottomColor: LINE }]}>
                 <View style={[st.rowLabel, { width: labelW, backgroundColor: '#F1F5F9' }]}><Text style={{ fontSize: 6.5, color: MUTED, textTransform: 'uppercase', letterSpacing: 0.8 }}>Class</Text></View>
-                {rows.map(r => r.isBreak
+                {rows.map(r => r.isBreak && !r.activity
                     ? <View key={r.key} style={[st.breakCol, { backgroundColor: '#FDE68A' }]} />
                     : <View key={r.key} style={[st.headCell, { width, backgroundColor: '#F1F5F9' }]}><Text style={st.headLabel}>{r.label}</Text><Text style={st.headTime}>{r.time}</Text></View>)}
             </View>
             {sheet.classes.map((c, ci) => (
                 <View key={c.name} style={[st.row, { height: rowH }, ci > 0 ? { borderTopWidth: 1, borderTopColor: LINE } : {}]} wrap={false}>
                     <View style={[st.rowLabel, { width: labelW }]}><Text style={st.rowLabelText}>{c.name}</Text></View>
-                    {rows.map(r => r.isBreak
+                    {rows.map(r => r.activity
+                        ? <OffDay key={r.key} width={width} height={rowH} label={r.label} />
+                        : r.isBreak
                         ? <BreakColumn key={r.key} row={ci === 0 ? r : { ...r, label: '' }} height={rowH} />
                         : <Cell key={r.key} lessons={lessonsAt(config, c.lessons, sheet.day, r)} width={width} mode="school" height={rowH} />)}
                 </View>

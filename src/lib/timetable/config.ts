@@ -176,7 +176,7 @@ export const timesOverlap = (a: { start: string; end: string }, b: { start: stri
 
 /** The activities a bell keeps: the whole school's and its own. */
 export const activitiesOf = (config: TimetableConfig, sectionId: string): TimetableActivity[] =>
-    config.rules.activities.filter(a => a.section_ids.length === 0 || a.section_ids.includes(sectionId));
+    (config.rules.activities ?? []).filter(a => a.section_ids.length === 0 || a.section_ids.includes(sectionId));
 
 /** A bell's lesson periods less the days an activity takes their time. Breaks and indexes stay as they are. */
 export function withActivities(periods: readonly TimetablePeriod[], activities: readonly TimetableActivity[], schoolDays: readonly number[]): TimetablePeriod[] {

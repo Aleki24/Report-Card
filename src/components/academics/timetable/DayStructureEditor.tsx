@@ -300,9 +300,7 @@ export function DayStructureEditor({ onSaved }: { onSaved?: () => void } = {}) {
                         <Button onClick={save} disabled={saving || !!problem}>{saving ? 'Saving…' : 'Save school day'}</Button>
                     </div>
                 </div>
-            ) : (
-                <p className="text-xs text-muted-foreground">Changing the day after publishing? Generate the timetable again so lessons follow the new times.</p>
-            )}
+            ) : null}
         </section>
     );
 }

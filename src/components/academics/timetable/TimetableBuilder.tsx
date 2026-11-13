@@ -313,7 +313,7 @@ export function TimetableBuilder({ plan, onGenerated }: { plan?: TimetablePlan |
                                 <Button size="xs" variant="ghost" onClick={() => setSelected(null)}>Cancel</Button>
                             </span>
                         </div>
-                    ) : <p className="text-xs text-muted-foreground">Click a lesson to move or pin it: the grid then shows every slot it can go to. Pinned lessons keep their slots when you reshuffle.</p>)}
+                    ) : <p className="text-xs text-muted-foreground">Click a lesson to move or pin it.</p>)}
                     <TimetableGrid config={config} lessons={shown} mode={view} selectedId={selected?.id} onCellClick={view === 'class' ? onCell : undefined} hintAt={view === 'class' ? hintAt : undefined} />
                 </section>
             )}

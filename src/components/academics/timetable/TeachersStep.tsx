@@ -83,7 +83,7 @@ export function TeachersStep({ plan, config, onChange }: { plan: TimetablePlan; 
             <section className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-card p-4 shadow-sm sm:flex-row sm:items-end sm:justify-between sm:p-5">
                 <div>
                     <h3 className="text-sm font-semibold">No teacher is ever booked twice</h3>
-                    <p className="text-sm text-muted-foreground">Each teacher’s lessons are counted across every class and level they teach. Add the times a teacher cannot teach and they stay free then.</p>
+                    <p className="text-sm text-muted-foreground">Add the times a teacher can’t teach.</p>
                 </div>
                 <div className="flex items-end gap-2">
                     <FormField label="Most lessons in a row" htmlFor="max-run" className="w-40"><InputField id="max-run" type="number" min={1} max={12} value={run} onChange={e => setRun(e.target.value)} /></FormField>

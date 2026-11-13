@@ -312,7 +312,7 @@ export function HoursStep({ plan, focus, onChange }: { plan: TimetablePlan; focu
             <section className="flex flex-col gap-3">
                 <div>
                     <h3 className="text-sm font-semibold">When subjects are best taught</h3>
-                    <p className="text-xs text-muted-foreground">Mathematics and sciences go before lunch and PE and the arts later, unless you choose otherwise. The timetable follows these where it can.</p>
+                    <p className="text-xs text-muted-foreground">When each subject is best taught.</p>
                 </div>
                 <SubjectTimes plan={plan} onChange={onChange} />
             </section>

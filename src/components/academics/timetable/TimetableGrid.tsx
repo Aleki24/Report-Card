@@ -127,6 +127,7 @@ function phoneItems(cells: readonly DayCell[], day: number): PhoneItem[] {
     const out: PhoneItem[] = [];
     for (const c of cells) {
         const row = c.rows[0];
+        if (row.activity && rowRunsOn(row, day)) { out.push({ kind: 'activity', key: row.key, label: row.label, time: row.time }); continue; }
         if (rowRunsOn(row, day)) { out.push({ ...c, kind: 'cell' }); continue; }
         const label = row.taken?.[day];
         if (!label) continue;
@@ -244,9 +245,9 @@ export function TimetableGrid({ config, lessons, mode, selectedId, onCellClick, 
 
             {/* Tablets and up: the whole week, days down the side and periods across, as schools pin it up */}
             <div className="hidden overflow-x-auto rounded-2xl border border-border/60 bg-card shadow-sm md:block">
-                <div className="grid min-w-[48rem] gap-x-1 p-2" style={{ gridTemplateColumns: `4rem ${rows.map(r => (r.isBreak ? '1.5rem' : 'minmax(5.5rem, 1fr)')).join(' ')}` }}>
+                <div className="grid min-w-[48rem] gap-x-1 p-2" style={{ gridTemplateColumns: `4rem ${rows.map(r => (r.isBreak && !r.activity ? '1.5rem' : 'minmax(5.5rem, 1fr)')).join(' ')}` }}>
                     <div />
-                    {rows.map(r => r.isBreak ? <div key={r.key} aria-hidden /> : (
+                    {rows.map(r => r.isBreak && !r.activity ? <div key={r.key} aria-hidden /> : (
                         <div key={r.key} className="px-1 pb-2 text-center">
                             <span className="block text-xs font-semibold">{r.label}</span>
                             <span className="block text-[10px] text-muted-foreground tabular-nums">{r.time}</span>
@@ -258,11 +259,11 @@ export function TimetableGrid({ config, lessons, mode, selectedId, onCellClick, 
                                 <span className={cn('rounded-lg px-2 py-1 text-sm font-semibold', today === d ? 'bg-primary text-primary-foreground' : 'text-foreground')} title={today === d ? 'Today' : WEEKDAY_NAMES[d]}>{WEEKDAY_LABELS[d]}</span>
                             </div>
                             {cellsOf(d).map(c => c.rows[0].activity ? (
-                                rowRunsOn(c.rows[0], d)
-                                    ? <div key={c.rows[0].key} className={cn('relative my-1 rounded-md bg-indigo-500/12', di > 0 && 'mt-2')} title={`${c.rows[0].label} · ${c.rows[0].time}`}>
-                                        <span className="absolute inset-x-0 top-2 mx-auto block w-fit text-[9px] font-semibold tracking-wider text-indigo-700 uppercase [writing-mode:vertical-rl] dark:text-indigo-300">{c.rows[0].label}</span>
-                                    </div>
-                                    : <div key={c.rows[0].key} aria-hidden />
+                                <div key={c.rows[0].key} className={cn('h-[4.75rem] py-1', di > 0 && 'border-t border-border/40', today === d && 'bg-primary/[0.03]')}>
+                                    {rowRunsOn(c.rows[0], d)
+                                        ? <span className="flex h-full items-center justify-center rounded-xl border border-indigo-500/25 bg-indigo-500/10 px-2 text-xs font-semibold text-indigo-800 dark:text-indigo-200"><span className="truncate">{c.rows[0].label}</span></span>
+                                        : <span className="block h-full rounded-xl bg-muted/30" />}
+                                </div>
                             ) : c.rows[0].isBreak ? (
                                 <div key={c.rows[0].key} className={cn('relative my-1 rounded-md bg-amber-500/10', di > 0 && 'mt-2')} title={`${c.rows[0].label} · ${c.rows[0].time}`}>
                                     {di === 0 && <span className="absolute inset-x-0 top-2 mx-auto block w-fit text-[9px] font-semibold tracking-wider text-amber-700 uppercase [writing-mode:vertical-rl] dark:text-amber-300">{c.rows[0].label}</span>}

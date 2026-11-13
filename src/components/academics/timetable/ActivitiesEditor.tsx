@@ -24,7 +24,6 @@ export function ActivitiesEditor({ config, update }: { config: TimetableConfig; 
         <div className="flex flex-col gap-3">
             <div>
                 <h3 className="flex items-center gap-2 text-sm font-semibold"><Flag className="size-4 text-primary" aria-hidden />Assembly, games and clubs</h3>
-                <p className="text-xs text-muted-foreground">They show on every timetable, and no lesson is put in their time. One inside the school day takes those lesson periods on its days.</p>
             </div>
             {activities.map(a => {
                 const taken = lessonsTakenBy(config, a);
@@ -69,8 +68,8 @@ export function ActivitiesEditor({ config, update }: { config: TimetableConfig; 
                         {problem
                             ? <p role="alert" className="rounded-lg bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive">{problem}</p>
                             : taken.length > 0
-                                ? <p className="rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-900 dark:text-amber-200">Takes {taken.map(t => `${t.lessons} lesson${t.lessons === 1 ? '' : 's'} a week from ${t.name}`).join(', ')}. Check those classes still fit in Subjects &amp; hours.</p>
-                                : <p className="text-xs text-muted-foreground">Outside the lessons: no lesson time is lost.</p>}
+                                ? <p className="rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-900 dark:text-amber-200">Takes {taken.map(t => `${t.lessons} lesson${t.lessons === 1 ? '' : 's'} a week from ${t.name}`).join(', ')}.</p>
+                                : null}
                     </article>
                 );
             })}

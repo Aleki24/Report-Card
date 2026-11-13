@@ -89,16 +89,14 @@ export function TimetableRules({ plan, config, onChange }: { plan: TimetablePlan
 
     return (
         <View>
-            <Text style={styles.title}>Built-in rules on doubles</Text>
-            <Text style={styles.small}>How Skulbase places double lessons, as a timetabler would.</Text>
+            <Text style={styles.title}>Double lessons</Text>
             {DOUBLE_RULE_COPY.map((r) => (
                 <ToggleRow key={r.key} label={r.label} description={r.hint} value={doubles[r.key]}
                     onValueChange={(on) => void save(r.key, { doubles: { [r.key]: on } }, `${r.label}: ${on ? 'on' : 'off'}.`)} />
             ))}
 
             <Text style={[styles.title, { marginTop: spacing.lg }]}>Your rules</Text>
-            <Text style={styles.small}>Rules of your own for how subjects sit in the week. A “must” is broken only when nothing else fits; a “prefer” gives way to a better week.</Text>
-            {relations.length === 0 && !adding ? <Text style={[styles.small, styles.empty]}>No rules of your own yet. Most schools need none.</Text> : null}
+            {relations.length === 0 && !adding ? <Text style={[styles.small, styles.empty]}>No rules yet.</Text> : null}
             {relations.map((r) => {
                 const conflicts = ruleConflicts(r, plan.classes, plan.day.days);
                 const must = r.strength === 'must';
@@ -151,7 +149,7 @@ export function TimetableRules({ plan, config, onChange }: { plan: TimetablePlan
             {withDoubles.length > 0 ? (
                 <>
                     <Text style={[styles.title, { marginTop: spacing.lg }]}>Doubles across a short break</Text>
-                    <Text style={styles.small}>A double never spans lunch. Turn a subject on to let its double run on across a short break.</Text>
+                    <Text style={styles.small}>Never across lunch.</Text>
                     {withDoubles.map((s) => {
                         const on = s.ids.every((id) => spans.includes(id));
                         return (
