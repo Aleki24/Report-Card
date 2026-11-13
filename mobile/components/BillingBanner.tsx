@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Linking, Pressable, Text, View } from 'react-native';
 import { CalendarClock, ChevronDown, Lock } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { useCurrentUser } from '@/lib/UserContext';
 import { formatDate } from '@/lib/format';
@@ -18,6 +19,7 @@ export function BillingBanner() {
     const staff = !!role && role !== 'STUDENT' && role !== 'PARENT' && role !== 'PENDING';
     const query = useApiQuery<SchoolBilling>(staff ? BILLING_URL : null);
     const [open, setOpen] = useState(false);
+    const router = useRouter();
     const styles = useStyles();
     const { colors } = useTheme();
     if (!staff || !query.data) return null;
@@ -70,6 +72,9 @@ export function BillingBanner() {
                     ) : (
                         <Text style={styles.detail}>Payment details coming soon.</Text>
                     )}
+                    <Pressable onPress={() => router.push('/staff/settings?tab=subscription')} accessibilityRole="link" hitSlop={6}>
+                        <Text style={styles.link}>All invoices</Text>
+                    </Pressable>
                 </View>
             ) : null}
         </View>
@@ -94,5 +99,6 @@ const useStyles = makeStyles((colors) => ({
     pay: { borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.card, padding: spacing.sm, gap: 6 },
     row: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.md },
     rowLabel: { fontSize: 12, fontFamily: fonts.regular, color: colors.muted },
+    link: { fontSize: 13, fontFamily: fonts.semibold, color: colors.primary, marginTop: 4 },
     rowValue: { flexShrink: 1, textAlign: 'right', fontSize: 13, fontFamily: fonts.semibold, color: colors.foreground },
 }));

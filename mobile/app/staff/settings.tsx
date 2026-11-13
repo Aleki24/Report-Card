@@ -15,6 +15,7 @@ import {
 } from '@/components/ui';
 import { DutiesPanel, ModulesPanel } from '@/components/settings/ModulesAndDuties';
 import { PaymentsSetup } from '@/components/settings/PaymentsSetup';
+import { Subscription } from '@/components/settings/Subscription';
 import { NewGradingSystemSheet, OwnSystemActions } from '@/components/settings/GradingEditor';
 import { RequireScreen } from '@/components/RequireScreen';
 import { SignatureCard } from '@/components/account/SignatureCard';
@@ -37,7 +38,7 @@ interface SchoolProfile {
     overall_grading_system_id: string | null;
 }
 
-const SETTINGS_TABS = ['school', 'calendar', 'grading', 'payments', 'modules', 'duties'] as const;
+const SETTINGS_TABS = ['school', 'calendar', 'grading', 'payments', 'modules', 'duties', 'subscription'] as const;
 type Tab = (typeof SETTINGS_TABS)[number];
 type Msg = { tone: 'success' | 'danger'; text: string } | null;
 
@@ -53,7 +54,7 @@ function SettingsContent() {
     const [tab, setTab] = useTabParam<Tab>(SETTINGS_TABS, 'school');
     return (
         <Screen>
-            <ScreenHeader title="Settings" description="School profile, calendar, grading, payments, modules and duties." />
+            <ScreenHeader title="Settings" />
             <ChipSelect
                 options={[
                     { value: 'school', label: 'School' },
@@ -62,12 +63,13 @@ function SettingsContent() {
                     { value: 'payments', label: 'Payments' },
                     { value: 'modules', label: 'Modules' },
                     { value: 'duties', label: 'Duties' },
+                    { value: 'subscription', label: 'Subscription' },
                 ]}
                 value={tab}
                 onChange={setTab}
             />
             {tab === 'school' ? <SchoolTab /> : tab === 'calendar' ? <CalendarTab /> : tab === 'grading' ? <GradingTab />
-                : tab === 'payments' ? <PaymentsTab /> : tab === 'modules' ? <ModulesPanel /> : <DutiesPanel />}
+                : tab === 'payments' ? <PaymentsTab /> : tab === 'modules' ? <ModulesPanel /> : tab === 'subscription' ? <Subscription /> : <DutiesPanel />}
         </Screen>
     );
 }
