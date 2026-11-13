@@ -539,6 +539,10 @@ body {
 @layer components {
   /* Dashboard main content */
   .dashboard-main {
+    /* The containing block for absolutely placed content (screen-reader labels,
+       menus): without it they are placed against the page, outside this
+       scroller, and leave an empty band to scroll into below the content. */
+    position: relative;
     flex: 1;
     min-height: 100vh;
     min-width: 0;
