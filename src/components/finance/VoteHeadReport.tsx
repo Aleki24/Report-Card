@@ -68,7 +68,6 @@ export function VoteHeadReport({ canRemind }: { canRemind: boolean }) {
                 <section className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-card p-4 shadow-sm sm:flex-row sm:items-end sm:p-5">
                     <div className="sm:flex-1">
                         <h3 className="flex items-center gap-2 text-sm font-semibold"><MessageSquare className="size-4" aria-hidden />Balance reminders</h3>
-                        <p className="text-sm text-muted-foreground">Text the parents of learners billed this term who owe at least this much, arrears included. Each linked parent and the number on the learner&apos;s record gets one SMS, with your Paybill when it is set up.</p>
                     </div>
                     <FormField label="Owing at least (KES)" htmlFor="vh-min" className="sm:w-44"><InputField id="vh-min" type="number" min={1} value={minBalance} onChange={e => setMinBalance(e.target.value)} /></FormField>
                     <Button onClick={() => void remind(true)} disabled={sending}>Send reminders</Button>

@@ -71,9 +71,6 @@ export default function MinistryCombinationPicker({ offeredIdByCode, existingCod
         <section aria-labelledby="official-combinations" className="flex flex-col gap-4">
             <header>
                 <h4 id="official-combinations" className="text-sm font-bold">Official Ministry combinations</h4>
-                <p className="text-xs text-muted-foreground">
-                    All 511 combinations from the Grade 10 selection list, with their official codes. Tick the ones your school runs.
-                </p>
             </header>
 
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_repeat(2,minmax(0,1fr))]">

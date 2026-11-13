@@ -211,11 +211,6 @@ export default function CombinationsManager({ combinations, subjects, cbcLevelId
                             </button>
                         )}
                     />
-                    <p className="text-xs text-muted-foreground mb-4">
-                        A combination is a Ministry code for a track plus exactly 3 electives (e.g. AS2009 = Biology + Geography + Sports &amp; Recreation).
-                        Learners take these 3 electives alongside English, Kiswahili, Community Service Learning and Mathematics — Essential Mathematics
-                        unless the combination includes Core Mathematics. Groups need {minGroupSize}+ learners to run as their own class.
-                    </p>
 
                     {!showForm && (
                         <div className="mb-2 rounded-lg border border-border/50 bg-muted/30 p-4">
@@ -230,12 +225,6 @@ export default function CombinationsManager({ combinations, subjects, cbcLevelId
 
                     {showForm && (
                         <>
-                            {!editingId && (
-                                <p className="mb-3 text-xs text-muted-foreground">
-                                    A custom combination is for one your school runs that is not on the Ministry list. Official ones are added from the list above.
-                                </p>
-                            )}
-
                             <div className="flex flex-wrap gap-3 items-end mb-3">
                                 <div className="w-32">
                                     <label className="block text-xs text-muted-foreground mb-2 font-medium">Code *</label>

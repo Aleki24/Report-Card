@@ -38,7 +38,6 @@ export default function DisciplinePage() {
                         defaults={incidentDefaults()}
                         addLabel="Report incident"
                         searchText={i => `${studentName(i.student)} ${admissionNo(i.student)} ${i.category} ${i.description}`}
-                        header={() => (!manage ? <p className="text-sm text-muted-foreground">You see the incidents you reported. The discipline master decides the action.</p> : null)}
                         rowActions={(i, reload) => (manage && !i.parent_notified ? (
                             <ActionButton url={`/api/welfare/discipline/${i.id}/notify`} success="Guardian asked to contact the school." onDone={reload} variant="outline"><MessageSquare />Tell parent</ActionButton>
                         ) : null)}

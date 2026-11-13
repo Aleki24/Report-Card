@@ -255,7 +255,6 @@ export function DayStructureEditor({ onSaved }: { onSaved?: () => void } = {}) {
 
             <div>
                 <h3 className="text-sm font-semibold">{config.sections.length > 0 ? 'Main school day' : 'Periods and breaks'}</h3>
-                <p className="mb-3 text-xs text-muted-foreground">{config.sections.length > 0 ? 'For classes in no section below. ' : ''}Change a time and every later period moves with it. Untick a day to run a period only on some days, e.g. a ninth lesson on Friday.</p>
                 <BellEditor key={`main-${rev}`} id="main" periods={config.periods} schoolDays={config.days} onChange={periods => update(c => ({ ...c, periods }))} />
             </div>
 

@@ -277,7 +277,7 @@ export function PaymentsTab() {
                         </button>
                     </div>
                     {!settings?.configured && (
-                        <p className="mt-2 text-[11px] text-muted-foreground">Save a shortcode, consumer key/secret, and passkey before registering callback URLs.</p>
+                        <p className="mt-2 text-[11px] text-muted-foreground">Save the payment details first.</p>
                     )}
                 </div>
             )}
@@ -309,10 +309,6 @@ export function PaymentsTab() {
                             />
                         </div>
                     </div>
-                    <p className="mt-3 text-[11px] text-muted-foreground">
-                        Saving with Pesapal selected automatically registers your payment-notification URL with Pesapal — no separate step needed.
-                        {settings?.pesapalConfigured ? ' Currently registered and ready.' : ''}
-                    </p>
                 </div>
             )}
 
@@ -320,10 +316,6 @@ export function PaymentsTab() {
                 <div className="mb-4 flex items-start justify-between gap-3">
                     <div>
                         <h3 className="font-bold text-sm">Bank Transfer</h3>
-                        <p className="mt-1 text-[11px] text-muted-foreground">
-                            Show your bank account(s) as a pay-in option alongside {activeProvider === 'NONE' ? 'M-Pesa/Pesapal' : PROVIDERS.find(p => p.value === activeProvider)?.label}.
-                            Deposits are always reconciled manually — there&apos;s no automatic bank webhook, so record each one under Fees once it clears.
-                        </p>
                     </div>
                     <label className="flex shrink-0 cursor-pointer items-center gap-2">
                         <input type="checkbox" checked={bankEnabled} onChange={e => setBankEnabled(e.target.checked)} />
@@ -418,13 +410,6 @@ export function PaymentsTab() {
             </div>
 
             {/* Money that came in without a learner is matched with the rest of the fees work. */}
-            <p className="flex items-start gap-2 rounded-xl border border-border/70 bg-muted/30 p-3 text-sm text-muted-foreground">
-                <ScanSearch className="mt-0.5 size-4 shrink-0" aria-hidden />
-                <span>
-                    Paybill payments whose account number matched no learner wait on{' '}
-                    <Link href="/dashboard/fees?view=reconcile" className="font-medium text-primary hover:underline">Fees › Reconcile</Link>, each with the learners it most likely belongs to.
-                </span>
-            </p>
             <ConfirmDialog
                 isOpen={removingAccount !== null}
                 onClose={() => setRemovingAccount(null)}

@@ -52,9 +52,6 @@ export function StudentCommentsSection({ open, setOpen, comments, dirtyIds, savi
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <StepHeading step={3} title="Comments on the cards" />
-            <p className="mt-1 text-xs text-muted-foreground sm:pl-[2.625rem]">
-              The class teacher&apos;s and principal&apos;s remarks for each learner this term. Leave one blank and the card writes a remark from the learner&apos;s results.
-            </p>
           </div>
           <button type="button" className="btn-secondary h-9 shrink-0 text-xs" aria-expanded={open} aria-controls={`${id}-panel`} onClick={() => setOpen(!open)}>
             {open ? <ChevronUp className="size-3.5" aria-hidden /> : <ChevronDown className="size-3.5" aria-hidden />}

@@ -380,9 +380,6 @@ export function ExamResultsTable({ marks, maxScore, examId, gradeStreamId, schem
 
             {/* How to fix a wrong mark — said where mistakes are spotted */}
             <div className="mb-4 flex flex-col gap-3 rounded-xl border border-primary/20 bg-primary/[0.05] p-3 text-sm sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-muted-foreground">
-                    <strong className="text-foreground">Spotted a wrong mark?</strong> Tap the pencil on the learner&apos;s row to fix it{markEntryLink ? ', or open the mark sheet to correct several at once.' : '.'}
-                </p>
                 {markEntryLink && (
                     <Link href={markEntryLink} className="btn-secondary inline-flex shrink-0 items-center justify-center gap-1.5 px-3 py-1.5 text-xs">
                         <PenLine size={13} aria-hidden /> Correct marks

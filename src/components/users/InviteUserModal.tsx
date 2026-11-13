@@ -40,7 +40,6 @@ export function InviteUserModal(props: InviteUserModalProps) {
   return (
     <ModalOverlay onClose={onClose}>
       <h2 className="text-lg font-bold font-[family-name:var(--font-display)] mb-2">Add User</h2>
-      <p className="text-xs text-muted-foreground mb-6">Add a phone number. The user will receive an invite code to set up their own account.</p>
 
       <form onSubmit={onSubmit}>
         {formError && <div className="mb-4 p-3 rounded-md text-sm bg-red-500/10 text-red-400 border border-red-500/30">{formError}</div>}
@@ -76,7 +75,6 @@ export function InviteUserModal(props: InviteUserModalProps) {
               <option value="">-- Select --</option>
               {STAFF_JOB_TITLES.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
-            <p className="text-[10px] text-muted-foreground mt-1">Non-teaching staff (e.g. Bursar, Secretary). They sign in for announcements; grant more access later if needed.</p>
           </div>
         )}
 

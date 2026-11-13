@@ -73,11 +73,6 @@ export default function PlacementManager(props: Props) {
                 <h3 id="placement-heading" className="flex items-center gap-2 text-sm font-bold">
                     <Sparkles size={16} className="text-primary" aria-hidden /> Place learners from their marks
                 </h3>
-                <p className="mt-1 mb-4 max-w-3xl text-xs text-muted-foreground">
-                    Teachers only record marks for learners who take a subject, so those marks show what each learner studies.
-                    Pick a class, check the suggestions, adjust anything that is wrong, and apply. Nothing changes until you apply.
-                    CBC Senior School learners get a combination and a maths; 8-4-4 students get the electives they take.
-                </p>
                 <label className="block w-full sm:w-72">
                     <span className="mb-2 block text-xs font-medium text-muted-foreground">Class</span>
                     <select
@@ -337,15 +332,11 @@ function ElectiveTable({ data, onApply, onError }: TableProps<ElectivePlacementR
     };
 
     if (data.electives.length === 0) {
-        return <p className="card p-5 text-sm text-muted-foreground">Your school offers no 8-4-4 electives — every subject is compulsory, so every student is on every mark sheet.</p>;
+        return <p className="card p-5 text-sm text-muted-foreground">No electives: every learner takes every subject.</p>;
     }
 
     return (
         <div className="card overflow-hidden min-[769px]:p-0">
-            <p className="border-b border-border px-4 py-3 text-xs text-muted-foreground sm:px-5">
-                Compulsory subjects list the whole class automatically. Tick the electives each student takes — pre-filled from the marks
-                already recorded (<span className="font-semibold text-primary">•</span> marks a subject the student has marks in).
-            </p>
             <ul className="divide-y divide-border">
                 {data.learners.map(l => {
                     const set = picked[l.studentId] ?? new Set<string>();

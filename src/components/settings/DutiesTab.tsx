@@ -73,7 +73,6 @@ export function DutiesTab() {
             <div className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-card p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:p-5">
                 <div>
                     <h2 className="text-base font-semibold text-foreground">Roles &amp; duties</h2>
-                    <p className="text-sm text-muted-foreground">Give staff the jobs they do: a teacher can also be DOS or a patron; a bursar or nurse signs in as Staff and gets their module.</p>
                 </div>
                 <Button onClick={() => setOpen(true)}><Plus />Assign duty</Button>
             </div>

@@ -229,9 +229,6 @@ export default function ClassAnalytics({ streamId, termId, periodLabel }: ClassA
             {/* ── Subject ranking, best first ──────────────────────────────── */}
             <section className="rounded-2xl border border-border/70 bg-card p-4 shadow-sm sm:p-5">
                 <h3 className="flex items-center gap-2 font-semibold"><Award className="size-4 text-primary" aria-hidden="true" />Subject ranking</h3>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                    Ranked from highest to lowest mean score. Colour shows the pass rate; grades come from this school&apos;s own scale.
-                </p>
 
                 <ol className="mt-4 space-y-3">
                     {subjectRanking.map(s => (

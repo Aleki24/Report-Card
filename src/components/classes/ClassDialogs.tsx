@@ -144,7 +144,6 @@ function RenameClass({ cls, gradeName, onClose, onRenamed }: RenameClassModalPro
         <FormField label="Full name" required htmlFor={`${id}-full`} hint="Shown on mark sheets and report cards.">
           <InputField id={`${id}-full`} value={fullName} onChange={e => { setFullName(e.target.value); setFullNameTouched(true); }} maxLength={100} />
         </FormField>
-        <p className="text-xs text-muted-foreground">Students, teachers and exams stay with the class; only its name changes.</p>
       </div>
     </Modal>
   );

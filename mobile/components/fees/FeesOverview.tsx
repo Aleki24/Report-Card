@@ -39,7 +39,6 @@ export function FeesOverview({ onGo }: { onGo: (tab: OverviewTab) => void }) {
                 <Text style={styles.score}>{health.score}<Text style={styles.outOf}>  out of 100</Text></Text>
                 <ProgressBar value={health.score} color={tone} />
                 <Text style={[styles.grade, { color: tone }]}>{grade.label}</Text>
-                <Text style={styles.muted}>How well money is matched to learners, checked against statements, signed off each day, and chased.</Text>
             </Card>
 
             <SectionLabel>{health.fixes.length > 0 ? 'Fix these first' : 'Nothing urgent'}</SectionLabel>

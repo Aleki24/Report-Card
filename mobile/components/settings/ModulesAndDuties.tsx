@@ -170,7 +170,6 @@ export function DutiesPanel() {
         <View>
             <Card style={{ marginBottom: spacing.md }}>
                 <Text style={styles.title}>Roles & duties</Text>
-                <Text style={styles.muted}>Give staff the jobs they do: a teacher can also be DOS or a patron; a bursar or nurse signs in as Staff and gets their module.</Text>
                 <View style={{ marginTop: spacing.md }}><Button icon={Plus} label="Assign duty" onPress={() => setOpen(true)} block /></View>
             </Card>
 

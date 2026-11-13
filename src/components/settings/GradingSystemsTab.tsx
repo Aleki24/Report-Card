@@ -279,7 +279,6 @@ export function GradingSystemsTab({
                     </div>
                     <p className="text-[11px] text-muted-foreground mb-1 sm:hidden">Swipe the grid sideways to reach every column.</p>
                     <button type="button" className="btn-secondary mb-2" onClick={addRow}>+ Add Row</button>
-                    <p className="text-[11px] text-muted-foreground mb-5">Adding a row auto-fills the next grade{isOverall ? '' : ', high mark, and points (A = 12, A- = 11 …)'} from the row above — just set the low value.</p>
 
                     {!isOverall && (
                         <div className="mb-2">

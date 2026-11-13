@@ -115,7 +115,6 @@ export function FollowUps({ studentId }: { studentId: string }) {
                     }
                 />
             ))}
-            <Text style={styles.foot}>Promises are checked against payments made from the day they were written to the date given.</Text>
         </View>
     );
 }

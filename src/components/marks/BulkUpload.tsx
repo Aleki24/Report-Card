@@ -270,9 +270,6 @@ export function BulkUpload({ examId, subjectId, gradeStreamId, gradeId }: Props)
                             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />
                         </svg>
                         <h3 className="text-xl font-bold font-[family-name:var(--font-display)] mb-2">Upload Marks File</h3>
-                        <p className="text-muted-foreground text-sm max-w-md mx-auto">
-                            Upload a CSV or Excel (.xlsx) file with columns for student name, admission number, and score. Columns will be auto-detected.
-                        </p>
                     </div>
                     <label className="btn-primary cursor-pointer w-full sm:w-auto justify-center">
                         Choose File
@@ -291,9 +288,6 @@ export function BulkUpload({ examId, subjectId, gradeStreamId, gradeId }: Props)
             {step === 'map' && (
                 <div className="card">
                     <h3 className="text-lg font-bold font-[family-name:var(--font-display)] mb-4">Map Columns</h3>
-                    <p className="text-muted-foreground text-sm mb-6">
-                        We auto-detected your columns. Please verify or adjust the mapping below.
-                    </p>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
                         {(Object.keys(mapping) as (keyof ColumnMapping)[]).map((field) => (

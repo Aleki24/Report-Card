@@ -299,7 +299,6 @@ function LinkParentForm({ studentId, initial, onCancel, onLinked }: { studentId:
                     {GUARDIAN_RELATIONSHIPS.map(r => <option key={r} value={r}>{humanize(r)}</option>)}
                 </select>
             </div>
-            <p className="mt-2 text-xs text-muted-foreground">A parent already linked to another child is matched by phone. New parents get an invite code by SMS.</p>
             {error && <p role="alert" className="mt-2 text-xs text-destructive">{error}</p>}
             <div className="mt-3 flex justify-end gap-2">
                 <button type="button" className="btn-secondary h-9 px-3 text-xs" onClick={onCancel}>Cancel</button>

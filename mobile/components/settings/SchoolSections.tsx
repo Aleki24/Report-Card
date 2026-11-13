@@ -56,9 +56,6 @@ export function SchoolSections() {
         <View>
             <Card style={{ marginBottom: spacing.md }}>
                 <SectionLabel>Sections and their heads</SectionLabel>
-                <Text style={styles.note}>
-                    Each section’s head signs its own classes’ report cards and mark sheets. Classes in no section are signed by the principal above.
-                </Text>
                 {query.error ? <ErrorBanner message={query.error} onRetry={query.reload} /> : null}
                 {message ? <Notice tone={message.tone} message={message.text} onDismiss={() => setMessage(null)} /> : null}
                 {sections.length === 0 ? (

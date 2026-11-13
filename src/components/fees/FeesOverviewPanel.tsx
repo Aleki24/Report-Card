@@ -91,7 +91,6 @@ export function FeesOverviewPanel({ onGo }: { onGo: (target: Extract<FixTarget, 
                     </p>
                     <Meter value={health.score} hue={grade.hue} label="Fees health score" />
                     <p className={cn('text-sm font-semibold', METER[grade.hue].text)}>{grade.label}</p>
-                    <p className="text-xs text-muted-foreground">How well money is matched to learners, checked against statements, signed off each day, and chased.</p>
                 </div>
                 <div className="flex min-w-0 flex-col gap-2">
                     <h3 className="text-sm font-semibold">{health.fixes.length > 0 ? 'Fix these first' : 'Nothing urgent'}</h3>

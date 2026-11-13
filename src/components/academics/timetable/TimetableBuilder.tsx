@@ -317,7 +317,7 @@ export function TimetableBuilder({ plan, onGenerated }: { plan?: TimetablePlan |
                     <TimetableGrid config={config} lessons={shown} mode={view} selectedId={selected?.id} onCellClick={view === 'class' ? onCell : undefined} hintAt={view === 'class' ? hintAt : undefined} />
                 </section>
             )}
-            {versions.length === 0 && <p className="rounded-2xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">No drafts yet. When every step is ready, generate one with the button at the top.</p>}
+            {versions.length === 0 && <p className="rounded-2xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">No drafts yet.</p>}
 
             <Modal
                 isOpen={confirm === 'publish'}

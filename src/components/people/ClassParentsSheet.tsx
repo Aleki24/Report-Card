@@ -104,7 +104,6 @@ export function ClassParentsSheet() {
                             <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-rose-500/10 text-rose-600 dark:text-rose-400" aria-hidden="true"><Users className="size-5" /></span>
                             <div>
                                 <p className="text-sm font-semibold">{linkedCount} of {learners.length} learners have a parent linked</p>
-                                <p className="text-xs text-muted-foreground">Fill in a parent for the rest. Rows with both names and a phone are linked; empty rows are skipped.</p>
                             </div>
                         </div>
                         <Button onClick={() => void save()} disabled={saving || toLink.length === 0} className="shrink-0">

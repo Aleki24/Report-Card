@@ -95,7 +95,7 @@ export default function MarkingProgressPanel({ items, termName, loading, limit =
                 <div className="flex flex-col items-center gap-2 py-10 text-center">
                     <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-muted text-muted-foreground"><ClipboardList size={20} aria-hidden /></span>
                     <p className="text-sm font-semibold">No exams to mark yet</p>
-                    <p className="max-w-xs text-xs text-muted-foreground">When your admin sets up this term&apos;s exams for your subjects, they will show up here.</p>
+                    <p className="max-w-xs text-xs text-muted-foreground">No exams for your subjects yet.</p>
                 </div>
             ) : (
                 <>

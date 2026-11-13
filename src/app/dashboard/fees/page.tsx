@@ -693,9 +693,6 @@ function FeesPageInner() {
                                         <FileText size={20} />
                                     </div>
                                     <h4 className="font-bold text-sm mb-1">Add a fee record</h4>
-                                    <p className="text-xs text-muted-foreground leading-relaxed">
-                                        Create a fee record for an individual student with amount, due date, and notes.
-                                    </p>
                                 </button>
                                 <button
                                     className="rounded-2xl border border-border/70 bg-card p-5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-md"
@@ -705,9 +702,6 @@ function FeesPageInner() {
                                         <Upload size={20} />
                                     </div>
                                     <h4 className="font-bold text-sm mb-1">Batch entry</h4>
-                                    <p className="text-xs text-muted-foreground leading-relaxed">
-                                        Select a class and term, then bulk-enter fees for multiple students at once.
-                                    </p>
                                 </button>
                             </div>
                             )}

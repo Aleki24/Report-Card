@@ -111,7 +111,6 @@ export function ExamPaperDrawer({ paperId, moderators, onClose, onChanged }: Pro
                         <section className="flex flex-wrap gap-2">
                             <Button variant="outline" onClick={() => openFile('paper')} disabled={!paper.paper_path}><FileText />Open paper</Button>
                             <Button variant="outline" onClick={() => openFile('scheme')} disabled={!paper.scheme_path}><Download />Marking scheme</Button>
-                            <p className="w-full text-[11px] text-muted-foreground">PDFs open stamped with your name and the time. Every download is logged.</p>
                         </section>
                     )}
 

@@ -163,11 +163,6 @@ export default function SchoolOverview({ yearId, termId, onSelectClass, onShowWh
             <section className="overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm">
                 <div className="flex flex-col gap-1 border-b border-border/70 p-4 sm:p-5">
                     <h2 className="font-semibold">Classes, weakest first</h2>
-                    <p className="text-xs leading-snug text-muted-foreground">
-                        Pass rate is the share of marks at or above {summary.pass_mark}%. CBC and 8-4-4 are graded
-                        differently, so each row names its curriculum. Open a class for its
-                        subjects and merit list.
-                    </p>
                 </div>
 
                 <ul className="divide-y divide-border/60">
