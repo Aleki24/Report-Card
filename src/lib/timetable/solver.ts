@@ -34,7 +34,7 @@
  *     rather than piled on one;
  *   - doubles as a timetabler places them (each switchable): one a day for
  *     a class, never one straight after another, at different times of day;
- *   - the school's own rules (aSc's card relationships): two subjects not on
+ *   - the school's own rules: two subjects not on
  *     the same day or not one after the other, a subject not on two days in
  *     a row; a "must" weighs four times a "prefer";
  *   - no more than `maxConsecutive` lessons in a row for a teacher, and a

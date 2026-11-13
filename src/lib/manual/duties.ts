@@ -122,7 +122,7 @@ export const leadershipManual: Manual = {
                 {
                     id: 'rules',
                     title: 'Rules (optional)',
-                    summary: 'How double lessons are placed, and rules of your own, like the card relationships in aSc Timetables. Most schools need none of their own: the built-in rules already spread subjects and doubles well.',
+                    summary: 'How double lessons are placed, and rules of your own for how subjects sit in the week. Most schools need none of their own: the built-in rules already spread subjects and doubles well.',
                     steps: [
                         { title: 'Keep or change the rules on doubles', body: '“One double a day”, “No double after a double” (a short break does not part two doubles; lunch does) and “Doubles at different times” are on for every school. Turn one off only if your school does it differently.' },
                         { title: 'Add a rule of your own', body: 'Press “Add a rule” and pick its kind: two subjects not on the same day, never one straight after the other, or a subject not on two days in a row. Pick the subjects, every class or only some, and how firm it is: a “Must” is broken only when nothing else fits; a “Prefer” gives way to a better week.' },

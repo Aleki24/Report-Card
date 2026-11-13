@@ -88,7 +88,7 @@ export const timetableConfigSchema = z.object({
          * no teacher or room would clash. On unless the school turns it off.
          */
         fill_free_periods: z.boolean().default(true),
-        /** The school's own rules (aSc's card relationships): subjects apart, not on end, not on days in a row. */
+        /** The school's own rules: subjects apart, not on end, not on days in a row. */
         relations: z.array(timetableRuleSchema).max(MAX_RULES).default([]),
         /** The built-in rules on doubles, each on unless turned off. */
         doubles: doubleRulesSchema.default(DEFAULT_DOUBLE_RULES),
