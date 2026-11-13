@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type PointerEvent } from 'react';
+import { PLAN_FOOTNOTE } from '@/lib/pricing';
 import Link from 'next/link';
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -259,7 +260,7 @@ export default function HeroSection() {
           </div>
 
           <p className="text-sm text-muted-foreground">
-            KES 5,000 per term · every module included. <br className="sm:hidden" />
+            {PLAN_FOOTNOTE}. <br className="sm:hidden" />
             Already have an account?{' '}
             <Link href="/login" className="font-semibold text-primary underline-offset-4 hover:underline focus-visible:underline focus-visible:outline-none">
               Sign in

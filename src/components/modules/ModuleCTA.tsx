@@ -1,4 +1,5 @@
 import type { Module } from '@/lib/modules';
+import { PLAN_FOOTNOTE } from '@/lib/pricing';
 import { CtaLink } from '@/components/landing/ui/CtaLink';
 import { CtaPanel } from '@/components/landing/ui/CtaPanel';
 
@@ -19,7 +20,7 @@ export default function ModuleCTA({ module }: ModuleCTAProps) {
           <CtaLink href="/signup" variant="outline" className="bg-transparent">Register Your School</CtaLink>
         </>
       }
-      footnote="KES 5,000 per term · every module included"
+      footnote={PLAN_FOOTNOTE}
     />
   );
 }

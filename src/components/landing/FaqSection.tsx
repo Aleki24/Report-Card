@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Plus } from 'lucide-react';
 import { Section, SectionHeader } from './ui/Section';
+import { STARTING_PRICE } from '@/lib/pricing';
 
 type Faq = {
   question: string;
@@ -11,7 +12,7 @@ const FAQS: Faq[] = [
   {
     question: 'How much does Skulbase cost?',
     answer:
-      'One plan: KES 5,000 per term with every module included — unlimited students, unlimited teachers, report cards, attendance, analytics and parent management. No per-learner fees.',
+      `Every plan has every module. You pay by school size, per term: from ${STARTING_PRICE} for up to 300 learners. Pay the year and save; your first term is free.`,
   },
   {
     question: 'Does it support both CBC and 8-4-4?',
