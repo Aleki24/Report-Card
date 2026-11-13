@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { BillingBanner } from './BillingBanner';
 import {
     ActivityIndicator,
     Image,
@@ -103,8 +104,9 @@ export function Screen({
  * gradient tile in the section's colour, the section name above the title.
  * Taken from the route, so screens need not pass them.
  */
-export function ScreenHeader({ title, description, action, icon, hue, eyebrow }: {
+export function ScreenHeader({ title, action, icon, hue, eyebrow }: {
     title: string;
+    /** What the screen is for: not shown (people learn by doing; the guide is in Help). */
     description?: string;
     action?: React.ReactNode;
     icon?: LucideIcon;
@@ -132,8 +134,8 @@ export function ScreenHeader({ title, description, action, icon, hue, eyebrow }:
                 </View>
                 {action}
             </View>
-            {/* Under the title at full width, so a header button doesn't squeeze it into a column. */}
-            {description ? <Text style={[styles.headerDesc, Icon ? styles.headerDescIndent : null]}>{description}</Text> : null}
+            {/* An unpaid Skulbase subscription, under every screen's title. */}
+            <BillingBanner />
         </View>
     );
 }

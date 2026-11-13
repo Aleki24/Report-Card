@@ -1,4 +1,5 @@
 import React from 'react';
+import { BillingBanner } from '@/components/BillingBanner';
 import { Screen } from '@/components/ui';
 import { Image, Pressable, Text, TextInput, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -139,8 +140,14 @@ export function ProfileBar() {
  * Every home's screen: the signed-in person's bar stays pinned at the top
  * while the hero and sections scroll beneath it.
  */
-export function HomeScreen(props: Omit<React.ComponentProps<typeof Screen>, 'header'>) {
-    return <Screen {...props} header={<ProfileBar />} />;
+export function HomeScreen({ children, ...props }: Omit<React.ComponentProps<typeof Screen>, 'header'>) {
+    return (
+        <Screen {...props} header={<ProfileBar />}>
+            {/* An unpaid Skulbase subscription, first thing on every home. */}
+            <BillingBanner />
+            {children}
+        </Screen>
+    );
 }
 
 /** A figure on the hero's frosted glass: learners, present today, pass rate. */
