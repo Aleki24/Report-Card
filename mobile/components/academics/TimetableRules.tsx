@@ -36,7 +36,7 @@ function Conflicts({ lines }: { lines: readonly string[] }) {
 
 /**
  * The web's Rules step: the built-in rules on doubles, the school's own rules
- * (as aSc's card relationships) and the subjects whose doubles may run across
+ * (subjects kept apart, not on end, not on days in a row) and the subjects whose doubles may run across
  * a short break. A phone rule holds for one class or every class.
  */
 export function TimetableRules({ plan, config, onChange }: { plan: TimetablePlan; config: TimetableConfig; onChange: () => void }) {
@@ -97,7 +97,7 @@ export function TimetableRules({ plan, config, onChange }: { plan: TimetablePlan
             ))}
 
             <Text style={[styles.title, { marginTop: spacing.lg }]}>Your rules</Text>
-            <Text style={styles.small}>Like aSc’s card relationships. A “must” is broken only when nothing else fits; a “prefer” gives way to a better week.</Text>
+            <Text style={styles.small}>Rules of your own for how subjects sit in the week. A “must” is broken only when nothing else fits; a “prefer” gives way to a better week.</Text>
             {relations.length === 0 && !adding ? <Text style={[styles.small, styles.empty]}>No rules of your own yet. Most schools need none.</Text> : null}
             {relations.map((r) => {
                 const conflicts = ruleConflicts(r, plan.classes, plan.day.days);

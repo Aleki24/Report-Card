@@ -1,5 +1,5 @@
 /**
- * A school's own timetable rules, as aSc's card relationships: two subjects
+ * A school's own timetable rules, as a timetabler sets them: two subjects
  * never on the same day, never one straight after the other, a subject never
  * on two days in a row. Each is a must or a preference. Plus switches for
  * the built-in rules on doubles, and the subjects whose doubles may run

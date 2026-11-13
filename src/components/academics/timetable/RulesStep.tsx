@@ -128,7 +128,7 @@ function Conflicts({ lines }: { lines: readonly string[] }) {
 }
 
 /**
- * Rules: the school's own, as aSc's card relationships (two subjects not on
+ * Rules: the school's own, as a timetabler sets them (two subjects not on
  * the same day, not one after the other, a subject not on days in a row),
  * each a must or a preference; switches for the built-in rules on doubles;
  * and the subjects whose doubles may run across a short break.
@@ -183,7 +183,7 @@ export function RulesStep({ plan, config, onChange }: { plan: TimetablePlan; con
                 </ul>
             </Block>
 
-            <Block title="Your rules" hint="Rules of your own, like the card relationships in aSc. A “must” is broken only when nothing else fits; a “prefer” gives way to a better week.">
+            <Block title="Your rules" hint="Rules of your own for how subjects sit in the week. A “must” is broken only when nothing else fits; a “prefer” gives way to a better week.">
                 {relations.length === 0 && !adding && (
                     <p className="rounded-xl border border-dashed border-border p-4 text-center text-sm text-muted-foreground">No rules of your own yet. Most schools need none: add one only for something your school insists on.</p>
                 )}
