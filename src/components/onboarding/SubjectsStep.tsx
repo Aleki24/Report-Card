@@ -42,10 +42,6 @@ export default function SubjectsStep({ grades, offer, onOfferChange }: Props) {
         <div className="space-y-6">
             <header>
                 <h2 className="mb-1 text-xl font-bold">Subjects</h2>
-                <p className="text-sm text-muted-foreground">
-                    Exams and mark sheets need subjects. Start with the ones every learner takes; add electives and optional
-                    subjects on the Subjects page once you&apos;re in.
-                </p>
             </header>
 
             <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-border p-4">

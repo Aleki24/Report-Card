@@ -141,7 +141,7 @@ export function DriverMode() {
         return (
             <div className="flex flex-col gap-4">
                 {trips.length === 0 ? (
-                    <p className="rounded-2xl border border-border/60 bg-card p-8 text-center text-sm text-muted-foreground">No trips assigned to you right now. Ask the transport manager to schedule one and link your account under Crew.</p>
+                    <p className="rounded-2xl border border-border/60 bg-card p-8 text-center text-sm text-muted-foreground">No trips assigned to you right now.</p>
                 ) : (
                     <>
                         <FormField label="Odometer at start (optional)" htmlFor="odo-start" className="max-w-xs">

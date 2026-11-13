@@ -149,7 +149,7 @@ export function FollowUpsSection({ studentId, canWrite, canRemove, onChanged }: 
             {load.state === 'loading' && <div className="h-14 animate-pulse rounded-2xl bg-muted/60" aria-busy="true" />}
             {load.state === 'error' && <p role="alert" className="text-sm text-destructive">{load.message}</p>}
             {load.state === 'ready' && load.items.length === 0 && !adding && (
-                <p className="text-sm text-muted-foreground">No follow-ups yet. Note each call, and write down promises to pay: Skulbase checks them against the payments.</p>
+                <p className="text-sm text-muted-foreground">No follow-ups yet.</p>
             )}
             {load.state === 'ready' && load.items.length > 0 && (
                 <ul className="flex flex-col divide-y divide-border/60 rounded-2xl border border-border/70">

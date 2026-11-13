@@ -169,7 +169,6 @@ export function TermComparisonModal({ onClose, academicYears, terms, gradeStream
                                 </table>
                             </div>
                         )}
-                        <p className="mt-3 text-[11px] text-muted-foreground">Uses the learners in this class today, so a learner who joined or left counts only where they have marks.</p>
                     </>
                 )}
             </div>

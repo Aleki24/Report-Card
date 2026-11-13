@@ -6,7 +6,7 @@
  * week, in clock order.
  */
 import { bandForGrade } from '../curriculum-bands';
-import { minutesOf, runsOn, sectionFor, type TimetableConfig, type TimetableLesson, type TimetablePeriod } from './config';
+import { activitiesOf, bellFor, minutesOf, runsOn, sectionFor, timesOverlap, type ActivityKind, type TimetableActivity, type TimetableConfig, type TimetableLesson, type TimetablePeriod } from './config';
 
 export interface GridRow {
     key: string;
@@ -18,6 +18,10 @@ export interface GridRow {
     end: number;
     /** The weekdays the row's period runs, when not every day. */
     days?: readonly number[];
+    /** An activity's own row (assembly before the first lesson): shown like a break, on its days. */
+    activity?: ActivityKind;
+    /** The activity that has this lesson period on a day (Games on Wednesday afternoon), by weekday. */
+    taken?: Readonly<Record<number, string>>;
 }
 
 /** Whether a row's period runs on a weekday (a Friday-only lesson does not on Monday). */
@@ -25,7 +29,7 @@ export const rowRunsOn = (row: Pick<GridRow, 'days'>, day: number) => runsOn(row
 
 /** The periods of the bell a lesson's class follows. */
 export function periodsOfLesson(config: TimetableConfig, lesson: Pick<TimetableLesson, 'stream'>): TimetablePeriod[] {
-    return sectionFor(config, bandForGrade(lesson.stream?.grade ?? null)).periods;
+    return bellFor(config, bandForGrade(lesson.stream?.grade ?? null)).periods;
 }
 
 /** A lesson's clock time, or null if its period no longer exists. */
@@ -45,8 +49,9 @@ const rowOf = (p: TimetablePeriod, key: string): GridRow => ({
 export function gridRows(config: TimetableConfig, lessons: readonly TimetableLesson[]): GridRow[] {
     const bells = new Set(lessons.map(l => periodsOfLesson(config, l)));
     if (bells.size <= 1) {
-        const periods = bells.size === 1 ? [...bells][0] : config.periods;
-        return periods.map((p, i) => rowOf(p, `p${i}`));
+        const section = sectionFor(config, lessons[0] ? bandForGrade(lessons[0].stream?.grade ?? null) : null);
+        const periods = bells.size === 1 ? [...bells][0] : bellFor(config, null).periods;
+        return withActivityRows(section.periods, periods, activitiesOf(config, section.id));
     }
     const seen = new Map<string, GridRow>();
     for (const l of lessons) {
@@ -114,4 +119,27 @@ export function dayCells(config: TimetableConfig, lessons: readonly TimetableLes
 /** Each subject on a timetable gets its own colour, by its code A to Z; `palette` is how many colours there are. */
 export function subjectColours(codes: readonly string[], palette: number): Map<string, number> {
     return new Map([...new Set(codes)].sort((a, b) => a.localeCompare(b)).map((code, i) => [code, i % palette]));
+}
+
+/**
+ * A bell's rows with its activities: a lesson period an activity takes on
+ * some days says so on those days; an activity clear of every lesson period
+ * (assembly before the first, games after the last) gets a row of its own.
+ */
+function withActivityRows(raw: readonly TimetablePeriod[], periods: readonly TimetablePeriod[], activities: readonly TimetableActivity[]): GridRow[] {
+    const rows = periods.map((p, i) => {
+        const row = rowOf(p, `p${i}`);
+        const original = raw[i];
+        if (p.is_break || !original) return row;
+        const taken: Record<number, string> = {};
+        activities.filter(a => timesOverlap(original, a)).forEach(a => a.days.forEach(d => { taken[d] ??= a.label; }));
+        return Object.keys(taken).length > 0 ? { ...row, taken } : row;
+    });
+    const own = activities
+        .filter(a => !raw.some(p => !p.is_break && timesOverlap(p, a)))
+        .map((a): GridRow => ({
+            key: `a${a.id}`, label: a.label, time: `${a.start}–${a.end}`, isBreak: true,
+            start: minutesOf(a.start), end: minutesOf(a.end), days: [...a.days].sort((x, y) => x - y), activity: a.kind,
+        }));
+    return [...rows, ...own].sort((a, b) => a.start - b.start || a.end - b.end);
 }

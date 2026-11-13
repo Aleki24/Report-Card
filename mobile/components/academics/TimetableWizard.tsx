@@ -323,7 +323,6 @@ function SubjectTimes({ plan, onChange }: { plan: TimetablePlan; onChange: () =>
                 <Text style={[styles.fitName, { flex: 1 }]}>When subjects are best taught</Text>
                 <ChevronDown size={18} color={colors.muted} style={shown ? { transform: [{ rotate: '180deg' }] } : undefined} />
             </Pressable>
-            <Text style={styles.fitLine}>Mathematics and sciences go before lunch and PE and the arts later, unless you choose otherwise. The timetable follows these where it can.</Text>
             {shown ? rows.map((row) => (
                 <ChipSelect key={row.key} label={row.name} options={TIME_OPTIONS} value={row.time} onChange={(t) => { if (row.time !== t) void choose(row, t); }} />
             )) : null}
@@ -404,7 +403,6 @@ function TeachersPanel({ plan, config, onChange }: { plan: TimetablePlan; config
         <View>
             <View style={styles.explain}>
                 <Text style={styles.blockTitle}>No teacher is ever booked twice</Text>
-                <Text style={styles.fitLine}>Each teacher’s lessons are counted across every class and level they teach. Add the times a teacher cannot teach and they stay free then.</Text>
                 <TextField label="Most lessons in a row" value={run} onChangeText={setRun} keyboardType="number-pad" />
                 <ButtonRow>
                     <Button size="sm" variant="secondary" label="Save" disabled={Number(run) === config.rules.max_consecutive} onPress={() => void saveRun()} />
@@ -608,7 +606,6 @@ export function TimetableWizard() {
             <StudioCard viewRef={cardRef('loads')} icon={BookOpenCheck} title="Subjects & hours" summary={loadsSummary(plan)} state={stateOf('loads')} open={open === 'loads'} onToggle={() => toggle('loads')}>
                 <View style={styles.explain}>
                     <Text style={styles.blockTitle}>Lessons a week, checked against the Ministry (KICD)</Text>
-                    <Text style={styles.fitLine}>Each class’s subjects and lessons a week. Electives in one group run at the same time, each learner in the subject they chose; groups are worked out from learners’ choices when a class has more subjects than periods.</Text>
                 </View>
                 <ClassFit
                     plan={plan}

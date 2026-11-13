@@ -96,9 +96,6 @@ function BulkPathway({ onClose, onSaved, students, seniorStreams, combinations, 
         </button>
       </>}
     >
-      <p className="mb-4 text-sm text-muted-foreground">
-        Move Senior School students (Grades 10–12) to a subject combination. Their subjects — three electives plus the compulsory core — update to match.
-      </p>
 
       <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-[12rem_minmax(0,1fr)]">
         <select className="input-field" aria-label="Class" value={streamId} onChange={e => setStreamId(e.target.value)}>

@@ -53,7 +53,7 @@ export function InvoicingPanel({ canManage }: { canManage: boolean }) {
                     <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-amber-500/15 text-amber-700 dark:text-amber-300"><Layers className="size-5" /></span>
                     <div className="flex-1">
                         <h2 className="text-sm font-semibold">Set up fee structures first</h2>
-                        <p className="text-sm text-muted-foreground">Each class level needs a structure (its vote heads and amounts) before a term can be billed.</p>
+                        <p className="text-sm text-muted-foreground">Add a fee structure for each class level first.</p>
                     </div>
                     <Link href="/dashboard/billing?tab=structures" className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90">
                         Add fee structures<ArrowRight className="size-4" />

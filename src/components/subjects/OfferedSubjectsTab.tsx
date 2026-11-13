@@ -87,7 +87,6 @@ function CustomSubjectModal({ open, onClose, onAdded, academicLevels, takenCodes
                 </button>
             </>}
         >
-            <p className="mb-4 text-sm text-muted-foreground">Only for something your school teaches that has no official code. Official subjects are ticked in the list instead.</p>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-[minmax(0,1fr)_8rem]">
                 <FormField label="Name" required htmlFor={`${id}-name`}>
                     <InputField id={`${id}-name`} placeholder="e.g. Chess" value={form.name} maxLength={100} onChange={e => set('name', e.target.value)} />

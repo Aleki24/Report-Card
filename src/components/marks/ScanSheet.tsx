@@ -450,9 +450,6 @@ export function ScanSheet({ examId, maxScore = 100, gradeId, gradeStreamId, subj
                                 {phase === 'saving' ? '⏳ Saving…' : `Save ${readyRows.length} mark${readyRows.length !== 1 ? 's' : ''}`}
                             </button>
                         </div>
-                        <p className="mt-2 text-[11px] text-muted-foreground">
-                            Nothing is saved until you confirm. Rows without an assigned student, a valid score or a grade are skipped.
-                        </p>
                     </div>
                 </div>
             )}

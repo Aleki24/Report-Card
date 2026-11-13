@@ -4,7 +4,7 @@ import { DateField } from '@/components/DateField';
 import { Text, View } from 'react-native';
 import { date as fmtDate, personName, today } from '@shared/ops/format';
 import { BAND_LABELS } from '@shared/curriculum-bands';
-import { CURRICULUM_BANDS, WEEKDAYS, WEEKDAY_LABELS, describeQuality, minutesOf, runsOn, type TimetablePeriod, type TimetableConfig, type TimetableLesson, type TimetableVersion } from '@shared/timetable/config';
+import { CURRICULUM_BANDS, MAIN_SECTION_ID, WEEKDAYS, WEEKDAY_LABELS, describeQuality, minutesOf, runsOn, type TimetablePeriod, type TimetableConfig, type TimetableLesson, type TimetableVersion } from '@shared/timetable/config';
 import { periodIndexOf, periodsOfLesson, type GridRow } from '@shared/timetable/layout';
 import { moveHint } from '@shared/timetable/moves';
 import { auditLessons, freePeriods, freePeriodsCheck, hoursCheck } from '@shared/timetable/checks';
@@ -12,11 +12,11 @@ import type { TimetablePlan } from '@shared/timetable/readiness';
 import { timetablePdfUrl, type TimetablePdfView } from '@shared/timetable/pdf-url';
 import { useDownload } from '@/lib/useDownload';
 import {
-    PERIOD_KINDS, PUBLISH_TIMETABLE_WARNING, weekSummary, SECTIONS_NOTE, bellOrderProblem, bellSummary, periodKind, periodKindMismatch, TIMETABLE_VIEWS, VERSION_TONES, lessonClasses, newDraftName, openSectionPresets,
+    PERIOD_KINDS, PUBLISH_TIMETABLE_WARNING, weekSummary, activityProblem, bellOrderProblem, bellSummary, periodKind, periodKindMismatch, TIMETABLE_VIEWS, VERSION_TONES, lessonClasses, newDraftName, openSectionPresets,
     withAddedPeriodTo, withPeriodDayToggled, withPeriodPatched, withSectionAdded, withSectionBandToggled, withSectionPatched, withSectionRemoved,
     type CoverNeed, type CoverRow, type TimetableView, type TimetableViewResult,
 } from '@shared/ops/forms/academics';
-import { Button, ButtonRow, Card, ChipSelect, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView, Notice, SectionLabel, SegmentedTabs, TextField, ToggleRow } from '@/components/ui';
+import { Button, ButtonRow, Card, ChipSelect, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView, Notice, ScrollTabs, SectionLabel, SegmentedTabs, TextField, ToggleRow } from '@/components/ui';
 import { useToast } from '@/components/Toast';
 import { LookupField, SelectField } from '@/components/ops/SelectField';
 import { StatusPill, useRefreshSignal } from '@/components/ops/bits';
@@ -26,6 +26,7 @@ import { errorMessage, formatDate } from '@/lib/format';
 import { opsGet, useOpsList } from '@/lib/ops';
 import { spacing, fonts, useTheme } from '@/lib/theme';
 import { TimetableGrid } from './TimetableGrid';
+import { ActivitiesEditor } from './ActivitiesEditor';
 
 /** Saves a timetable PDF to the phone; reports failure as a toast. */
 function useTimetablePdf() {
@@ -403,6 +404,8 @@ export function DayStructureEditor({ onSaved }: { onSaved?: () => void } = {}) {
     const toast = useToast();
     const [config, setConfig] = useState<TimetableConfig | null>(null);
     const [saving, setSaving] = useState(false);
+    // One bell (or assembly & games) open at a time.
+    const [view, setView] = useState<string>(MAIN_SECTION_ID);
 
     useEffect(() => {
         opsGet<TimetableConfig>(api, '/api/academics/timetable/config').then(setConfig).catch((err: unknown) => toast.error(errorMessage(err, 'Could not load the day')));
@@ -411,7 +414,17 @@ export function DayStructureEditor({ onSaved }: { onSaved?: () => void } = {}) {
     if (!config) return <LoadingView />;
 
     const update = (fn: (c: TimetableConfig) => TimetableConfig) => setConfig((c) => c && fn(c));
-    const problem = [config.periods, ...config.sections.map((sec) => sec.periods)].map(bellOrderProblem).find(Boolean);
+    const open = view === MAIN_SECTION_ID || view === 'activities' || view === 'new-bell' || config.sections.some((sec) => sec.id === view) ? view : MAIN_SECTION_ID;
+    const section = config.sections.find((sec) => sec.id === open);
+    /** A new bell, opened straight away. */
+    const addBell = (preset: string | null) => {
+        const before = new Set(config.sections.map((sec) => sec.id));
+        const next = withSectionAdded(config, preset);
+        setConfig(next);
+        setView(next.sections.find((sec) => !before.has(sec.id))?.id ?? MAIN_SECTION_ID);
+    };
+    const problem = [config.periods, ...config.sections.map((sec) => sec.periods)].map(bellOrderProblem).find(Boolean)
+        ?? config.rules.activities.map(activityProblem).find(Boolean);
 
     const save = async () => {
         setSaving(true);
@@ -441,31 +454,43 @@ export function DayStructureEditor({ onSaved }: { onSaved?: () => void } = {}) {
                 })}
             </ButtonRow>
 
-            <SectionLabel>{config.sections.length > 0 ? 'Main school day' : 'Periods and breaks'}</SectionLabel>
-            {config.sections.length > 0 ? <Text style={{ fontSize: 12, color: colors.muted, marginBottom: spacing.sm }}>For classes in no section below.</Text> : null}
-            <PeriodsEditor periods={config.periods} schoolDays={config.days} onChange={(periods) => update((c) => ({ ...c, periods }))} />
+            <View style={{ marginTop: spacing.md }}>
+                <ScrollTabs
+                    tabs={[
+                        { value: MAIN_SECTION_ID, label: config.sections.length > 0 ? 'Main day' : 'Periods' },
+                        ...config.sections.map((sec) => ({ value: sec.id, label: sec.name || 'Section' })),
+                        { value: 'activities', label: 'Assembly & games' },
+                        { value: 'new-bell', label: '+ New bell' },
+                    ]}
+                    value={open}
+                    onChange={setView}
+                />
+            </View>
 
-            <SectionLabel>Sections with their own bell</SectionLabel>
-            <Text style={{ fontSize: 12, color: colors.muted, marginBottom: spacing.sm }}>{SECTIONS_NOTE}</Text>
-            {config.sections.map((sec) => (
-                <Card key={sec.id} style={{ marginBottom: spacing.md, padding: spacing.md, backgroundColor: colors.mutedBg }}>
-                    <TextField label="Section name" value={sec.name} onChangeText={(v) => update((c) => withSectionPatched(c, sec.id, { name: v }))} />
-                    <Text style={{ fontSize: 12, fontFamily: fonts.semibold, color: colors.muted, marginBottom: spacing.xs }}>Levels on this bell</Text>
+            {open === MAIN_SECTION_ID ? (
+                <PeriodsEditor periods={config.periods} schoolDays={config.days} onChange={(periods) => update((c) => ({ ...c, periods }))} />
+            ) : null}
+            {section ? (
+                <View>
+                    <TextField label="Name" value={section.name} onChangeText={(v) => update((c) => withSectionPatched(c, section.id, { name: v }))} />
                     <ButtonRow>
                         {CURRICULUM_BANDS.map((b) => (
-                            <Button key={b} size="sm" variant={sec.bands.includes(b) ? 'primary' : 'secondary'} label={BAND_LABELS[b]} onPress={() => update((c) => withSectionBandToggled(c, sec.id, b))} />
+                            <Button key={b} size="sm" variant={section.bands.includes(b) ? 'primary' : 'secondary'} label={BAND_LABELS[b]} onPress={() => update((c) => withSectionBandToggled(c, section.id, b))} />
                         ))}
                     </ButtonRow>
-                    <PeriodsEditor periods={sec.periods} schoolDays={config.days} onChange={(periods) => update((c) => withSectionPatched(c, sec.id, { periods }))} />
+                    <PeriodsEditor periods={section.periods} schoolDays={config.days} onChange={(periods) => update((c) => withSectionPatched(c, section.id, { periods }))} />
                     <ButtonRow>
-                        <Button size="sm" variant="danger" label={`Remove ${sec.name}`} onPress={() => update((c) => withSectionRemoved(c, sec.id))} />
+                        <Button size="sm" variant="danger" label={`Remove ${section.name}`} onPress={() => { update((c) => withSectionRemoved(c, section.id)); setView(MAIN_SECTION_ID); }} />
                     </ButtonRow>
-                </Card>
-            ))}
-            <ButtonRow align="start">
-                {openSectionPresets(config).map((p) => <Button key={p.key} size="sm" variant="secondary" icon={Plus} label={p.name} onPress={() => update((c) => withSectionAdded(c, p.key))} />)}
-                <Button size="sm" variant="ghost" icon={Plus} label="Custom section" onPress={() => update((c) => withSectionAdded(c, null))} />
-            </ButtonRow>
+                </View>
+            ) : null}
+            {open === 'activities' ? <ActivitiesEditor config={config} update={update} /> : null}
+            {open === 'new-bell' ? (
+                <ButtonRow align="start">
+                    {openSectionPresets(config).map((p) => <Button key={p.key} size="sm" variant="secondary" icon={Plus} label={p.name} onPress={() => addBell(p.key)} />)}
+                    <Button size="sm" variant="ghost" icon={Plus} label="Custom" onPress={() => addBell(null)} />
+                </ButtonRow>
+            ) : null}
 
             <View style={{ marginTop: spacing.md }}>
                 <Button label={saving ? 'Saving…' : 'Save school day'} onPress={() => void save()} loading={saving} disabled={!!problem} block />

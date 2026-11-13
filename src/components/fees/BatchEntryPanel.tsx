@@ -190,9 +190,6 @@ export function BatchEntryPanel({ streams: gradeStreams, terms, years, canManage
         <div>
             <div className="mb-4 rounded-2xl border border-border/70 bg-card p-4 shadow-sm sm:p-5">
                 <h2 className="font-semibold">Batch fee entry</h2>
-                <p className="mt-0.5 mb-4 text-xs text-muted-foreground">
-                    Pick a class and term, set each student&apos;s fee, and enter any money received now. Payments already on record are shown, not re-entered.
-                </p>
                 <div className="grid gap-3 md:grid-cols-2">
                     <div>
                         <label htmlFor="batch-class" className="mb-2 block text-xs font-medium text-muted-foreground">Class</label>
@@ -230,7 +227,6 @@ export function BatchEntryPanel({ streams: gradeStreams, terms, years, canManage
                             <select id="batch-method" className="input-field w-full" value={batchMethod} onChange={e => setBatchMethod(e.target.value as FeePaymentMethod)}>
                                 {BATCH_METHODS.map(m => <option key={m} value={m}>{methodLabel(m)}</option>)}
                             </select>
-                            <p className="mt-1 text-[11px] text-muted-foreground">M-Pesa, bank and cheque payments each need their code: record them one by one, or upload the statement on Reconcile.</p>
                         </div>
                     </div>
                 )}

@@ -263,7 +263,6 @@ export function ExamResultsTab() {
                 <div className="flex flex-col items-center rounded-2xl border border-dashed border-border bg-card px-6 py-14 text-center">
                     <span className="mb-3 flex size-12 items-center justify-center rounded-2xl bg-amber-500/12 text-amber-600 dark:text-amber-400" aria-hidden><Trophy className="size-6" /></span>
                     <p className="text-sm font-semibold text-foreground">Choose a class to see its results</p>
-                    <p className="mt-1 max-w-sm text-sm text-muted-foreground">Compare every subject, look at one subject&apos;s paper, or see its analysis.</p>
                 </div>
             ) : (
                 <>
@@ -298,7 +297,6 @@ export function ExamResultsTab() {
                                 <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-violet-500/12 text-violet-600 dark:text-violet-400" aria-hidden><FEATURE_ICONS.reports className="size-5" /></span>
                                 <div>
                                     <p className="font-semibold text-foreground">Report cards have their own page</p>
-                                    <p className="text-sm text-muted-foreground">Download the whole class or one learner, choose the card design, send results by SMS and compare terms.</p>
                                 </div>
                             </div>
                             <Link href="/dashboard/reports" className="btn-primary shrink-0 no-underline">

@@ -96,10 +96,6 @@ export function SubjectTeachersTab({ grades, streams }: { grades: Grade[]; strea
     return (
         <div className="card p-5">
             <h3 className="font-bold text-base font-[family-name:var(--font-display)] mb-1">Subject Teachers</h3>
-            <p className="text-xs text-muted-foreground mb-4">
-                The teacher set here is the name printed against each subject on report cards and the class marksheet.
-                Leave a subject blank and it simply prints no name.
-            </p>
 
             <div className="flex flex-col sm:flex-row gap-3 mb-4">
                 <div className="flex-1">

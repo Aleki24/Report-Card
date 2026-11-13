@@ -28,7 +28,6 @@ export function MarkingNowCard({ termName, classes, asked, onPickAny }: MarkingN
         <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary" aria-hidden><DoorOpen className="size-5" /></span>
         <div className="min-w-0">
           <p className="text-sm font-semibold text-foreground">Marking now · {termName}</p>
-          <p className="text-xs text-muted-foreground">Choose your class and subject; the mark sheet opens on the exam your school is marking.</p>
         </div>
       </div>
       <ul className="flex flex-col divide-y divide-border/50 rounded-xl bg-card ring-1 ring-inset ring-border/70">

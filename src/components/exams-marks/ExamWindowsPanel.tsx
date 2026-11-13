@@ -203,7 +203,6 @@ export function ExamWindowsPanel({ termId, termName, classes, windows, requests,
                 </li>
               ))}
             </ol>
-            <p className="mt-3 text-xs text-muted-foreground">CATs, topical tests and your own exam types are always open, so they aren&apos;t listed here.</p>
           </div>
 
           {/* One card per level */}

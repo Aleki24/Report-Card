@@ -490,10 +490,6 @@ export default function OnboardingWizard() {
                 <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                   <div>
                     <h2 className="text-xl font-bold mb-1">Academic Calendar</h2>
-                    <p className="text-sm text-muted-foreground mb-4">
-                      The current year and term, with the term&apos;s real dates — exams, attendance and report cards are filed under them.
-                      Add the other terms later in Settings.
-                    </p>
                   </div>
 
                   <div className="grid gap-5 sm:grid-cols-2">
@@ -534,7 +530,7 @@ export default function OnboardingWizard() {
                 <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                   <div>
                     <h2 className="text-xl font-bold mb-1">Curriculum</h2>
-                    <p className="text-sm text-muted-foreground mb-4">Tick every curriculum your school runs — both, if you are still teaching 8-4-4 classes.</p>
+                    <p className="text-sm text-muted-foreground mb-4">Tick every curriculum your school runs.</p>
                   </div>
 
                   <div className="grid gap-4 sm:grid-cols-2">

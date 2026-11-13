@@ -3,7 +3,7 @@ import { route, parseBody, HttpError } from '@/lib/platform/access';
 import { audit } from '@/lib/platform/audit';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { solveTimetable, type PinnedLesson, type SolverRequirement } from '@/lib/timetable/solver';
-import { MAIN_SECTION_ID, minutesOf, type TimetablePeriod } from '@/lib/timetable/config';
+import { minutesOf, schoolBells, type TimetablePeriod } from '@/lib/timetable/config';
 import { availableLessons } from '@/lib/timetable/moves';
 import { auditLessons, freePeriods, timeOfDay } from '@/lib/timetable/checks';
 import { loadTimetablePlan, loadVersion, type LoadRow, type PlannedLoad } from '@/lib/timetable/server';
@@ -128,7 +128,8 @@ export const POST = route('timetable generate', { module: 'timetable', permissio
     // Several shuffles, the best kept (see solveTimetable).
     const result = solveTimetable({
         days: config.days,
-        sections: [{ id: MAIN_SECTION_ID, periods: toSolver(config.periods) }, ...config.sections.map(s => ({ id: s.id, periods: toSolver(s.periods) }))],
+        // Each bell less the times its assembly and games take.
+        sections: schoolBells(config).map(b => ({ id: b.id, periods: toSolver(b.periods) })),
         requirements: solverReqs,
         rooms: (rooms ?? []).map(r => ({ id: r.id as string, type: r.room_type as string })),
         pinned,

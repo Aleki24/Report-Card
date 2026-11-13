@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
-import { WEEKDAY_LABELS, type TimetableConfig, type TimetableLesson } from '@shared/timetable/config';
+import { WEEKDAY_LABELS, daysLabel, type TimetableConfig, type TimetableLesson } from '@shared/timetable/config';
 import { shortSubject, slotLines, subjectCode, subjectKey, type GridMode } from '@shared/ops/forms/academics';
 import { dayCells, gridRows, lessonsAt, rowRunsOn, subjectColours, type DayCell, type GridRow } from '@shared/timetable/layout';
 import { schoolWeekMinute } from '@shared/dates';
@@ -65,6 +65,15 @@ export function TimetableGrid({ config, lessons, mode, selectedId, onCellPress, 
 
     const cell = (day: number, row: GridRow, merged?: DayCell) => {
         // A period that runs on some days only (a Friday ninth lesson) is shaded on the others.
+        // An activity (Games) that has the period on this day says so.
+        const taken = row.taken?.[day];
+        if (!rowRunsOn(row, day) && taken) {
+            return (
+                <View style={[styles.cellWrap, styles.activity]} accessibilityLabel={`${taken} on ${WEEKDAY_LABELS[day]}`}>
+                    <Text style={styles.activityText} numberOfLines={1}>{taken}</Text>
+                </View>
+            );
+        }
         if (!rowRunsOn(row, day)) {
             return (
                 <View style={[styles.cellWrap, styles.offDay]} accessibilityLabel={`${row.label} does not run on ${WEEKDAY_LABELS[day]}`}>
@@ -132,7 +141,7 @@ export function TimetableGrid({ config, lessons, mode, selectedId, onCellPress, 
                         {config.days.map((d) => <Text key={d} style={[styles.weekHead, styles.dayCol, today === d && { color: colors.primary }]}>{WEEKDAY_LABELS[d].toUpperCase()}{today === d ? ' · TODAY' : ''}</Text>)}
                     </View>
                     {rows.map((r) => r.isBreak ? (
-                        <Text key={r.key} style={styles.breakRow}>{r.label} · {r.time}</Text>
+                        <Text key={r.key} style={[styles.breakRow, r.activity && styles.activityRow]}>{r.label} · {r.time}{r.activity && r.days ? ` · ${daysLabel(r.days, config.days)}` : ''}</Text>
                     ) : (
                         <View key={r.key} style={styles.weekRow}>
                             <View style={styles.periodCol}>
@@ -158,8 +167,8 @@ export function TimetableGrid({ config, lessons, mode, selectedId, onCellPress, 
                     </Pressable>
                 ))}
             </ScrollView>
-            {cellsOf(phoneDay).filter((c) => rowRunsOn(c.rows[0], phoneDay)).map((c) => c.rows[0].isBreak ? (
-                <Text key={c.rows[0].key} style={styles.breakRow}>{c.rows[0].label} · {c.rows[0].time}</Text>
+            {cellsOf(phoneDay).filter((c) => rowRunsOn(c.rows[0], phoneDay) || !!c.rows[0].taken?.[phoneDay]).map((c) => c.rows[0].isBreak ? (
+                <Text key={c.rows[0].key} style={[styles.breakRow, c.rows[0].activity && styles.activityRow]}>{c.rows[0].label} · {c.rows[0].time}</Text>
             ) : (
                 <View key={c.rows[0].key} style={styles.phoneRow}>
                     <View style={{ width: 56 }}>
@@ -195,6 +204,9 @@ const useStyles = makeStyles((colors) => ({
     keyDot: { width: 8, height: 8, borderRadius: 4 },
     keyCode: { fontSize: 11, fontFamily: fonts.bold, color: colors.foreground },
     keyName: { fontSize: 11, fontFamily: fonts.regular, color: colors.muted },
+    activity: { alignItems: 'center', justifyContent: 'center', borderRadius: radius.md, backgroundColor: colors.infoBg, paddingHorizontal: spacing.sm },
+    activityText: { fontSize: 12, fontFamily: fonts.bold, color: colors.info },
+    activityRow: { color: colors.info, backgroundColor: colors.infoBg },
     breakRow: { textAlign: 'center', fontSize: 11, fontFamily: fonts.semibold, color: colors.warningText, backgroundColor: colors.warningBg, borderRadius: radius.sm, paddingVertical: 4, marginVertical: 4 },
     phoneRow: { flexDirection: 'row', alignItems: 'stretch', gap: spacing.sm, marginBottom: spacing.sm },
     periodLabel: { fontSize: 12, fontFamily: fonts.bold, color: colors.foreground },

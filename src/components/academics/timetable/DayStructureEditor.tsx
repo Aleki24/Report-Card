@@ -2,24 +2,27 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { Clock3, Layers, Plus, Sparkles, Trash2, Wand2 } from 'lucide-react';
+import { Clock3, Flag, Plus, Sparkles, Trash2, Wand2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { FormField, InputField } from '@/components/ui/FormField';
 import { useConfirm } from '@/components/ui/ConfirmProvider';
 import { errorText, opsFetch } from '@/lib/ops/client';
 import { BAND_LABELS } from '@/lib/curriculum-bands';
 import {
-    CURRICULUM_BANDS, WEEKDAYS, WEEKDAY_LABELS, buildDay, lessonLength, minutesOf, runsOn, withDayStart, withLessonLength, withPeriodRetimed,
+    CURRICULUM_BANDS, MAIN_SECTION_ID, WEEKDAYS, WEEKDAY_LABELS, buildDay, lessonLength, minutesOf, runsOn, withDayStart, withLessonLength, withPeriodRetimed,
     type TimetableConfig, type TimetablePeriod,
 } from '@/lib/timetable/config';
 import {
-    PERIOD_KINDS, SECTIONS_NOTE, bellOrderProblem, bellSummary, openSectionPresets, periodKind, periodKindMismatch, quickDayOf,
+    PERIOD_KINDS, activityProblem, bellOrderProblem, bellSummary, openSectionPresets, periodKind, periodKindMismatch, quickDayOf,
     withAddedPeriodTo, withPeriodDayToggled, withPeriodPatched, withSectionAdded, withSectionBandToggled, withSectionPatched, withSectionRemoved,
     type QuickDay,
 } from '@/lib/ops/forms/academics';
 import { cn } from '@/lib/utils';
+import { ActivitiesEditor } from './ActivitiesEditor';
 
 const URL = '/api/academics/timetable/config';
+const ACTIVITIES_VIEW = 'activities';
+const NEW_BELL_VIEW = 'new-bell';
 
 const chip = (on: boolean) => cn('min-h-9 rounded-lg border px-2.5 text-xs font-semibold transition-colors', on ? 'border-primary bg-primary/10 text-foreground' : 'border-border text-muted-foreground hover:bg-muted');
 
@@ -214,6 +217,7 @@ export function DayStructureEditor({ onSaved }: { onSaved?: () => void } = {}) {
     const [dirty, setDirty] = useState(false);
     // Bumped on each load, so the bells' own fields start again from the saved day.
     const [rev, setRev] = useState(0);
+    const [view, setView] = useState<string>(MAIN_SECTION_ID);
 
     const load = useCallback(() => {
         opsFetch<TimetableConfig>(URL).then(c => { setConfig(c); setDirty(false); setRev(r => r + 1); }).catch(err => toast.error(errorText(err)));
@@ -223,7 +227,8 @@ export function DayStructureEditor({ onSaved }: { onSaved?: () => void } = {}) {
     if (!config) return <div className="skeleton-bone h-64 rounded-2xl" />;
 
     const update = (fn: (c: TimetableConfig) => TimetableConfig) => { setConfig(c => c && fn(c)); setDirty(true); };
-    const problem = [config.periods, ...config.sections.map(s => s.periods)].map(bellOrderProblem).find(Boolean);
+    const problem = [config.periods, ...config.sections.map(s => s.periods)].map(bellOrderProblem).find(Boolean)
+        ?? config.rules.activities.map(activityProblem).find(Boolean);
 
     const save = async () => {
         setSaving(true);
@@ -233,72 +238,86 @@ export function DayStructureEditor({ onSaved }: { onSaved?: () => void } = {}) {
     };
 
     const presets = openSectionPresets(config);
+    // One bell (or assembly & games) open at a time, picked from the tabs.
+    const views: { id: string; label: string; hint: string }[] = [
+        { id: MAIN_SECTION_ID, label: config.sections.length > 0 ? 'Main day' : 'Periods', hint: bellSummary(config.periods, config.days) },
+        ...config.sections.map(s => ({ id: s.id, label: s.name || 'Section', hint: bellSummary(s.periods, config.days) })),
+        { id: ACTIVITIES_VIEW, label: 'Assembly & games', hint: `${config.rules.activities.length} added` },
+        { id: NEW_BELL_VIEW, label: 'New bell', hint: 'For a level with its own day' },
+    ];
+    const open = views.some(v => v.id === view) ? view : MAIN_SECTION_ID;
+    const section = config.sections.find(s => s.id === open);
 
     return (
-        <section className="flex flex-col gap-6">
-            <div>
-                <h3 className="text-sm font-semibold">School days</h3>
-                <div className="mt-2 flex flex-wrap gap-2">
-                    {WEEKDAYS.map(d => {
-                        const on = config.days.includes(d);
-                        return (
-                            <button key={d} type="button" aria-pressed={on} className={cn(chip(on), 'min-h-10 px-3 text-sm')}
-                                onClick={() => update(c => ({ ...c, days: on ? c.days.filter(x => x !== d) : [...c.days, d].sort() }))}>
-                                {WEEKDAY_LABELS[d]}
-                            </button>
-                        );
-                    })}
-                </div>
+        <section className="flex flex-col gap-5">
+            <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-semibold text-muted-foreground">Days</span>
+                {WEEKDAYS.map(d => {
+                    const on = config.days.includes(d);
+                    return (
+                        <button key={d} type="button" aria-pressed={on} className={cn(chip(on), 'min-h-9 px-3 text-sm')}
+                            onClick={() => update(c => ({ ...c, days: on ? c.days.filter(x => x !== d) : [...c.days, d].sort() }))}>
+                            {WEEKDAY_LABELS[d]}
+                        </button>
+                    );
+                })}
             </div>
 
-            <div>
-                <h3 className="text-sm font-semibold">{config.sections.length > 0 ? 'Main school day' : 'Periods and breaks'}</h3>
-                <p className="mb-3 text-xs text-muted-foreground">{config.sections.length > 0 ? 'For classes in no section below. ' : ''}Change a time and every later period moves with it. Untick a day to run a period only on some days, e.g. a ninth lesson on Friday.</p>
+            <nav aria-label="Bells" className="-mx-4 overflow-x-auto px-4 [scrollbar-width:none] sm:mx-0 sm:px-0">
+                <div role="tablist" className="flex min-w-max gap-2">
+                    {views.map(v => (
+                        <button key={v.id} type="button" role="tab" aria-selected={open === v.id} onClick={() => setView(v.id)}
+                            className={cn('flex min-h-12 flex-col items-start justify-center rounded-xl border px-3 py-1.5 text-left transition-colors', open === v.id ? 'border-primary bg-primary/[0.07] ring-1 ring-primary/40' : 'border-border/70 bg-card hover:bg-muted/50', v.id === NEW_BELL_VIEW && 'border-dashed')}>
+                            <span className="flex items-center gap-1.5 text-sm font-semibold">
+                                {v.id === NEW_BELL_VIEW ? <Plus className="size-3.5" aria-hidden /> : v.id === ACTIVITIES_VIEW ? <Flag className="size-3.5" aria-hidden /> : <Clock3 className="size-3.5" aria-hidden />}
+                                {v.label}
+                            </span>
+                            <span className="text-[11px] text-muted-foreground">{v.hint}</span>
+                        </button>
+                    ))}
+                </div>
+            </nav>
+
+            {open === MAIN_SECTION_ID && (
                 <BellEditor key={`main-${rev}`} id="main" periods={config.periods} schoolDays={config.days} onChange={periods => update(c => ({ ...c, periods }))} />
-            </div>
+            )}
 
-            <div className="flex flex-col gap-3">
-                <div>
-                    <h3 className="flex items-center gap-2 text-sm font-semibold"><Layers className="size-4 text-primary" aria-hidden />Levels with their own bell</h3>
-                    <p className="text-xs text-muted-foreground">{SECTIONS_NOTE}</p>
-                </div>
-                {config.sections.map(s => (
-                    <article key={s.id} className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-background p-3 sm:p-4">
-                        <div className="flex items-end gap-2">
-                            <FormField label="Section name" htmlFor={`${s.id}-name`} className="flex-1">
-                                <InputField id={`${s.id}-name`} value={s.name} onChange={e => update(c => withSectionPatched(c, s.id, { name: e.target.value }))} />
-                            </FormField>
-                            <Button variant="ghost" size="icon" aria-label={`Remove ${s.name}`} onClick={() => update(c => withSectionRemoved(c, s.id))}><Trash2 className="text-destructive" /></Button>
-                        </div>
-                        <div>
-                            <p className="mb-2 text-xs font-medium text-muted-foreground">Levels on this bell</p>
-                            <div className="flex flex-wrap gap-2">
-                                {CURRICULUM_BANDS.map(b => {
-                                    const on = s.bands.includes(b);
-                                    return <button key={b} type="button" aria-pressed={on} className={chip(on)} onClick={() => update(c => withSectionBandToggled(c, s.id, b))}>{BAND_LABELS[b]}</button>;
-                                })}
-                            </div>
-                        </div>
-                        <BellEditor key={`${s.id}-${rev}`} id={s.id} periods={s.periods} schoolDays={config.days} onChange={periods => update(c => withSectionPatched(c, s.id, { periods }))} />
-                    </article>
-                ))}
+            {section && (
+                <article className="flex flex-col gap-3">
+                    <div className="flex items-end gap-2">
+                        <FormField label="Name" htmlFor={`${section.id}-name`} className="flex-1">
+                            <InputField id={`${section.id}-name`} value={section.name} onChange={e => update(c => withSectionPatched(c, section.id, { name: e.target.value }))} />
+                        </FormField>
+                        <Button variant="ghost" size="icon" aria-label={`Remove ${section.name}`} onClick={() => { update(c => withSectionRemoved(c, section.id)); setView(MAIN_SECTION_ID); }}><Trash2 className="text-destructive" /></Button>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                        {CURRICULUM_BANDS.map(b => {
+                            const on = section.bands.includes(b);
+                            return <button key={b} type="button" aria-pressed={on} className={chip(on)} onClick={() => update(c => withSectionBandToggled(c, section.id, b))}>{BAND_LABELS[b]}</button>;
+                        })}
+                    </div>
+                    <BellEditor key={`${section.id}-${rev}`} id={section.id} periods={section.periods} schoolDays={config.days} onChange={periods => update(c => withSectionPatched(c, section.id, { periods }))} />
+                </article>
+            )}
+
+            {open === ACTIVITIES_VIEW && <ActivitiesEditor config={config} update={update} />}
+
+            {open === NEW_BELL_VIEW && (
                 <div className="flex flex-wrap gap-2">
-                    {presets.map(p => <Button key={p.key} variant="outline" size="sm" onClick={() => update(c => withSectionAdded(c, p.key))}><Plus />{p.name}</Button>)}
-                    <Button variant="ghost" size="sm" onClick={() => update(c => withSectionAdded(c, null))}><Plus />Custom section</Button>
+                    {presets.map(p => <Button key={p.key} variant="outline" onClick={() => { const before = new Set(config.sections.map(s => s.id)); const next = withSectionAdded(config, p.key); update(() => next); setView(next.sections.find(s => !before.has(s.id))?.id ?? MAIN_SECTION_ID); }}><Plus />{p.name}</Button>)}
+                    <Button variant="ghost" onClick={() => { const before = new Set(config.sections.map(s => s.id)); const next = withSectionAdded(config, null); update(() => next); setView(next.sections.find(s => !before.has(s.id))?.id ?? MAIN_SECTION_ID); }}><Plus />Custom</Button>
                 </div>
-            </div>
+            )}
 
             {dirty ? (
                 <div className="sticky bottom-3 z-10 flex flex-col gap-2 rounded-2xl border border-primary/40 bg-card/95 p-3 shadow-lg backdrop-blur sm:flex-row sm:items-center sm:justify-between">
-                    <p className="text-sm"><span className="font-semibold">Unsaved changes.</span> <span className="text-muted-foreground">Generate the timetable again after saving, so lessons follow the new day.</span></p>
+                    <p className="text-sm font-semibold">Unsaved changes</p>
                     <div className="flex shrink-0 justify-end gap-2">
                         <Button variant="ghost" onClick={load} disabled={saving}>Discard</Button>
                         <Button onClick={save} disabled={saving || !!problem}>{saving ? 'Saving…' : 'Save school day'}</Button>
                     </div>
                 </div>
-            ) : (
-                <p className="text-xs text-muted-foreground">Changing the day after publishing? Generate the timetable again so lessons follow the new times.</p>
-            )}
+            ) : null}
         </section>
     );
 }

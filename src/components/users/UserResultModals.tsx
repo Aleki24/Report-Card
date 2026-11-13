@@ -89,9 +89,6 @@ export function InviteResultModal({ invitedName, invitedUsername, invitedCode, n
         </div>
         <NotifyBanner notified={notified} />
         <ShareActivation code={invitedCode} name={invitedName} />
-        <p className="text-xs text-muted-foreground mb-6">
-          Opening the link fills the code in; they then choose a password and are signed in straight away.
-        </p>
         <button className="btn-primary w-full" onClick={onClose}>Done</button>
       </div>
     </ModalOverlay>
@@ -118,7 +115,7 @@ export function ResetPasswordResultModal({ inviteCode, notified, onClose }: Rese
         </div>
         <NotifyBanner notified={notified} />
         <ShareActivation code={inviteCode} />
-        <p className="text-xs text-muted-foreground mb-4">Share the link or code with the user. Opening it lets them set a new password and signs them in.</p>
+        <p className="text-xs text-muted-foreground mb-4">Share the link or code with the user.</p>
         <button onClick={onClose} className="btn-primary w-full">Done</button>
       </div>
     </ModalOverlay>

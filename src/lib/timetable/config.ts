@@ -70,6 +70,33 @@ export const sectionSchema = z.object({
 
 export type TimetableSection = z.infer<typeof sectionSchema>;
 
+/** Whole-school times that are not lessons but belong on the timetable. */
+export const ACTIVITY_KINDS = ['assembly', 'games', 'clubs', 'other'] as const;
+export type ActivityKind = (typeof ACTIVITY_KINDS)[number];
+export const ACTIVITY_LABELS: Record<ActivityKind, string> = { assembly: 'Assembly', games: 'Games', clubs: 'Clubs & societies', other: 'Other' };
+/** The latest an activity may run to: games and clubs go on after lessons. */
+export const LATEST_ACTIVITY_END = '18:00';
+
+/**
+ * Assembly, games, clubs: on the days it runs, between its times, no lesson
+ * is timetabled for the classes it covers. It takes over any lesson period
+ * it overlaps on those days; outside the periods (assembly before the first
+ * lesson, games after the last) it only shows on the timetable.
+ */
+export const activitySchema = z.object({
+    id: z.string().trim().min(1).max(40),
+    kind: z.enum(ACTIVITY_KINDS),
+    label: z.string().trim().min(1).max(40),
+    days: z.array(weekdaySchema).min(1, 'Pick its days').max(7).refine(d => new Set(d).size === d.length, 'Each day once'),
+    start: hhmm,
+    end: hhmm,
+    /** The bells it holds for (a section's id, or the main day's); empty, the whole school. */
+    section_ids: z.array(z.string().trim().min(1).max(40)).max(9).default([]),
+}).refine(a => a.end > a.start, { message: 'It must end after it starts', path: ['end'] })
+    .refine(a => a.end <= LATEST_ACTIVITY_END, { message: `Activities end by ${LATEST_ACTIVITY_END}`, path: ['end'] });
+
+export type TimetableActivity = z.infer<typeof activitySchema>;
+
 export const timetableConfigSchema = z.object({
     days: z.array(z.number().int().min(1).max(7)).min(1).max(7)
         .refine(d => new Set(d).size === d.length, 'Each day once'),
@@ -94,7 +121,9 @@ export const timetableConfigSchema = z.object({
         doubles: doubleRulesSchema.default(DEFAULT_DOUBLE_RULES),
         /** Subjects whose doubles may run across a short break (never lunch). */
         span_short_break: z.array(z.string().min(1).max(64)).max(200).default([]),
-    }).default({ max_consecutive: 4, teacher_off: [], subject_times: {}, fill_free_periods: true, relations: [], doubles: DEFAULT_DOUBLE_RULES, span_short_break: [] }),
+        /** Assembly, games and the like: times that are not lessons. */
+        activities: z.array(activitySchema).max(30).default([]),
+    }).default({ max_consecutive: 4, teacher_off: [], subject_times: {}, fill_free_periods: true, relations: [], doubles: DEFAULT_DOUBLE_RULES, span_short_break: [], activities: [] }),
 });
 
 export type TimetableConfig = z.infer<typeof timetableConfigSchema>;
@@ -117,7 +146,7 @@ export const DEFAULT_TIMETABLE_CONFIG: TimetableConfig = {
         { label: 'P8', start: '14:40', end: '15:20', is_break: false },
     ],
     sections: [],
-    rules: { max_consecutive: 4, teacher_off: [], subject_times: {}, fill_free_periods: true, relations: [], doubles: DEFAULT_DOUBLE_RULES, span_short_break: [] },
+    rules: { max_consecutive: 4, teacher_off: [], subject_times: {}, fill_free_periods: true, relations: [], doubles: DEFAULT_DOUBLE_RULES, span_short_break: [], activities: [] },
 };
 
 // ── Sections and clock times ─────────────────────────────────────────
@@ -139,6 +168,50 @@ export function sectionFor(config: TimetableConfig, band: CurriculumBand | null 
 }
 
 export const periodsFor = (config: TimetableConfig, band: CurriculumBand | null | undefined): TimetablePeriod[] => sectionFor(config, band).periods;
+
+// ── Activities: assembly, games ──────────────────────────────────────
+
+/** Whether two clock ranges ("08:00"–"08:40") share any minute. */
+export const timesOverlap = (a: { start: string; end: string }, b: { start: string; end: string }) => a.start < b.end && b.start < a.end;
+
+/** The activities a bell keeps: the whole school's and its own. */
+export const activitiesOf = (config: TimetableConfig, sectionId: string): TimetableActivity[] =>
+    (config.rules.activities ?? []).filter(a => a.section_ids.length === 0 || a.section_ids.includes(sectionId));
+
+/** A bell's lesson periods less the days an activity takes their time. Breaks and indexes stay as they are. */
+export function withActivities(periods: readonly TimetablePeriod[], activities: readonly TimetableActivity[], schoolDays: readonly number[]): TimetablePeriod[] {
+    if (activities.length === 0) return [...periods];
+    return periods.map(p => {
+        if (p.is_break) return p;
+        const taken = new Set(activities.filter(a => timesOverlap(p, a)).flatMap(a => a.days));
+        return taken.size === 0 ? p : { ...p, days: (p.days ?? schoolDays).filter(d => !taken.has(d)) };
+    });
+}
+
+const bellCache = new WeakMap<TimetableConfig, Map<string, { id: string; name: string; periods: TimetablePeriod[] }>>();
+
+/**
+ * The bell a class of this band works to: its section's periods, less the
+ * times its activities take. The one place lessons are told where they can
+ * go, so the generator, the checks and the grids agree. Kept per config, so
+ * the same bell is the same array everywhere.
+ */
+export function bellFor(config: TimetableConfig, band: CurriculumBand | null | undefined): { id: string; name: string; periods: TimetablePeriod[] } {
+    const section = sectionFor(config, band);
+    const cache = bellCache.get(config) ?? new Map();
+    bellCache.set(config, cache);
+    const hit = cache.get(section.id);
+    if (hit) return hit;
+    const bell = { ...section, periods: withActivities(section.periods, activitiesOf(config, section.id), config.days) };
+    cache.set(section.id, bell);
+    return bell;
+}
+
+/** Every bell in the school, as the generator places lessons in them: the main day, then each section. */
+export const schoolBells = (config: TimetableConfig): { id: string; periods: TimetablePeriod[] }[] => [
+    { id: MAIN_SECTION_ID, periods: withActivities(config.periods, activitiesOf(config, MAIN_SECTION_ID), config.days) },
+    ...config.sections.map(s => ({ id: s.id, periods: withActivities(s.periods, activitiesOf(config, s.id), config.days) })),
+];
 
 // ── Periods on given days ───────────────────────────────────────────
 

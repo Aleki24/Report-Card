@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from 'react';
-import { ArrowLeftRight, Clock, Coffee, Lock, MoveRight } from 'lucide-react';
+import { ArrowLeftRight, Clock, Coffee, Flag, Lock, MoveRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { WEEKDAY_LABELS, WEEKDAY_NAMES, type TimetableConfig, type TimetableLesson } from '@/lib/timetable/config';
 import { shortSubject, slotLines, subjectCode, subjectKey, type GridMode } from '@/lib/ops/forms/academics';
@@ -117,6 +117,27 @@ function NowNext({ cells, minutes, mode, swatchOf }: { cells: readonly DayCell[]
     );
 }
 
+type PhoneItem = (DayCell & { kind: 'cell' }) | { kind: 'activity'; key: string; label: string; time: string };
+
+/**
+ * A phone's day as a list: the periods that run, and an activity (Games) in
+ * place of the lesson periods it takes, once for its whole time.
+ */
+function phoneItems(cells: readonly DayCell[], day: number): PhoneItem[] {
+    const out: PhoneItem[] = [];
+    for (const c of cells) {
+        const row = c.rows[0];
+        if (row.activity && rowRunsOn(row, day)) { out.push({ kind: 'activity', key: row.key, label: row.label, time: row.time }); continue; }
+        if (rowRunsOn(row, day)) { out.push({ ...c, kind: 'cell' }); continue; }
+        const label = row.taken?.[day];
+        if (!label) continue;
+        const last = out[out.length - 1];
+        if (last?.kind === 'activity' && last.label === label) { last.time = `${last.time.split('–')[0]}–${row.time.split('–')[1]}`; continue; }
+        out.push({ kind: 'activity', key: `${row.key}-${day}`, label, time: row.time });
+    }
+    return out;
+}
+
 /**
  * The week as a timetable board: each subject in its own colour, a double
  * one long card, today's row and the lesson on now marked. From `md` up the
@@ -146,7 +167,11 @@ export function TimetableGrid({ config, lessons, mode, selectedId, onCellClick, 
         : dayCells(config, lessons, day, rows));
     const isNow = (day: number, cell: DayCell) => !!now && now.day === day && cell.rows[0].start <= now.minutes && now.minutes < cell.rows[cell.rows.length - 1].end;
 
-    const notRunning = (row: GridRow, day: number) => (
+    const notRunning = (row: GridRow, day: number) => row.taken?.[day] ? (
+        <span className="flex h-full min-h-12 items-center justify-center gap-1.5 rounded-xl border border-indigo-500/25 bg-indigo-500/10 px-2 text-xs font-semibold text-indigo-800 dark:text-indigo-200" title={`${row.taken[day]} on ${WEEKDAY_NAMES[day]}`}>
+            <Flag className="size-3.5 shrink-0" aria-hidden /><span className="truncate">{row.taken[day]}</span>
+        </span>
+    ) : (
         <span className="flex h-full min-h-12 items-center justify-center rounded-xl bg-[repeating-linear-gradient(135deg,transparent,transparent_6px,var(--color-muted)_6px,var(--color-muted)_12px)] text-[10px] font-medium text-muted-foreground" title={`${row.label} does not run on ${WEEKDAY_NAMES[day]}`}>
             Not on {WEEKDAY_LABELS[day]}
         </span>
@@ -199,7 +224,12 @@ export function TimetableGrid({ config, lessons, mode, selectedId, onCellClick, 
                     ))}
                 </div>
                 <ol className="flex flex-col gap-2">
-                    {cellsOf(shownDay).filter(c => rowRunsOn(c.rows[0], shownDay)).map(c => c.rows[0].isBreak ? (
+                    {phoneItems(cellsOf(shownDay), shownDay).map(c => c.kind === 'activity' ? (
+                        <li key={c.key} className="flex min-h-12 items-center gap-2 rounded-xl border border-indigo-500/25 bg-indigo-500/10 px-3 text-sm font-semibold text-indigo-800 dark:text-indigo-200">
+                            <Flag className="size-4 shrink-0" aria-hidden />{c.label}
+                            <span className="ml-auto text-xs font-medium tabular-nums opacity-75">{c.time}</span>
+                        </li>
+                    ) : c.rows[0].isBreak ? (
                         <li key={c.rows[0].key} className="flex items-center gap-2 px-1 text-[11px] font-semibold text-amber-700 dark:text-amber-300">
                             <Coffee className="size-3.5" aria-hidden />{c.rows[0].label}
                             <span className="h-px flex-1 bg-amber-500/30" aria-hidden />
@@ -215,9 +245,9 @@ export function TimetableGrid({ config, lessons, mode, selectedId, onCellClick, 
 
             {/* Tablets and up: the whole week, days down the side and periods across, as schools pin it up */}
             <div className="hidden overflow-x-auto rounded-2xl border border-border/60 bg-card shadow-sm md:block">
-                <div className="grid min-w-[48rem] gap-x-1 p-2" style={{ gridTemplateColumns: `4rem ${rows.map(r => (r.isBreak ? '1.5rem' : 'minmax(5.5rem, 1fr)')).join(' ')}` }}>
+                <div className="grid min-w-[48rem] gap-x-1 p-2" style={{ gridTemplateColumns: `4rem ${rows.map(r => (r.isBreak && !r.activity ? '1.5rem' : 'minmax(5.5rem, 1fr)')).join(' ')}` }}>
                     <div />
-                    {rows.map(r => r.isBreak ? <div key={r.key} aria-hidden /> : (
+                    {rows.map(r => r.isBreak && !r.activity ? <div key={r.key} aria-hidden /> : (
                         <div key={r.key} className="px-1 pb-2 text-center">
                             <span className="block text-xs font-semibold">{r.label}</span>
                             <span className="block text-[10px] text-muted-foreground tabular-nums">{r.time}</span>
@@ -228,7 +258,13 @@ export function TimetableGrid({ config, lessons, mode, selectedId, onCellClick, 
                             <div className={cn('flex items-center py-1', di > 0 && 'border-t border-border/40')}>
                                 <span className={cn('rounded-lg px-2 py-1 text-sm font-semibold', today === d ? 'bg-primary text-primary-foreground' : 'text-foreground')} title={today === d ? 'Today' : WEEKDAY_NAMES[d]}>{WEEKDAY_LABELS[d]}</span>
                             </div>
-                            {cellsOf(d).map(c => c.rows[0].isBreak ? (
+                            {cellsOf(d).map(c => c.rows[0].activity ? (
+                                <div key={c.rows[0].key} className={cn('h-[4.75rem] py-1', di > 0 && 'border-t border-border/40', today === d && 'bg-primary/[0.03]')}>
+                                    {rowRunsOn(c.rows[0], d)
+                                        ? <span className="flex h-full items-center justify-center rounded-xl border border-indigo-500/25 bg-indigo-500/10 px-2 text-xs font-semibold text-indigo-800 dark:text-indigo-200"><span className="truncate">{c.rows[0].label}</span></span>
+                                        : <span className="block h-full rounded-xl bg-muted/30" />}
+                                </div>
+                            ) : c.rows[0].isBreak ? (
                                 <div key={c.rows[0].key} className={cn('relative my-1 rounded-md bg-amber-500/10', di > 0 && 'mt-2')} title={`${c.rows[0].label} · ${c.rows[0].time}`}>
                                     {di === 0 && <span className="absolute inset-x-0 top-2 mx-auto block w-fit text-[9px] font-semibold tracking-wider text-amber-700 uppercase [writing-mode:vertical-rl] dark:text-amber-300">{c.rows[0].label}</span>}
                                 </div>

@@ -230,11 +230,6 @@ function RankingSettings({ school, setSchool }: SchoolFormProps) {
       <h3 className="mb-1 flex items-center gap-2 text-sm font-bold">
         <Trophy size={16} className="text-primary" aria-hidden /> Report card positions
       </h3>
-      <p className="mb-4 text-xs text-muted-foreground">
-        8-4-4 report cards always show positions: in the stream, and overall across every stream of the form.
-        KNEC does not rank CBC learners (KPSEA and KJSEA report performance levels, not positions), so CBC cards show
-        no positions unless you switch them on.
-      </p>
 
       <label className="flex cursor-pointer items-start justify-between gap-4 rounded-xl border border-border p-4">
         <span>

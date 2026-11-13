@@ -67,7 +67,6 @@ export function ModulesTab() {
                 <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
                     <div>
                         <h2 className="flex items-center gap-2 text-base font-semibold text-foreground"><Sparkles className="size-4 text-amber-500" aria-hidden />Start from a preset</h2>
-                        <p className="text-sm text-muted-foreground">Pick the kind of school you run; you can fine-tune each module below. Nothing is ever deleted.</p>
                     </div>
                     <p className="text-xs text-muted-foreground tabular-nums">{enabledCount} of {states.length} modules on</p>
                 </div>

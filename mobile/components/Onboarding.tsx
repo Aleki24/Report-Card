@@ -231,7 +231,6 @@ export function Onboarding() {
                 ) : null}
                 {step === 5 ? (
                     <>
-                        <Text style={styles.muted}>Exams and mark sheets need subjects. Start with the ones every learner takes; add electives and optional subjects on the Subjects screen once you're in.</Text>
                         <ToggleRow
                             label="Add the compulsory subjects for my classes (recommended)"
                             description="From the standard Kenyan curriculum list, with their official codes."

@@ -36,10 +36,6 @@ export default function ClassesStep({ grades, curricula, plans, onChange }: Prop
         <div className="space-y-6">
             <header>
                 <h2 className="mb-1 text-xl font-bold">Classes</h2>
-                <p className="text-sm text-muted-foreground">
-                    Tick every grade you teach. A grade is one class unless you split it into streams — learners, teachers,
-                    mark sheets and report cards are all organised by class.
-                </p>
             </header>
 
             {curricula.map(curriculum => (

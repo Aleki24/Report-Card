@@ -11,7 +11,8 @@ import { today } from '../format';
 import { CBC_LEVELS, EVENT_AUDIENCES, EVENT_TYPES, ROOM_TYPES } from '../resources/academics';
 import type { PaperAction, PaperStatus, PrintStatus } from '../../academics/exam-papers';
 import {
-    CURRICULUM_BANDS, LATEST_LESSON_END, SECTION_PRESETS, USUAL_LAST_END, WEEKDAY_LABELS, lessonLength, lessonsOn, minutesOf, weeklyLessons,
+    ACTIVITY_LABELS, CURRICULUM_BANDS, LATEST_ACTIVITY_END, LATEST_LESSON_END, MAIN_SECTION_ID, SECTION_PRESETS, USUAL_LAST_END, WEEKDAY_LABELS,
+    daysLabel, hhmmOf, lessonLength, lessonsOn, minutesOf, weeklyLessons, withActivities, type ActivityKind, type TimetableActivity,
     type TimetableConfig, type TimetableLesson, type TimetablePeriod, type TimetableVersion,
 } from '../../timetable/config';
 import type { CurriculumBand } from '../../curriculum-bands';
@@ -577,3 +578,59 @@ export const EMPTY_CBC_FILTER = { grade_stream_id: '', subject_id: '', term_id: 
 export type CbcFilter = typeof EMPTY_CBC_FILTER;
 export const cbcFilterReady = (f: CbcFilter) => !!(f.grade_stream_id && f.subject_id && f.term_id && f.strand.trim());
 export const cbcCounts = (rows: readonly CbcRow[] | null) => Object.fromEntries(CBC_LEVELS.map(l => [l, rows?.filter(r => r.level === l).length ?? 0])) as Record<CbcLevel, number>;
+
+// ── Assembly, games and clubs ───────────────────────────────────────
+
+/** Every bell an activity can cover: the main day and each section. */
+export const activityBells = (config: TimetableConfig): { id: string; name: string; periods: readonly TimetablePeriod[] }[] => [
+    { id: MAIN_SECTION_ID, name: config.sections.length > 0 ? 'Main school day' : 'Whole school', periods: config.periods },
+    ...config.sections.map(s => ({ id: s.id, name: s.name, periods: s.periods })),
+];
+
+/**
+ * A new activity at the usual time for its kind: assembly on Monday just
+ * before the first lesson, games on Wednesday and clubs on Thursday for an
+ * hour after the last lesson of the main day.
+ */
+export function activityPreset(config: TimetableConfig, kind: ActivityKind): TimetableActivity {
+    const lessons = config.periods.filter(p => !p.is_break);
+    const first = minutesOf(lessons[0]?.start ?? '08:00');
+    const last = minutesOf(lessons[lessons.length - 1]?.end ?? '16:00');
+    const latest = minutesOf(LATEST_ACTIVITY_END);
+    const after = (day: number) => ({ days: [day], start: hhmmOf(Math.min(last, latest - 30)), end: hhmmOf(Math.min(last + 60, latest)) });
+    const when = kind === 'assembly' ? { days: [...config.days], start: hhmmOf(Math.max(0, first - 20)), end: hhmmOf(first) }
+        : kind === 'games' ? after(3)
+        : kind === 'clubs' ? after(4)
+        : { days: [config.days[0] ?? 1], start: hhmmOf(last), end: hhmmOf(Math.min(last + 40, latest)) };
+    return { id: `act${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`, kind, label: ACTIVITY_LABELS[kind], section_ids: [], ...when };
+}
+
+/** Lessons a week an activity takes from each bell it covers (none when it sits outside the lessons). */
+export function lessonsTakenBy(config: TimetableConfig, activity: TimetableActivity): { name: string; lessons: number }[] {
+    return activityBells(config)
+        .filter(b => activity.section_ids.length === 0 || activity.section_ids.includes(b.id))
+        .map(b => ({ name: b.name, lessons: weeklyLessons(b.periods, config.days) - weeklyLessons(withActivities(b.periods, [activity], config.days), config.days) }))
+        .filter(x => x.lessons > 0);
+}
+
+/** An activity in a line: "Mon · 07:50–08:20 · Whole school". */
+export function activityLine(config: TimetableConfig, a: TimetableActivity): string {
+    const bells = activityBells(config);
+    const who = a.section_ids.length === 0 ? 'Whole school' : a.section_ids.map(id => bells.find(b => b.id === id)?.name ?? 'A removed section').join(', ');
+    return `${daysLabel(a.days, config.days)} · ${a.start}–${a.end} · ${who}`;
+}
+
+/** What is wrong with an activity's times, if anything. */
+export function activityProblem(a: TimetableActivity): string | null {
+    if (a.days.length === 0) return `${a.label}: pick its days.`;
+    if (a.end <= a.start) return `${a.label} ends before it starts.`;
+    if (a.end > LATEST_ACTIVITY_END) return `${a.label} must end by ${LATEST_ACTIVITY_END}.`;
+    return null;
+}
+
+export const withActivityAdded = (config: TimetableConfig, kind: ActivityKind): TimetableConfig =>
+    ({ ...config, rules: { ...config.rules, activities: [...config.rules.activities, activityPreset(config, kind)] } });
+export const withActivityPatched = (config: TimetableConfig, id: string, patch: Partial<TimetableActivity>): TimetableConfig =>
+    ({ ...config, rules: { ...config.rules, activities: config.rules.activities.map(a => (a.id === id ? { ...a, ...patch } : a)) } });
+export const withActivityRemoved = (config: TimetableConfig, id: string): TimetableConfig =>
+    ({ ...config, rules: { ...config.rules, activities: config.rules.activities.filter(a => a.id !== id) } });

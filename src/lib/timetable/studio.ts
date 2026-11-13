@@ -10,7 +10,7 @@ import { ministryAllocation } from './allocations';
 import { missingEssentials } from './essentials';
 import { teacherWeeks, type ClassPlan } from './blocks';
 import { timeOfDay } from './checks';
-import { lessonsOn, weeklyLessons, type TimetableConfig, type TimetablePeriod } from './config';
+import { bellFor, lessonsOn, weeklyLessons, type TimetableConfig, type TimetablePeriod } from './config';
 import { classFixes, fitClassOf } from './fit';
 import { availableLessons } from './moves';
 import { assess, type PlanClass, type PlanLoad, type TeacherWeek, type TimetablePlan } from './readiness';
@@ -126,13 +126,15 @@ export function buildStudioPlan(input: StudioInput): TimetablePlan {
         })
         .sort((a, b) => b.lessons - a.lessons);
 
-    const perDay = config.days.map(d => lessonsOn(config.periods, d));
+    // The main day's lessons, less what its assembly and games take.
+    const mainBell = bellFor(config, null).periods;
+    const perDay = config.days.map(d => lessonsOn(mainBell, d));
     const base = {
         day: {
             days: config.days.length,
             lessonsPerDay: Math.max(0, ...perDay),
             fewestPerDay: perDay.length ? Math.min(...perDay) : 0,
-            lessonsPerWeek: weeklyLessons(config.periods, config.days),
+            lessonsPerWeek: weeklyLessons(mainBell, config.days),
             starts: config.periods[0]?.start ?? null,
             ends: config.periods[config.periods.length - 1]?.end ?? null,
             sections: config.sections.length,

@@ -22,7 +22,7 @@ import { STEP_TONES } from '@/components/ui/tones';
 function Rooms() {
     return (
         <div className="flex flex-col gap-3">
-            <p className="text-sm text-muted-foreground">Add labs, the computer room or the hall only if some lessons need them (set <em>Needs a room type</em> on those loads). Every other lesson stays in the class’s own room, and no room is ever booked twice.</p>
+            <p className="text-sm text-muted-foreground">Only if some lessons need a lab or special room.</p>
             <ResourceManager<'rooms', Room>
                 resource="rooms"
                 fields={ROOM_FIELDS}
@@ -48,12 +48,12 @@ interface StepDef { id: StepId; title: string; icon: LucideIcon; intro: string }
 
 /** The studio's steps, in the order a timetable is made. */
 const STEPS: readonly StepDef[] = [
-    { id: 'day', title: 'School day', icon: CalendarClock, intro: 'The days the school runs, when lessons and breaks are, and any levels with their own bell.' },
-    { id: 'loads', title: 'Subjects & hours', icon: BookOpenCheck, intro: 'Each class’s subjects and lessons a week, checked against the Ministry (KICD) figures, with elective groups and when subjects are best taught.' },
-    { id: 'teachers', title: 'Teachers', icon: Users, intro: 'Each teacher’s week across every class they teach, and the times they cannot teach.' },
-    { id: 'rules', title: 'Rules', icon: ListChecks, intro: 'How double lessons are placed, and rules of your own: subjects kept apart, not on end, or not on days in a row.' },
-    { id: 'rooms', title: 'Labs & rooms', icon: FlaskConical, intro: 'Special rooms some lessons need. Optional.' },
-    { id: 'drafts', title: 'Generate & publish', icon: Layers, intro: 'Generate a draft, check it, adjust anything by hand, then publish it to teachers and learners.' },
+    { id: 'day', title: 'School day', icon: CalendarClock, intro: 'Days, periods, breaks, assembly and games.' },
+    { id: 'loads', title: 'Subjects & hours', icon: BookOpenCheck, intro: 'Each class’s subjects and lessons a week.' },
+    { id: 'teachers', title: 'Teachers', icon: Users, intro: 'Each teacher’s week and times away.' },
+    { id: 'rules', title: 'Rules', icon: ListChecks, intro: 'Doubles and your own rules. Optional.' },
+    { id: 'rooms', title: 'Labs & rooms', icon: FlaskConical, intro: 'Labs and special rooms. Optional.' },
+    { id: 'drafts', title: 'Generate & publish', icon: Layers, intro: 'Generate, check, adjust, publish.' },
 ];
 
 /** The top of the studio: ready or not, what is in the way (each with its step), and the button to generate. */
@@ -75,7 +75,7 @@ function Readiness({ plan, generating, fixing, onGenerate, onOpen, onSetBreaks }
                     <h2 className="mt-1 text-lg font-bold tracking-tight">
                         {ready ? 'Ready to generate' : plan.blockers.length === 1 ? 'One thing to fix first' : `${plan.blockers.length} things to fix first`}
                     </h2>
-                    <p className="text-sm text-muted-foreground">{ready ? 'Every class fits its week and no teacher has more lessons than periods. Generate a draft, check it, then publish.' : 'Each one opens the step where it is fixed.'}</p>
+                    {!ready && <p className="text-sm text-muted-foreground">Each one opens the step where it is fixed.</p>}
                 </div>
                 <Button onClick={onGenerate} disabled={!ready || generating} className="h-11 sm:min-w-48"><Sparkles />{generating ? 'Generating…' : plan.drafts > 0 ? 'Generate a new draft' : 'Generate timetable'}</Button>
             </div>

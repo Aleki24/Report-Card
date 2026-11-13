@@ -3,10 +3,12 @@ import Link from 'next/link';
 import { ChevronRight, type LucideIcon } from 'lucide-react';
 import { TONES, type Hue } from '@/components/ui/tones';
 import { cn } from '@/lib/utils';
+import { GuideLink } from './GuideLink';
 
 interface PageHeaderProps {
   title: React.ReactNode;
-  description?: React.ReactNode;
+  /** What the page is for: not shown (people learn by doing, and the guide is a click away), kept as the header's tooltip. */
+  description?: string;
   /** Small label above the title — the menu section, e.g. "Finance". */
   eyebrow?: string;
   /** The page's icon, shown in a gradient tile in the page's colour. */
@@ -18,11 +20,11 @@ interface PageHeaderProps {
   className?: string;
 }
 
-/** Every page's title block: one layout, one colour per page, as on Users and Exams & Marks. */
+/** Every page's title block: one layout, one colour per page, the title and a link to the guide, no paragraph of explanation. */
 export default function PageHeader({ title, description, eyebrow, icon: Icon, hue = 'blue', breadcrumbs, action, className }: PageHeaderProps) {
   const tone = TONES[hue];
   return (
-    <header className={cn('mb-6', className)}>
+    <header className={cn('mb-6', className)} title={description}>
       {breadcrumbs && breadcrumbs.length > 0 && (
         <nav aria-label="Breadcrumb" className="mb-3 flex items-center gap-1.5">
           {breadcrumbs.map((crumb, i) => (
@@ -50,10 +52,12 @@ export default function PageHeader({ title, description, eyebrow, icon: Icon, hu
           <div className="min-w-0">
             {eyebrow && <p className={cn('mb-0.5 text-[11px] font-semibold tracking-widest uppercase', tone.text)}>{eyebrow}</p>}
             <h1 className="font-display text-[1.375rem] font-bold tracking-tight text-foreground sm:text-[1.75rem]">{title}</h1>
-            {description && <p className="mt-0.5 max-w-2xl text-sm leading-relaxed text-muted-foreground">{description}</p>}
           </div>
         </div>
-        {action && <div className="min-w-0 md:shrink-0">{action}</div>}
+        <div className="flex min-w-0 flex-wrap items-center gap-2 md:shrink-0 md:justify-end">
+          {action}
+          <GuideLink />
+        </div>
       </div>
     </header>
   );

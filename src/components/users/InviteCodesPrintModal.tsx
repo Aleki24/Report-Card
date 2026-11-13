@@ -57,10 +57,6 @@ export function InviteCodesPrintModal({ onClose }: { onClose: () => void }) {
     return (
         <ModalOverlay onClose={onClose}>
             <CardHeading as="h2" icon={Printer} hue="blue" className="mb-2" title="Print invite codes" />
-            <p className="text-xs text-muted-foreground mb-6">
-                Generate a printable PDF of invitation codes grouped by category, so you can share each person&apos;s
-                code with them in person at your school.
-            </p>
 
             {error && <div className="mb-4 p-3 rounded-md text-sm bg-red-500/10 text-red-400 border border-red-500/30">{error}</div>}
 

@@ -171,9 +171,6 @@ function PromotionPlanner({ data, onDone }: { data: PromotionOverview; onDone: (
           </span>
           <div className="min-w-0">
             <h2 className="font-display text-base font-bold">{plural(plan.total, 'learner')} pending</h2>
-            <p className="mt-0.5 text-sm text-muted-foreground">
-              They keep their class and records but are off class lists, attendance, fees and SMS. Decide them when you are ready; anyone you leave stays pending.
-            </p>
           </div>
         </div>
       ) : (
