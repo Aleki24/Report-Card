@@ -82,14 +82,15 @@ export const leadershipManual: Manual = {
         {
             id: 'timetable',
             title: 'Building the timetable',
-            intro: 'Timetable → “Set up & generate” takes you through five steps in the order a timetable is made. It checks each class’s lessons a week against the Ministry (KICD) figures, never books a teacher or room twice, keeps teachers free at the times they are away, and spreads each subject across the week. Anything that stops you generating is listed at the top, each with a “Fix it” button that opens the step where it is fixed.',
+            intro: 'Timetable → “Set up & generate” takes you through six steps in the order a timetable is made. It checks each class’s lessons a week against the Ministry (KICD) figures, never books a teacher or room twice, keeps teachers free at the times they are away, and spreads each subject across the week. Anything that stops you generating is listed at the top, each with a “Fix it” button that opens the step where it is fixed.',
             sections: [
                 {
                     id: 'day-structure',
                     title: 'School day',
                     summary: 'Choose the school days, then set each period and break with its times. Change a time and every later period moves with it. “Move day” starts the whole day earlier or later, “Lessons of … min” changes every lesson’s length, and “Quick setup” builds a day from when it starts, how long lessons are, how many there are and where the breaks fall.',
                     points: [
-                        'Untick a day on a period to run it only on some days: a ninth lesson on Friday, or games on Wednesday afternoon. The week then counts each day’s own lessons.',
+                        'Untick a day on a period to run it only on some days, e.g. a ninth lesson on Friday. The week then counts each day’s own lessons.',
+                        'Under “Assembly, games and clubs”, add each with its days and times, for the whole school or one bell. They show on every timetable, the PDFs and the phone app, and no lesson is put in their time. One before or after the lessons costs nothing; one inside the day takes those lesson periods on its days, and the card says how many lessons a week, so check those classes still fit.',
                         'A level with a different day (30-minute lessons for Grades 1–3, Junior School starting later) gets its own bell under “Levels with their own bell”. A teacher who teaches on both bells is still never booked twice.',
                         'Nothing changes until you press “Save school day”; “Discard” puts the saved day back.',
                     ],

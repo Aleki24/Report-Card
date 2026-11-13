@@ -16,7 +16,7 @@ type PageHeroProps = {
 /** The opening block of an inner marketing page — clears the fixed navbar. */
 export function PageHero({ eyebrow, title, highlight, description, icon: Icon, actions }: PageHeroProps) {
   return (
-    <section className="px-4 pt-28 pb-12 sm:px-6 md:pt-36 md:pb-20 lg:px-12">
+    <section className="px-4 pt-28 pb-6 sm:px-6 md:pt-36 md:pb-10 lg:px-12">
       <div className="mx-auto flex max-w-3xl flex-col items-center gap-5 text-center">
         {Icon && (
           <span className="flex size-16 items-center justify-center rounded-2xl border border-primary/30 bg-primary/10 text-primary">

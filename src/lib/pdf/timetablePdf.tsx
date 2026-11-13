@@ -152,9 +152,9 @@ function Cell({ lessons, width, mode, height }: { lessons: TimetableLesson[]; wi
     );
 }
 
-/** A period that does not run on this day (a Friday-only lesson, on Monday). */
-const OffDay = ({ width, height }: { width: number; height: number }) => (
-    <View style={[st.cell, { width, height }]}><View style={st.offDay}><Text style={st.offDayText}>—</Text></View></View>
+/** A period that does not run on this day (a Friday-only lesson, on Monday), or the activity that has it (Games). */
+const OffDay = ({ width, height, label }: { width: number; height: number; label?: string }) => (
+    <View style={[st.cell, { width, height }]}><View style={st.offDay}><Text style={[st.offDayText, label ? { fontWeight: 700, color: INK } : {}]}>{label ?? '—'}</Text></View></View>
 );
 
 /** The period header across the top: lessons with their times, breaks as narrow shaded columns. */
@@ -192,10 +192,11 @@ function WeekGrid({ config, sheet }: { config: TimetableConfig; sheet: Timetable
                 <View key={d} style={[st.row, { height: rowH }, di > 0 ? { borderTopWidth: 1, borderTopColor: LINE } : {}]} wrap={false}>
                     <View style={st.rowLabel}><Text style={st.rowLabelText}>{WEEKDAY_LABELS[d]}</Text></View>
                     {rows.map(r => r.isBreak
-                        ? (di === 0 ? <View key={r.key} style={[st.breakCol, { height: rowH }]}><Text style={st.breakText}>{r.label}</Text></View> : <View key={r.key} style={[st.breakCol, { height: rowH }]} />)
+                        // A break's name once, at the top; an activity's (Assembly) on each day it runs.
+                        ? ((r.activity ? rowRunsOn(r, d) : di === 0) ? <View key={r.key} style={[st.breakCol, { height: rowH }]}><Text style={st.breakText}>{r.label}</Text></View> : <View key={r.key} style={[st.breakCol, { height: rowH }]} />)
                         : rowRunsOn(r, d)
                             ? <Cell key={r.key} lessons={lessonsAt(config, sheet.lessons, d, r)} width={width} mode={sheet.mode} height={rowH} />
-                            : <OffDay key={r.key} width={width} height={rowH} />)}
+                            : <OffDay key={r.key} width={width} height={rowH} label={r.taken?.[d]} />)}
                 </View>
             ))}
         </View>

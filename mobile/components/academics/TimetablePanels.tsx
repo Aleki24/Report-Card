@@ -12,7 +12,7 @@ import type { TimetablePlan } from '@shared/timetable/readiness';
 import { timetablePdfUrl, type TimetablePdfView } from '@shared/timetable/pdf-url';
 import { useDownload } from '@/lib/useDownload';
 import {
-    PERIOD_KINDS, PUBLISH_TIMETABLE_WARNING, weekSummary, SECTIONS_NOTE, bellOrderProblem, bellSummary, periodKind, periodKindMismatch, TIMETABLE_VIEWS, VERSION_TONES, lessonClasses, newDraftName, openSectionPresets,
+    PERIOD_KINDS, PUBLISH_TIMETABLE_WARNING, weekSummary, SECTIONS_NOTE, activityProblem, bellOrderProblem, bellSummary, periodKind, periodKindMismatch, TIMETABLE_VIEWS, VERSION_TONES, lessonClasses, newDraftName, openSectionPresets,
     withAddedPeriodTo, withPeriodDayToggled, withPeriodPatched, withSectionAdded, withSectionBandToggled, withSectionPatched, withSectionRemoved,
     type CoverNeed, type CoverRow, type TimetableView, type TimetableViewResult,
 } from '@shared/ops/forms/academics';
@@ -26,6 +26,7 @@ import { errorMessage, formatDate } from '@/lib/format';
 import { opsGet, useOpsList } from '@/lib/ops';
 import { spacing, fonts, useTheme } from '@/lib/theme';
 import { TimetableGrid } from './TimetableGrid';
+import { ActivitiesEditor } from './ActivitiesEditor';
 
 /** Saves a timetable PDF to the phone; reports failure as a toast. */
 function useTimetablePdf() {
@@ -411,7 +412,8 @@ export function DayStructureEditor({ onSaved }: { onSaved?: () => void } = {}) {
     if (!config) return <LoadingView />;
 
     const update = (fn: (c: TimetableConfig) => TimetableConfig) => setConfig((c) => c && fn(c));
-    const problem = [config.periods, ...config.sections.map((sec) => sec.periods)].map(bellOrderProblem).find(Boolean);
+    const problem = [config.periods, ...config.sections.map((sec) => sec.periods)].map(bellOrderProblem).find(Boolean)
+        ?? config.rules.activities.map(activityProblem).find(Boolean);
 
     const save = async () => {
         setSaving(true);
@@ -466,6 +468,8 @@ export function DayStructureEditor({ onSaved }: { onSaved?: () => void } = {}) {
                 {openSectionPresets(config).map((p) => <Button key={p.key} size="sm" variant="secondary" icon={Plus} label={p.name} onPress={() => update((c) => withSectionAdded(c, p.key))} />)}
                 <Button size="sm" variant="ghost" icon={Plus} label="Custom section" onPress={() => update((c) => withSectionAdded(c, null))} />
             </ButtonRow>
+
+            <ActivitiesEditor config={config} update={update} />
 
             <View style={{ marginTop: spacing.md }}>
                 <Button label={saving ? 'Saving…' : 'Save school day'} onPress={() => void save()} loading={saving} disabled={!!problem} block />

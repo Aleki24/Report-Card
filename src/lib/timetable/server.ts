@@ -5,7 +5,7 @@ import { embedOne, fetchAllRows } from '@/lib/postgrest';
 import { planClasses, type BlockLoad } from './blocks';
 import { syncLoadTeachers } from './assignments';
 import { BUILT_IN_TOGETHER, togetherGroups, type TogetherRule } from './together';
-import { DEFAULT_TIMETABLE_CONFIG, LATEST_LESSON_END, LESSON_SELECT, sectionFor, timetableConfigSchema, weeklyLessons, type TimetableConfig, type TimetableLesson } from './config';
+import { DEFAULT_TIMETABLE_CONFIG, LATEST_LESSON_END, LESSON_SELECT, bellFor, timetableConfigSchema, weeklyLessons, type TimetableConfig, type TimetableLesson } from './config';
 
 const db = () => createSupabaseAdmin();
 
@@ -148,7 +148,8 @@ export async function loadTimetablePlan(schoolId: string) {
         const stream = embedOne(r.stream);
         return { ...r, subject: embedOne(r.subject), stream: stream ? { ...stream, grade: embedOne(stream.grade) } : null, teacher: embedOne(r.teacher) };
     });
-    const sectionOf = (streamId: string) => sectionFor(config, bands.get(streamId) ?? null);
+    // A class's bell less the times its assembly and games take.
+    const sectionOf = (streamId: string) => bellFor(config, bands.get(streamId) ?? null);
     // A period can run on some days only (a Friday ninth lesson), so the week is counted day by day.
     const capacityOf = (streamId: string) => weeklyLessons(sectionOf(streamId).periods, config.days);
     const loads: PlannedLoad[] = rows.map(r => ({

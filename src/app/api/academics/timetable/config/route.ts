@@ -7,14 +7,14 @@ import { loadConfig, saveConfig } from '@/lib/timetable/server';
 export const GET = route('timetable config', { module: 'timetable', permission: 'timetable.view' }, ({ access }) => loadConfig(access.schoolId));
 
 /**
- * PUT — the school day: days, bells and sections. The rules (teachers' times
- * away, subjects' times of day, the longest run, filling free periods) are
- * kept as stored: they change with PATCH, so a day editor opened earlier
- * never undoes them.
+ * PUT — the school day: days, bells, sections, and its assembly and games.
+ * The other rules (teachers' times away, subjects' times of day, the longest
+ * run, filling free periods, the school's own rules) are kept as stored: they
+ * change with PATCH, so a day editor opened earlier never undoes them.
  */
 export const PUT = route('timetable config save', { module: 'timetable', permission: 'timetable.manage' }, async ({ access, request }) => {
     const [config, current] = await Promise.all([parseBody(request, timetableConfigSchema), loadConfig(access.schoolId)]);
-    return saveConfig(access.schoolId, { ...config, rules: current.rules });
+    return saveConfig(access.schoolId, { ...config, rules: { ...current.rules, activities: config.rules.activities } });
 });
 
 const patchSchema = z.object({

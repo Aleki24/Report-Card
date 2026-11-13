@@ -13,11 +13,12 @@ import {
     type TimetableConfig, type TimetablePeriod,
 } from '@/lib/timetable/config';
 import {
-    PERIOD_KINDS, SECTIONS_NOTE, bellOrderProblem, bellSummary, openSectionPresets, periodKind, periodKindMismatch, quickDayOf,
+    PERIOD_KINDS, SECTIONS_NOTE, activityProblem, bellOrderProblem, bellSummary, openSectionPresets, periodKind, periodKindMismatch, quickDayOf,
     withAddedPeriodTo, withPeriodDayToggled, withPeriodPatched, withSectionAdded, withSectionBandToggled, withSectionPatched, withSectionRemoved,
     type QuickDay,
 } from '@/lib/ops/forms/academics';
 import { cn } from '@/lib/utils';
+import { ActivitiesEditor } from './ActivitiesEditor';
 
 const URL = '/api/academics/timetable/config';
 
@@ -223,7 +224,8 @@ export function DayStructureEditor({ onSaved }: { onSaved?: () => void } = {}) {
     if (!config) return <div className="skeleton-bone h-64 rounded-2xl" />;
 
     const update = (fn: (c: TimetableConfig) => TimetableConfig) => { setConfig(c => c && fn(c)); setDirty(true); };
-    const problem = [config.periods, ...config.sections.map(s => s.periods)].map(bellOrderProblem).find(Boolean);
+    const problem = [config.periods, ...config.sections.map(s => s.periods)].map(bellOrderProblem).find(Boolean)
+        ?? config.rules.activities.map(activityProblem).find(Boolean);
 
     const save = async () => {
         setSaving(true);
@@ -287,6 +289,8 @@ export function DayStructureEditor({ onSaved }: { onSaved?: () => void } = {}) {
                     <Button variant="ghost" size="sm" onClick={() => update(c => withSectionAdded(c, null))}><Plus />Custom section</Button>
                 </div>
             </div>
+
+            <ActivitiesEditor config={config} update={update} />
 
             {dirty ? (
                 <div className="sticky bottom-3 z-10 flex flex-col gap-2 rounded-2xl border border-primary/40 bg-card/95 p-3 shadow-lg backdrop-blur sm:flex-row sm:items-center sm:justify-between">

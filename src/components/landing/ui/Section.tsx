@@ -11,7 +11,7 @@ export function Section({ width = 'default', className, children, ...props }: Se
   return (
     <section
       className={cn(
-        'mx-auto w-full scroll-mt-24 px-4 py-16 sm:px-6 md:py-24 lg:px-12',
+        'mx-auto w-full scroll-mt-24 px-4 py-10 sm:px-6 md:py-14 lg:px-12',
         width === 'narrow' ? 'max-w-4xl' : 'max-w-7xl',
         className,
       )}
