@@ -99,7 +99,12 @@ export interface Requirement {
     module?: ModuleKey;
     /** At least one of these must be granted. */
     permission?: Permission | readonly Permission[];
+    /** Changes go through even while the school is read-only for an unpaid subscription (paying it, for one). */
+    billingExempt?: boolean;
 }
+
+/** Methods that only read; every other one is a change, refused while the school is read-only. */
+const READS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
 export async function requireAccess(req: Requirement = {}): Promise<Access> {
     const access = await getAccess();
@@ -151,6 +156,11 @@ export function route<P = Record<string, never>>(
     return async (...[request, second]: RouteArgs<P>): Promise<Response> => {
         try {
             const access = await requireAccess(requirement);
+            if (!requirement.billingExempt && !READS.has(request.method)) {
+                // Loaded here, not at the top: the billing module throws this file's HttpError.
+                const { assertSchoolWritable } = await import('@/lib/school-billing-server');
+                await assertSchoolWritable(access.schoolId);
+            }
             const params = (second ? await second.params : {}) as P;
             const result = await handler({ access, request, params });
             return result instanceof Response ? result : NextResponse.json({ data: result ?? null });
