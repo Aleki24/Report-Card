@@ -2,7 +2,9 @@
 
 import React from 'react';
 import { AlertTriangle, CheckCircle2, Hourglass, Mail, MapPin, Phone, RotateCcw, User, XCircle } from 'lucide-react';
+import Link from 'next/link';
 import PageHeader from '@/components/dashboard/PageHeader';
+import { PLATFORM_BILLING_PATH } from '@/lib/school-billing';
 import EmptyState from '@/components/dashboard/EmptyState';
 import { ContentSkeleton } from '@/components/dashboard/LoadingSkeleton';
 import { usePendingSchools } from '@/hooks/usePendingSchools';
@@ -63,7 +65,10 @@ export default function PendingSchoolsPage() {
         icon={Hourglass}
         hue="amber"
         description="New schools stay locked until you approve them. You're also told by email, SMS and WhatsApp when one asks."
-        action={state.status === 'ready' && <button type="button" className="btn-secondary" onClick={() => void reload()}><RotateCcw className="size-4" aria-hidden />Refresh</button>}
+        action={<div className="flex flex-wrap gap-2">
+          <Link href={PLATFORM_BILLING_PATH} className="btn-secondary">School billing</Link>
+          {state.status === 'ready' && <button type="button" className="btn-secondary" onClick={() => void reload()}><RotateCcw className="size-4" aria-hidden />Refresh</button>}
+        </div>}
       />
 
       {state.status === 'loading' && <ContentSkeleton message="Loading requests..." />}

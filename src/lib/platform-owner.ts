@@ -35,3 +35,16 @@ export async function isPlatformOwner(userId: string): Promise<boolean> {
         && provesInbox(address.verification.strategy),
     );
 }
+
+/**
+ * The signed-in platform owner's user id, for routes only they may use;
+ * throws the 401 or 403 to return otherwise.
+ */
+export async function requirePlatformOwner(): Promise<string> {
+    const { auth } = await import('@clerk/nextjs/server');
+    const { HttpError } = await import('@/lib/platform/access');
+    const { userId } = await auth();
+    if (!userId) throw new HttpError(401, 'Unauthorized');
+    if (!(await isPlatformOwner(userId))) throw new HttpError(403, 'Only the platform owner can do this.');
+    return userId;
+}

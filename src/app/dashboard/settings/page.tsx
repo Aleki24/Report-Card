@@ -2,8 +2,9 @@
 
 import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { AlertTriangle, Award, BookOpen, CalendarRange, CreditCard, LayoutGrid, RotateCcw, School, UserCog } from 'lucide-react';
+import { AlertTriangle, Award, BookOpen, CalendarRange, CreditCard, LayoutGrid, Receipt, RotateCcw, School, UserCog } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
+import { SubscriptionTab } from '@/components/billing/SubscriptionTab';
 import PageHeader from '@/components/dashboard/PageHeader';
 import EmptyState from '@/components/dashboard/EmptyState';
 import { ContentSkeleton } from '@/components/dashboard/LoadingSkeleton';
@@ -39,7 +40,7 @@ interface SettingsData {
   school: SchoolProfile;
 }
 
-type SettingsTab = 'profile' | 'modules' | 'duties' | 'calendar' | 'grading' | 'curriculum' | 'payments';
+type SettingsTab = 'profile' | 'modules' | 'duties' | 'calendar' | 'grading' | 'curriculum' | 'payments' | 'subscription';
 type StructureType = 'academic_year' | 'term' | 'grading_system';
 
 const TABS: readonly PageTab<SettingsTab>[] = [
@@ -50,6 +51,7 @@ const TABS: readonly PageTab<SettingsTab>[] = [
   { id: 'grading', label: 'Grading systems', shortLabel: 'Grading', icon: Award, hue: 'violet' },
   { id: 'curriculum', label: 'Curriculum', icon: BookOpen, hue: 'emerald' },
   { id: 'payments', label: 'Payments', icon: CreditCard, hue: 'teal' },
+  { id: 'subscription', label: 'Subscription', icon: Receipt, hue: 'emerald' },
 ];
 
 const STRUCTURE_URL = '/api/admin/academic-structure';
@@ -281,7 +283,7 @@ function SettingsPageInner() {
       <PageTabs tabs={TABS} active={active} onSelect={select} label="Settings" idPrefix="settings" />
 
       <div role="tabpanel" id="settings-panel" aria-labelledby={`settings-tab-${active}`}>
-        {active === 'payments' ? <PaymentsTab /> : active === 'modules' ? <ModulesTab /> : active === 'duties' ? <DutiesTab /> : load.state === 'loading' ? (
+        {active === 'subscription' ? <SubscriptionTab /> : active === 'payments' ? <PaymentsTab /> : active === 'modules' ? <ModulesTab /> : active === 'duties' ? <DutiesTab /> : load.state === 'loading' ? (
           <ContentSkeleton message="Loading settings..." />
         ) : load.state === 'error' ? (
           <div className="rounded-2xl border border-dashed border-border bg-card">

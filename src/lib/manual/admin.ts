@@ -150,6 +150,16 @@ export const adminManual: Manual = {
                     tip: 'A module marked “Not included in your plan” needs to be enabled by Skulbase first.',
                 },
                 {
+                    id: 'subscription',
+                    title: 'Your Skulbase subscription',
+                    summary: 'Settings → Subscription shows this term’s invoice, priced by your number of learners, and how to pay. Your first term is free.',
+                    steps: [
+                        { title: 'Pay', body: 'Pay the amount by M-Pesa or bank using the details on the invoice. Skulbase confirms it and marks it paid.' },
+                        { title: 'Pay the year', body: 'Press “Pay the year instead” on an unpaid term to pay three terms at once for less.' },
+                        { title: 'If it stays unpaid', body: 'A reminder shows on every page. 14 days after the due date the school becomes read-only: everything can still be seen and downloaded, but nothing can be added or changed until it is paid.' },
+                    ],
+                },
+                {
                     id: 'duties',
                     title: 'Give staff their duties',
                     summary: 'Settings → Roles & duties gives people the jobs they hold on top of their account type: a teacher can also be the DOS and a house patron; a bursar, nurse or driver signs in as Staff and gets their pages from their duty.',
