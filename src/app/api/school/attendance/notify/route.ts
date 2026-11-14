@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { canManageStream, getCaller } from '@/lib/auth-server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
-import { sendBulkSMS } from '@/lib/africastalking';
+import { sendBulkSMS } from '@/lib/sms';
 import { internalError } from '@/lib/api-errors';
 import { embedOne } from '@/lib/postgrest';
 import { guardianPhones } from '@/lib/parents/phones';

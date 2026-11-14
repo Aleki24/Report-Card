@@ -62,9 +62,8 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 | `CLERK_SECRET_KEY` | yes | Clerk authentication |
 | `CLERK_WEBHOOK_SECRET` | yes | Clerk webhook verification |
 | `NEXT_PUBLIC_APP_URL` | yes | Base URL of the deployed app |
-| `AT_API_KEY` | for SMS | Africa's Talking API key |
-| `AT_USERNAME` | for SMS | Africa's Talking username (defaults to `sandbox`) |
-| `AT_SENDER_ID` | optional | Africa's Talking sender ID |
+| `TOPMEDIA_SMS_API_KEY` | for SMS | Top Media SMS API key (`bsms_live_…` sends, `bsms_test_…` mocks) |
+| `TOPMEDIA_SMS_SENDER_ID` | optional | Approved Top Media SMS sender ID (defaults to the platform's `BulkSMS`) |
 | `RESEND_API_KEY` | for email | Resend API key for transactional email |
 | `PLATFORM_OWNER_EMAIL` | optional | Overrides who is emailed to approve new school sign-ups (comma-separated). Defaults to the owner addresses in `src/lib/school-approval.ts` |
 | `PLATFORM_OWNER_PHONE` | optional | Overrides who is texted about new school sign-ups (comma-separated). Defaults as above |
@@ -163,16 +162,16 @@ activation code.
 ### SMS notifications
 
 Attendance and results notifications are sent to parents via
-[Africa's Talking](https://africastalking.com/). Phone numbers are normalized
-to Kenyan E.164 format before sending; without `AT_API_KEY` set, SMS sending
-is disabled.
+[Top Media SMS](https://topmediasms.com/docs). Phone numbers are normalized
+to Kenyan E.164 format before sending; without `TOPMEDIA_SMS_API_KEY` set, SMS
+sending is disabled.
 
 ## Tech Stack
 
 - [Next.js](https://nextjs.org) (App Router)
 - [Supabase](https://supabase.com) for the database
 - [Clerk](https://clerk.com) for authentication
-- [Africa's Talking](https://africastalking.com) for SMS
+- [Top Media SMS](https://topmediasms.com) for SMS
 - [Anthropic API](https://www.anthropic.com) for marksheet scanning
 - [Resend](https://resend.com) for transactional email
 

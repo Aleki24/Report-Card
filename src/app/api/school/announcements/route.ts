@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
-import { sendBulkSMS } from '@/lib/africastalking';
+import { sendBulkSMS } from '@/lib/sms';
 import { rateLimit } from '@/lib/rate-limit';
 import { getCaller } from '@/lib/auth-server';
 import { internalError } from '@/lib/api-errors';

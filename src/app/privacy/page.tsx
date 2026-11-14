@@ -64,7 +64,7 @@ const SECTIONS: readonly LegalSection[] = [
         <p>We do not sell personal data or use it for advertising. We share it only with the services that run Skulbase, each bound to protect it:</p>
         <ul>
           <li>Clerk (sign-in), Supabase (database and file storage), Vercel (hosting).</li>
-          <li>Resend (email), Africa’s Talking (SMS) and Meta WhatsApp (messages).</li>
+          <li>Resend (email), Top Media SMS (SMS) and Meta WhatsApp (messages).</li>
           <li>Safaricom M-Pesa and Pesapal (fee payments).</li>
           <li>Anthropic, when a school uses AI features such as reading a scanned exam paper; the content is processed to produce the result and is not used to train models.</li>
         </ul>
