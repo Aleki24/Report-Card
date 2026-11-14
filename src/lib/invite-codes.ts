@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { sendSMS } from './africastalking';
+import { sendSMS } from './sms';
 import { sendEmail } from './email';
 import { escapeHtml } from './html';
 import { activationUrl } from './activation-link';

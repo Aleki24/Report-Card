@@ -20,7 +20,7 @@ export function inviteDeliveryMessage(d: InviteDelivery | null | undefined): { s
   }
   const why = d.noPhone
     ? 'There is no phone number on file to text it to.'
-    : d.smsError && /credentials|AT_API_KEY|AT_USERNAME/i.test(d.smsError)
+    : d.smsError && /credentials|TOPMEDIA_SMS_API_KEY|not set up/i.test(d.smsError)
       ? 'The school’s SMS service isn’t working right now (its account settings need fixing).'
       : d.smsError === 'Invalid phone number'
         ? 'The phone number on file isn’t a valid Kenyan number.'

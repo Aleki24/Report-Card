@@ -5,7 +5,7 @@ import { audit } from '@/lib/platform/audit';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { embedOne, fetchAllRows, inChunks } from '@/lib/postgrest';
 import { guardianPhones } from '@/lib/parents/phones';
-import { sendBulkSMS } from '@/lib/africastalking';
+import { sendBulkSMS } from '@/lib/sms';
 import { rateLimit } from '@/lib/rate-limit';
 import { formatKsh, type FeeReminderSummary } from '@/lib/fee-account';
 

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getCaller } from '@/lib/auth-server';
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { classLearnersInTerm } from '@/lib/reports/class-history';
-import { sendBulkSMS } from '@/lib/africastalking';
+import { sendBulkSMS } from '@/lib/sms';
 import { rateLimit } from '@/lib/rate-limit';
 import { fetchAllRows } from '@/lib/postgrest';
 import { internalError } from '@/lib/api-errors';

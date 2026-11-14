@@ -1,5 +1,5 @@
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
-import { sendSMS } from '@/lib/africastalking';
+import { sendSMS } from '@/lib/sms';
 import { embedOne } from '@/lib/postgrest';
 
 export interface LearnerContact { name: string; firstName: string; guardianPhone: string | null; schoolName: string }

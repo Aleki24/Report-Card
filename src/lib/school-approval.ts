@@ -1,5 +1,5 @@
 import { sendSchoolApprovalRequestEmail, sendSchoolApprovedEmail, type SchoolApprovalRequest } from '@/lib/email';
-import { sendSMS } from '@/lib/africastalking';
+import { sendSMS } from '@/lib/sms';
 import { sendWhatsAppTemplate, WHATSAPP_TEMPLATES } from '@/lib/whatsapp';
 
 /**

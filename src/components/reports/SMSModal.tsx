@@ -24,8 +24,8 @@ interface SMSModalProps {
   messagePreview: string;
 }
 
-/** Rough Africa's Talking price per SMS in Kenya, for the estimate only. */
-const KES_PER_SMS = 0.8;
+/** Top Media SMS price per SMS unit, for the estimate only. */
+const KES_PER_SMS = 0.5;
 
 export function SMSModal({ onClose, classLabel, examLabel, learners, sending, result, onSend, messagePreview }: SMSModalProps) {
   const [search, setSearch] = useState('');
