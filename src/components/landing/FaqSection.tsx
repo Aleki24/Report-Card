@@ -12,7 +12,7 @@ const FAQS: Faq[] = [
   {
     question: 'How much does Skulbase cost?',
     answer:
-      `${TERM_PRICE} for every school, with every module included. Pay the year and save 15%; your first term is free.`,
+      `${TERM_PRICE} for every school, with every module included.`,
   },
   {
     question: 'Does it support both CBC and 8-4-4?',

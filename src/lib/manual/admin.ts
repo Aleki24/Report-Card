@@ -152,7 +152,7 @@ export const adminManual: Manual = {
                 {
                     id: 'subscription',
                     title: 'Your Skulbase subscription',
-                    summary: 'Settings → Subscription shows this term’s invoice, priced by your number of learners, and how to pay. Your first term is free.',
+                    summary: 'Settings → Subscription shows this term’s invoice and how to pay.',
                     steps: [
                         { title: 'Pay', body: 'Pay the amount by M-Pesa or bank using the details on the invoice. Skulbase confirms it and marks it paid.' },
                         { title: 'Pay the year', body: 'Press “Pay the year instead” on an unpaid term to pay three terms at once for less.' },

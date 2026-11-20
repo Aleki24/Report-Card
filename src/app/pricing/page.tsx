@@ -7,11 +7,11 @@ import { MarketingShell } from '@/components/landing/ui/MarketingShell';
 import { PageHero } from '@/components/landing/ui/PageHero';
 import { Section, SectionHeader } from '@/components/landing/ui/Section';
 import { CtaLink } from '@/components/landing/ui/CtaLink';
-import { FREE_TRIAL, PRICE_PER_TERM, TERM_PRICE, YEAR_DISCOUNT, cyclePrice, formatKes } from '@/lib/pricing';
+import { PRICE_PER_TERM, TERM_PRICE, formatKes } from '@/lib/pricing';
 
 export const metadata: Metadata = {
   title: 'Pricing · Skulbase',
-  description: `${FREE_TRIAL}, then ${TERM_PRICE}. Every module included.`,
+  description: `${TERM_PRICE}. Every module included.`,
 };
 
 const INCLUDED: readonly string[] = [
@@ -37,8 +37,7 @@ const MODULES: readonly Module[] = [
 ];
 
 const BILLING: readonly { q: string; a: string }[] = [
-  { q: 'How do we pay?', a: `By the term or the year, by M-Pesa or bank. The year is three terms less ${Math.round(YEAR_DISCOUNT * 100)}%.` },
-  { q: 'Is there a trial?', a: 'Your first term is free. No payment until your second term.' },
+  { q: 'How do we pay?', a: 'Each term, by M-Pesa or bank.' },
   { q: 'Do we pay per learner?', a: `No. Every school pays ${TERM_PRICE}, whatever its size.` },
   { q: 'What about SMS?', a: 'Texts to parents are bought in bundles, at the network price.' },
 ];
@@ -51,18 +50,17 @@ export default function PricingPage() {
         eyebrow="Plans & pricing"
         title="One price."
         highlight="Every module included."
-        description={`${FREE_TRIAL}. Then ${TERM_PRICE}.`}
+        description={`${TERM_PRICE} for every school.`}
       />
 
       <Section className="pt-0 md:pt-0">
         <div className="mx-auto grid max-w-5xl items-start gap-6 lg:grid-cols-[minmax(0,380px)_1fr] lg:gap-10">
-          <article className="relative flex flex-col rounded-3xl border-2 border-primary bg-card p-6 shadow-2xl shadow-black/5 sm:p-8 dark:shadow-black/40">
-            <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-primary px-4 py-1 text-[0.6875rem] font-bold tracking-widest whitespace-nowrap text-primary-foreground uppercase">{FREE_TRIAL}</span>
+          <article className="flex flex-col rounded-3xl border-2 border-primary bg-card p-6 shadow-2xl shadow-black/5 sm:p-8 dark:shadow-black/40">
             <h2 className="font-heading text-lg font-bold text-foreground">Every school</h2>
             <p className="text-sm text-muted-foreground">Any size, every module</p>
             <p className="mt-4 font-heading text-4xl leading-tight font-bold text-foreground tabular-nums">{formatKes(PRICE_PER_TERM)}</p>
-            <p className="text-sm text-muted-foreground">a term · {formatKes(cyclePrice('year'))} a year (save {Math.round(YEAR_DISCOUNT * 100)}%)</p>
-            <CtaLink href="/signup" variant="primary" size="md" className="mt-6 w-full">Start free</CtaLink>
+            <p className="text-sm text-muted-foreground">a term</p>
+            <CtaLink href="/signup" variant="primary" size="md" className="mt-6 w-full">Get started</CtaLink>
           </article>
           <div>
             <h2 className="mb-4 flex items-center gap-2 text-xs font-semibold tracking-[0.2em] text-muted-foreground uppercase">

@@ -1,13 +1,13 @@
 /**
  * Skulbase billing schools, on the server: each school's invoice for the
  * term it is in is made the first time anyone asks (no scheduled job), at the
- * one Skulbase price; its first invoice is free. Whether a school is
+ * one Skulbase price. Whether a school is
  * read-only is read from its unpaid invoices.
  */
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { schoolToday } from '@/lib/dates';
 import { HttpError } from '@/lib/platform/access';
-import { PLAN_NAME, PRICE_PER_TERM, cyclePrice } from '@/lib/pricing';
+import { PLAN_NAME, PRICE_PER_TERM } from '@/lib/pricing';
 import {
     DAYS_TO_PAY, READ_ONLY_MESSAGE, addIsoDays, billingState, lockDateOf, paymentInstructionsSchema,
     type InvoiceAction, type PaymentInstructions, type PlatformSchoolBilling, type SchoolInvoice,
@@ -74,10 +74,7 @@ export async function ensureCurrentInvoice(schoolId: string): Promise<void> {
         throw error;
     }
     if ((covering ?? []).length > 0) return;
-    const { count, error: countError } = await db().from('school_invoices').select('id', { count: 'exact', head: true }).eq('school_id', schoolId).neq('status', 'VOID');
-    if (countError) throw countError;
     const learners = await activeLearners(schoolId);
-    const first = (count ?? 0) === 0;
     const today = schoolToday();
     const { error: insertError } = await db().from('school_invoices').insert({
         school_id: schoolId,
@@ -87,10 +84,9 @@ export async function ensureCurrentInvoice(schoolId: string): Promise<void> {
         period_end: term.end,
         learners,
         plan: PLAN_NAME,
-        amount: first ? 0 : PRICE_PER_TERM,
-        status: first ? 'FREE' : 'DUE',
+        amount: PRICE_PER_TERM,
+        status: 'DUE',
         due_date: addIsoDays(term.start > today ? term.start : today, DAYS_TO_PAY),
-        note: first ? 'First term free' : null,
     });
     // Two requests at once: the second finds the live invoice the first made.
     if (insertError && insertError.code !== '23505') throw insertError;
@@ -130,32 +126,6 @@ export async function assertSchoolWritable(schoolId: string): Promise<void> {
     }
     const today = schoolToday();
     if ((data ?? []).some(r => today >= lockDateOf({ dueDate: r.due_date as string }))) throw new HttpError(402, READ_ONLY_MESSAGE);
-}
-
-/** Pay the year instead of the term: the term's invoice is replaced by one for three terms, less the yearly saving. */
-export async function switchToYear(schoolId: string, invoiceId: string): Promise<void> {
-    const { data, error } = await db().from('school_invoices').select(INVOICE_SELECT).eq('id', invoiceId).eq('school_id', schoolId).maybeSingle();
-    if (error) throw error;
-    const invoice = data as InvoiceRow | null;
-    if (!invoice || invoice.status !== 'DUE' || invoice.cycle !== 'TERM') throw new HttpError(400, 'Only an unpaid term can be changed to the year.');
-    const { error: voidError } = await db().from('school_invoices').update({ status: 'VOID', note: 'Replaced by the year' }).eq('id', invoiceId);
-    if (voidError) throw voidError;
-    const { error: insertError } = await db().from('school_invoices').insert({
-        school_id: schoolId,
-        label: `Year from ${invoice.label}`,
-        cycle: 'YEAR',
-        period_start: invoice.period_start,
-        period_end: addIsoDays(invoice.period_start, 364),
-        learners: invoice.learners,
-        plan: invoice.plan,
-        amount: cyclePrice('year'),
-        status: 'DUE',
-        due_date: invoice.due_date,
-    });
-    if (insertError) {
-        await db().from('school_invoices').update({ status: 'DUE', note: null }).eq('id', invoiceId);
-        throw insertError;
-    }
 }
 
 /** Every approved school with its invoices, for the platform owner; current invoices made first. */
