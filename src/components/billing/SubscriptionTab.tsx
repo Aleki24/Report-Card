@@ -79,7 +79,7 @@ export function SubscriptionTab() {
                         )}
                         {unpaid?.cycle === 'TERM' && (
                             <Button variant="outline" className="mt-4" disabled={busy} onClick={() => void payYear(unpaid)}>
-                                Pay the year instead: {formatKes(cyclePrice(unpaid.learners, 'year'))} (save {Math.round(YEAR_DISCOUNT * 100)}%)
+                                Pay the year instead: {formatKes(cyclePrice('year'))} (save {Math.round(YEAR_DISCOUNT * 100)}%)
                             </Button>
                         )}
                     </>

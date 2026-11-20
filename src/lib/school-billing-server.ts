@@ -1,13 +1,13 @@
 /**
  * Skulbase billing schools, on the server: each school's invoice for the
- * term it is in is made the first time anyone asks (no scheduled job), priced
- * by its active learners; its first invoice is free. Whether a school is
+ * term it is in is made the first time anyone asks (no scheduled job), at the
+ * one Skulbase price; its first invoice is free. Whether a school is
  * read-only is read from its unpaid invoices.
  */
 import { createSupabaseAdmin } from '@/lib/supabase-admin';
 import { schoolToday } from '@/lib/dates';
 import { HttpError } from '@/lib/platform/access';
-import { PER_LEARNER_ABOVE, cyclePrice, planFor, termPrice } from '@/lib/pricing';
+import { PLAN_NAME, PRICE_PER_TERM, cyclePrice } from '@/lib/pricing';
 import {
     DAYS_TO_PAY, READ_ONLY_MESSAGE, addIsoDays, billingState, lockDateOf, paymentInstructionsSchema,
     type InvoiceAction, type PaymentInstructions, type PlatformSchoolBilling, type SchoolInvoice,
@@ -30,7 +30,6 @@ const toInvoice = (r: InvoiceRow): SchoolInvoice => ({
     amount: r.amount, status: r.status, dueDate: r.due_date, paidAmount: r.paid_amount, paymentRef: r.payment_ref, paidAt: r.paid_at,
 });
 
-const planName = (learners: number) => planFor(learners)?.name ?? `Per learner (KES ${PER_LEARNER_ABOVE})`;
 
 async function activeLearners(schoolId: string): Promise<number> {
     const { count, error } = await db().from('students').select('id', { count: 'exact', head: true }).eq('school_id', schoolId).eq('status', 'ACTIVE');
@@ -87,8 +86,8 @@ export async function ensureCurrentInvoice(schoolId: string): Promise<void> {
         period_start: term.start,
         period_end: term.end,
         learners,
-        plan: planName(learners),
-        amount: first ? 0 : termPrice(learners),
+        plan: PLAN_NAME,
+        amount: first ? 0 : PRICE_PER_TERM,
         status: first ? 'FREE' : 'DUE',
         due_date: addIsoDays(term.start > today ? term.start : today, DAYS_TO_PAY),
         note: first ? 'First term free' : null,
@@ -149,7 +148,7 @@ export async function switchToYear(schoolId: string, invoiceId: string): Promise
         period_end: addIsoDays(invoice.period_start, 364),
         learners: invoice.learners,
         plan: invoice.plan,
-        amount: cyclePrice(invoice.learners, 'year'),
+        amount: cyclePrice('year'),
         status: 'DUE',
         due_date: invoice.due_date,
     });

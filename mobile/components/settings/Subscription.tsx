@@ -67,7 +67,7 @@ export function Subscription() {
                         {state.kind === 'locked' ? <Notice tone="danger" message="Read-only until paid." /> : null}
                         {unpaid?.cycle === 'TERM' ? (
                             <View style={{ marginTop: spacing.sm }}>
-                                <Button variant="secondary" loading={busy} block label={`Pay the year instead: ${formatKes(cyclePrice(unpaid.learners, 'year'))} (save ${Math.round(YEAR_DISCOUNT * 100)}%)`} onPress={() => void payYear(unpaid)} />
+                                <Button variant="secondary" loading={busy} block label={`Pay the year instead: ${formatKes(cyclePrice('year'))} (save ${Math.round(YEAR_DISCOUNT * 100)}%)`} onPress={() => void payYear(unpaid)} />
                             </View>
                         ) : null}
                     </>
