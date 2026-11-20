@@ -7,13 +7,11 @@ import { MarketingShell } from '@/components/landing/ui/MarketingShell';
 import { PageHero } from '@/components/landing/ui/PageHero';
 import { Section, SectionHeader } from '@/components/landing/ui/Section';
 import { CtaLink } from '@/components/landing/ui/CtaLink';
-import { FREE_TRIAL, PER_LEARNER_ABOVE, PLANS, STARTING_PRICE, cyclePrice, formatKes } from '@/lib/pricing';
-import { PriceCalculator } from '@/components/landing/PriceCalculator';
-import { cn } from '@/lib/utils';
+import { PRICE_PER_TERM, TERM_PRICE, formatKes } from '@/lib/pricing';
 
 export const metadata: Metadata = {
   title: 'Pricing · Skulbase',
-  description: `${FREE_TRIAL}, then from ${STARTING_PRICE}. Every module in every plan.`,
+  description: `${TERM_PRICE}. Every module included.`,
 };
 
 const INCLUDED: readonly string[] = [
@@ -39,51 +37,34 @@ const MODULES: readonly Module[] = [
 ];
 
 const BILLING: readonly { q: string; a: string }[] = [
-  { q: 'How do we pay?', a: 'By the term or the year, by M-Pesa or bank. The year is three terms less 15%.' },
-  { q: 'Is there a trial?', a: 'Your first term is free. No payment until your second term.' },
-  { q: 'Do we pay per learner?', a: `Only past 1,500 learners: ${formatKes(PER_LEARNER_ABOVE)} a learner a term. Below that, one price by size.` },
+  { q: 'How do we pay?', a: 'Each term, by M-Pesa or bank.' },
+  { q: 'Do we pay per learner?', a: `No. Every school pays ${TERM_PRICE}, whatever its size.` },
   { q: 'What about SMS?', a: 'Texts to parents are bought in bundles, at the network price.' },
 ];
 
-/** Plans by school size, every module in each, a calculator, and how paying works. */
+/** One price for every school, every module included, and how paying works. */
 export default function PricingPage() {
   return (
     <MarketingShell>
       <PageHero
         eyebrow="Plans & pricing"
-        title="Pay by school size."
+        title="One price."
         highlight="Every module included."
-        description={`${FREE_TRIAL}. Then from ${STARTING_PRICE}.`}
+        description={`${TERM_PRICE} for every school.`}
       />
 
       <Section className="pt-0 md:pt-0">
-        <div className="mx-auto grid max-w-6xl gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {PLANS.map((plan, i) => (
-            <article key={plan.id} className={cn('relative flex flex-col rounded-3xl border bg-card p-6', i === 1 ? 'border-2 border-primary shadow-2xl shadow-black/5 dark:shadow-black/40' : 'border-border/70')}>
-              {i === 1 && <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-primary px-4 py-1 text-[0.6875rem] font-bold tracking-widest text-primary-foreground uppercase">Most schools</span>}
-              <h2 className="font-heading text-lg font-bold text-foreground">{plan.name}</h2>
-              <p className="text-sm text-muted-foreground">{plan.tagline}</p>
-              <p className="mt-4 font-heading text-[1.75rem] leading-tight font-bold whitespace-nowrap text-foreground">{formatKes(plan.perTerm)}</p>
-              <p className="text-sm text-muted-foreground">a term · {formatKes(cyclePrice(plan.upTo, 'year'))} a year</p>
-              <CtaLink href="/signup" variant={i === 1 ? 'primary' : 'outline'} size="md" className="mt-6 w-full">Start free</CtaLink>
-            </article>
-          ))}
-          <article className="flex flex-col rounded-3xl border border-dashed border-border bg-card/60 p-6">
-            <h2 className="font-heading text-lg font-bold text-foreground">Big schools</h2>
-            <p className="text-sm text-muted-foreground">Over 1,500 learners</p>
-            <p className="mt-4 font-heading text-[1.75rem] leading-tight font-bold whitespace-nowrap text-foreground">{formatKes(PER_LEARNER_ABOVE)}</p>
-            <p className="text-sm text-muted-foreground">a learner a term</p>
-            <CtaLink href="/contact" variant="outline" size="md" className="mt-auto w-full">Talk to us</CtaLink>
+        <div className="mx-auto grid max-w-5xl items-start gap-6 lg:grid-cols-[minmax(0,380px)_1fr] lg:gap-10">
+          <article className="flex flex-col rounded-3xl border-2 border-primary bg-card p-6 shadow-2xl shadow-black/5 sm:p-8 dark:shadow-black/40">
+            <h2 className="font-heading text-lg font-bold text-foreground">Every school</h2>
+            <p className="text-sm text-muted-foreground">Any size, every module</p>
+            <p className="mt-4 font-heading text-4xl leading-tight font-bold text-foreground tabular-nums">{formatKes(PRICE_PER_TERM)}</p>
+            <p className="text-sm text-muted-foreground">a term</p>
+            <CtaLink href="/signup" variant="primary" size="md" className="mt-6 w-full">Get started</CtaLink>
           </article>
-        </div>
-      </Section>
-
-      <Section className="pt-0 md:pt-0">
-        <div className="mx-auto grid max-w-5xl items-start gap-6 lg:grid-cols-[minmax(0,420px)_1fr] lg:gap-10">
-          <PriceCalculator />
           <div>
             <h2 className="mb-4 flex items-center gap-2 text-xs font-semibold tracking-[0.2em] text-muted-foreground uppercase">
-              <Sparkles className="size-3.5" aria-hidden /> In every plan
+              <Sparkles className="size-3.5" aria-hidden /> Included
             </h2>
             <ul className="grid gap-2.5 sm:grid-cols-2">
               {INCLUDED.map(item => (

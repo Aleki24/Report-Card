@@ -1,11 +1,10 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Linking, Pressable, Text, View } from 'react-native';
-import { useApi } from '@/lib/api';
 import { useApiQuery } from '@/lib/useApiQuery';
-import { errorMessage, formatDate } from '@/lib/format';
+import { formatDate } from '@/lib/format';
 import { fonts, makeStyles, spacing } from '@/lib/theme';
-import { Badge, Button, Card, ErrorBanner, InfoRow, ListCard, ListRow, LoadingView, Notice, SectionLabel } from '@/components/ui';
-import { YEAR_DISCOUNT, cyclePrice, formatKes } from '@shared/pricing';
+import { Badge, Card, ErrorBanner, InfoRow, ListCard, ListRow, LoadingView, Notice, SectionLabel } from '@/components/ui';
+import { formatKes } from '@shared/pricing';
 import { BILLING_URL, STATE_COPY, hasInstructions, type SchoolBilling, type SchoolInvoice } from '@shared/school-billing';
 
 const BADGE = { good: 'success', warn: 'warning', bad: 'danger', muted: 'default' } as const;
@@ -22,10 +21,7 @@ function invoiceLine(i: SchoolInvoice): string {
 /** The web's Settings → Subscription: this term's Skulbase invoice, where to pay, and past invoices. */
 export function Subscription() {
     const styles = useStyles();
-    const api = useApi();
     const query = useApiQuery<SchoolBilling>(BILLING_URL);
-    const [busy, setBusy] = useState(false);
-    const [message, setMessage] = useState<{ tone: 'success' | 'danger'; text: string } | null>(null);
 
     if (query.loading && !query.data) return <LoadingView />;
     if (!query.data) return <ErrorBanner message={query.error ?? 'Could not load the subscription'} onRetry={query.reload} />;
@@ -35,23 +31,8 @@ export function Subscription() {
     const unpaid = current?.status === 'DUE' ? current : null;
     const copy = STATE_COPY[state.kind];
 
-    const payYear = async (invoice: SchoolInvoice) => {
-        setBusy(true);
-        setMessage(null);
-        try {
-            await api.post(`${BILLING_URL}/year`, { invoice_id: invoice.id });
-            setMessage({ tone: 'success', text: 'Changed to the year.' });
-            query.refresh();
-        } catch (err) {
-            setMessage({ tone: 'danger', text: errorMessage(err, 'Could not change it') });
-        } finally {
-            setBusy(false);
-        }
-    };
-
     return (
         <View>
-            {message ? <Notice tone={message.tone} message={message.text} onDismiss={() => setMessage(null)} /> : null}
             <Card>
                 {current ? (
                     <>
@@ -65,11 +46,6 @@ export function Subscription() {
                             <Notice tone={state.kind === 'overdue' ? 'danger' : 'warning'} message={`Read-only from ${day(state.lockOn)} if unpaid.`} />
                         ) : null}
                         {state.kind === 'locked' ? <Notice tone="danger" message="Read-only until paid." /> : null}
-                        {unpaid?.cycle === 'TERM' ? (
-                            <View style={{ marginTop: spacing.sm }}>
-                                <Button variant="secondary" loading={busy} block label={`Pay the year instead: ${formatKes(cyclePrice(unpaid.learners, 'year'))} (save ${Math.round(YEAR_DISCOUNT * 100)}%)`} onPress={() => void payYear(unpaid)} />
-                            </View>
-                        ) : null}
                     </>
                 ) : (
                     <Text style={styles.muted}>Set the current term under Calendar to see this term’s invoice.</Text>

@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { Plus } from 'lucide-react';
 import { Section, SectionHeader } from './ui/Section';
-import { STARTING_PRICE } from '@/lib/pricing';
+import { TERM_PRICE } from '@/lib/pricing';
 
 type Faq = {
   question: string;
@@ -12,7 +12,7 @@ const FAQS: Faq[] = [
   {
     question: 'How much does Skulbase cost?',
     answer:
-      `Every plan has every module. You pay by school size, per term: from ${STARTING_PRICE} for up to 300 learners. Pay the year and save; your first term is free.`,
+      `${TERM_PRICE} for every school, with every module included.`,
   },
   {
     question: 'Does it support both CBC and 8-4-4?',

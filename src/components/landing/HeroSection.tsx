@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type PointerEvent } from 'react';
-import { PLAN_FOOTNOTE } from '@/lib/pricing';
+import { PLAN_FOOTNOTE, PRICE_PER_TERM } from '@/lib/pricing';
 import Link from 'next/link';
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -34,7 +34,7 @@ const STATS: Stat[] = [
   { value: modules.filter((m) => m.status === 'active' && m.slug !== 'settings').length, label: 'Modules under one login' },
   { value: 1, label: 'Click to print a whole class’s report cards' },
   { value: 2, label: 'Curricula supported — CBC & 8-4-4' },
-  { value: 5000, prefix: 'KES ', label: 'Per term, every module included' },
+  { value: PRICE_PER_TERM, prefix: 'KES ', label: 'Per term, every module included' },
 ];
 
 // Grade 8 is CBC junior school — marks map to KNEC performance levels

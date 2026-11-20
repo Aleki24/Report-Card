@@ -1,14 +1,11 @@
 "use client";
 
-import React, { useState } from 'react';
-import { toast } from 'sonner';
+import React from 'react';
 import { CalendarClock, CircleCheck, Receipt, Smartphone, TriangleAlert } from 'lucide-react';
-import { Button } from '@/components/ui/Button';
 import { LoadError } from '@/components/ui/LoadError';
-import { jsonBody, requestJson } from '@/lib/api-error-message';
 import { formatIsoDate } from '@/lib/dates';
-import { YEAR_DISCOUNT, cyclePrice, formatKes } from '@/lib/pricing';
-import { BILLING_URL, STATE_COPY, hasInstructions, type BillingState, type SchoolInvoice } from '@/lib/school-billing';
+import { formatKes } from '@/lib/pricing';
+import { STATE_COPY, hasInstructions, type BillingState, type SchoolInvoice } from '@/lib/school-billing';
 import { cn } from '@/lib/utils';
 import { useSchoolBilling } from './useSchoolBilling';
 
@@ -37,7 +34,6 @@ function invoiceLine(i: SchoolInvoice): string {
 /** Settings → Subscription: what the school owes Skulbase this term, how to pay, and past invoices. */
 export function SubscriptionTab() {
     const { load, reload } = useSchoolBilling();
-    const [busy, setBusy] = useState(false);
 
     if (load.state === 'loading') return <div className="skeleton-bone h-64 rounded-2xl" />;
     if (load.state === 'error') return <LoadError title="Couldn't load the subscription" message={load.message} onRetry={() => void reload()} />;
@@ -46,15 +42,6 @@ export function SubscriptionTab() {
     const current = state.kind === 'none' ? null : state.invoice;
     const unpaid = current?.status === 'DUE' ? current : null;
 
-    const payYear = async (invoice: SchoolInvoice) => {
-        setBusy(true);
-        try {
-            await requestJson(`${BILLING_URL}/year`, jsonBody('POST', { invoice_id: invoice.id }));
-            toast.success('Changed to the year.');
-            await reload();
-        } catch (err) { toast.error(err instanceof Error ? err.message : 'Could not change it.'); }
-        finally { setBusy(false); }
-    };
 
     return (
         <div className="mx-auto flex max-w-3xl flex-col gap-4">
@@ -76,11 +63,6 @@ export function SubscriptionTab() {
                             <p className={cn('mt-3 flex items-center gap-2 rounded-xl px-3 py-2 text-sm', TONE.bad)}>
                                 <TriangleAlert className="size-4 shrink-0" aria-hidden />Read-only until paid.
                             </p>
-                        )}
-                        {unpaid?.cycle === 'TERM' && (
-                            <Button variant="outline" className="mt-4" disabled={busy} onClick={() => void payYear(unpaid)}>
-                                Pay the year instead: {formatKes(cyclePrice(unpaid.learners, 'year'))} (save {Math.round(YEAR_DISCOUNT * 100)}%)
-                            </Button>
                         )}
                     </>
                 ) : (
