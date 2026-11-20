@@ -30,6 +30,8 @@ as $$
           from student_promotions sp
           join student_promotion_runs r on r.id = sp.run_id
           where sp.student_id = s.id
+            -- This school's promotions only: a learner who transferred in keeps another school's history.
+            and r.school_id = p_school_id
             and r.undone_at is null
             and sp.outcome in ('GRADUATE', 'TRANSFER')
       );
