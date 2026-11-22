@@ -94,7 +94,7 @@ function SchoolRow({ school, onDone, onMessage }: { school: PlatformSchoolBillin
                     <TextField label="Amount (KES)" value={amount} onChangeText={(t) => setAmount(t.replace(/[^0-9]/g, ''))} keyboardType="number-pad" />
                     <ButtonRow>
                         <Button size="sm" variant="ghost" label="Cancel" onPress={() => setPaying(false)} />
-                        <Button size="sm" label="Save" loading={busy} disabled={ref.trim().length < 3} onPress={() => void act({ action: 'paid', payment_ref: ref.trim(), amount: Number(amount) || 0 }, 'marked paid.')} />
+                        <Button size="sm" label="Save" loading={busy} disabled={ref.trim().length < 3 || !(Number(amount) > 0)} onPress={() => void act({ action: 'paid', payment_ref: ref.trim(), amount: Number(amount) || 0 }, 'marked paid.')} />
                     </ButtonRow>
                 </View>
             ) : null}

@@ -108,7 +108,8 @@ export interface PlatformSchoolBilling {
 export const markPaidSchema = z.object({
     action: z.literal('paid'),
     payment_ref: z.string().trim().min(3, 'Enter the M-Pesa code or bank reference').max(40),
-    amount: z.number().int().min(0).max(10_000_000),
+    // Zero would show a school as paid with nothing received; Waive is for no payment.
+    amount: z.number().int().min(1, 'Enter the amount received').max(10_000_000),
 });
 export const invoiceActionSchema = z.discriminatedUnion('action', [
     markPaidSchema,

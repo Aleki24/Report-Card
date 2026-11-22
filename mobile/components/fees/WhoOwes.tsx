@@ -6,7 +6,7 @@ import { useApiQuery } from '@/lib/useApiQuery';
 import { useDownload } from '@/lib/useDownload';
 import { useGradeStreams, useTerms } from '@/lib/useSchoolData';
 import { useCurrentUser } from '@/lib/UserContext';
-import { confirmAlert } from '@/lib/confirm';
+import { askConfirm } from '@/lib/confirm';
 import { errorMessage, formatCurrency, formatDate } from '@/lib/format';
 import { fonts, makeStyles, spacing, useTheme } from '@/lib/theme';
 import {
@@ -83,27 +83,15 @@ export function WhoOwes({ initialFocus }: { initialFocus?: Exclude<Focus, 'all' 
                 setMessage({ tone: 'info', text: preview.without_phone ? `Nobody to text: ${preview.without_phone} owing learners have no parent phone.` : 'Nobody owing has a parent to text.' });
                 return;
             }
-            confirmAlert(
+            const ok = await askConfirm(
                 'Text fee reminders?',
                 `${preview.recipients} ${preview.recipients === 1 ? 'SMS' : 'SMSes'} to the parents of ${preview.learners} ${preview.learners === 1 ? 'learner' : 'learners'}, each with their balance.${preview.without_phone ? ` ${preview.without_phone} more owe but have no parent phone.` : ''}`,
-                [
-                    { text: 'Cancel', style: 'cancel' },
-                    {
-                        text: 'Send reminders',
-                        onPress: async () => {
-                            setBusy('remind');
-                            try {
-                                const sent = await api.post<FeeReminderSummary>('/api/finance/reminders', body(false));
-                                setMessage({ tone: sent.failed ? 'danger' : 'success', text: `Reminders sent: ${sent.sent}${sent.failed ? `, ${sent.failed} failed` : ''}.` });
-                            } catch (err) {
-                                setMessage({ tone: 'danger', text: errorMessage(err, 'Could not send reminders') });
-                            } finally {
-                                setBusy(null);
-                            }
-                        },
-                    },
-                ],
+                'Send reminders',
             );
+            if (!ok) return;
+            // Awaited here, so the button stays busy until the texts are sent.
+            const sent = await api.post<FeeReminderSummary>('/api/finance/reminders', body(false));
+            setMessage({ tone: sent.failed ? 'danger' : 'success', text: `Reminders sent: ${sent.sent}${sent.failed ? `, ${sent.failed} failed` : ''}.` });
         } catch (err) {
             setMessage({ tone: 'danger', text: errorMessage(err, 'Could not send reminders') });
         } finally {

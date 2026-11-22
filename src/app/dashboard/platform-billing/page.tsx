@@ -87,7 +87,7 @@ function SchoolRow({ school, onDone }: { school: PlatformSchoolBilling; onDone: 
                     <FormField label="Amount (KES)" htmlFor={`amt-${invoice.id}`}><InputField id={`amt-${invoice.id}`} inputMode="numeric" value={amount} onChange={e => setAmount(e.target.value.replace(/[^0-9]/g, ''))} /></FormField>
                     <div className="flex gap-2">
                         <Button variant="ghost" onClick={() => setPaying(false)}>Cancel</Button>
-                        <Button disabled={busy || ref.trim().length < 3} onClick={() => void act({ action: 'paid', payment_ref: ref.trim(), amount: Number(amount) || 0 }, 'Marked paid.')}>Save</Button>
+                        <Button disabled={busy || ref.trim().length < 3 || !(Number(amount) > 0)} onClick={() => void act({ action: 'paid', payment_ref: ref.trim(), amount: Number(amount) || 0 }, 'Marked paid.')}>Save</Button>
                     </div>
                 </div>
             )}
