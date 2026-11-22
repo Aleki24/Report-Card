@@ -3,6 +3,7 @@ import { Linking, StyleSheet, Text, View } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import { CircleCheck, Hourglass, Mail, MapPin, Phone, User } from 'lucide-react-native';
 import type { PendingSchool } from '@shared/pending-schools';
+import { useRouter } from 'expo-router';
 import { webUrl } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { fonts, spacing, makeStyles, useTheme } from '@/lib/theme';
@@ -55,11 +56,15 @@ function SchoolCard({ school }: { school: PendingSchool }) {
 /** The web's /dashboard/pending-schools: the platform owner's queue of new schools. */
 export default function PendingSchoolsScreen() {
     const { data, loading, error, refresh, refreshing } = usePendingSchools(true);
+    const router = useRouter();
     if (loading) return <LoadingView />;
     return (
         <Screen onRefresh={refresh} refreshing={refreshing}>
             <BackLink />
-            <ScreenHeader title="School requests" description="New schools stay locked until you approve them. You’re also told by email, SMS and WhatsApp when one asks." />
+            <ScreenHeader title="School requests" />
+            <ButtonRow>
+                <Button size="sm" variant="secondary" label="School billing" onPress={() => router.push('/staff/platform-billing')} />
+            </ButtonRow>
             {error ? (
                 <ErrorBanner message={error} onRetry={refresh} />
             ) : (data ?? []).length === 0 ? (

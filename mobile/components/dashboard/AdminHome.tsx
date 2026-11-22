@@ -11,7 +11,7 @@ import { useCurrentUser } from '@/lib/UserContext';
 import { hueForHref } from '@/lib/hues';
 import { ErrorBanner } from '@/components/ui';
 import { OperationsOverview } from '@/components/OperationsOverview';
-import { PendingSchoolsNotice } from '@/components/platform/PendingSchools';
+import { PendingSchoolsNotice, PlatformBillingNotice } from '@/components/platform/PendingSchools';
 import { GradeResults } from './GradeResults';
 import { DashboardHero } from './Hero';
 import { DashboardSkeleton } from './Skeleton';
@@ -53,6 +53,7 @@ export function AdminHome({ name }: { name: string }) {
     return (
         <HomeScreen onRefresh={refresh} refreshing={refreshing}>
             <PendingSchoolsNotice />
+            <PlatformBillingNotice />
             {data ? <SetupChecklist data={data} schoolKey={profile?.school_id ?? 'school'} /> : null}
             <Reveal index={i++}>
                 <DashboardHero

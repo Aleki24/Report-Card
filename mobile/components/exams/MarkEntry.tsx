@@ -13,6 +13,7 @@ import {
     Badge, Button, ButtonRow, Card, ChipSelect, EmptyState, ErrorBanner, LoadingView, Notice, SearchField, TextField,
 } from '@/components/ui';
 import { PaperSetup } from './PaperSetup';
+import { MarkHistory } from './MarkHistory';
 import type { AcademicStructure, ExamMark, ExamPaperScheme, ExamSlot, MarkEntryInput, StudentListItem } from '@/lib/types';
 import { confirmAlert } from '@/lib/confirm';
 import { MarkFillTools, type FillSummary } from './MarkFillTools';
@@ -68,6 +69,8 @@ export function MarkEntry({ exam, structure }: { exam: ExamSlot; structure: Acad
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState<{ tone: 'success' | 'danger' | 'info'; text: string } | null>(null);
     const [editingPapers, setEditingPapers] = useState(false);
+    // Bumped after each save so an open change history shows it.
+    const [savedVersion, setSavedVersion] = useState(0);
     const inputs = useRef<Record<string, TextInput | null>>({});
 
     // An empty sheet for an exam that isn't the one the school opened for this
@@ -255,6 +258,7 @@ export function MarkEntry({ exam, structure }: { exam: ExamSlot; structure: Acad
             else saveDraft(draftKey, remaining);
             setEntries(unsaved);
             setMessage({ tone: 'success', text: `Saved ${pluralize(payload.length, 'mark')}.` });
+            setSavedVersion((v) => v + 1);
             marks.refresh();
         } catch (err) {
             // The marks stay in the draft, so nothing typed is lost.
@@ -480,6 +484,7 @@ export function MarkEntry({ exam, structure }: { exam: ExamSlot; structure: Acad
                 <Button label={saving ? 'Saving…' : `Save ${pendingIds.length || ''}`.trim()} onPress={handleSave} loading={saving} disabled={pendingIds.length === 0} />
             </View>
             {invalid.length > 0 ? <Badge label={`${invalid.length} invalid`} variant="danger" /> : null}
+            {roster.length > 0 ? <MarkHistory examId={exam.id} search={search} version={savedVersion} /> : null}
         </View>
     );
 }

@@ -7,10 +7,12 @@ import { Button, Card, ErrorBanner, ListCard, ListRow, LoadingView, ProgressBar,
 import { GRADE_COPY, OVERVIEW_URL, TARGET_RATE, type FeesOverview as Overview, type FixTarget, type TermCollection } from '@shared/fee-overview';
 
 /** Where a fix is done in the app; null when it is web-only. */
-export type OverviewTab = 'unmatched' | 'daybook' | 'balances';
+export type OverviewTab = 'unmatched' | 'daybook' | 'owing';
+/** The families a fix in Who owes starts on. */
+export type OwingFocus = 'nothing' | 'broken';
 
 const tabFor = (target: FixTarget): OverviewTab | null =>
-    target.kind !== 'tab' ? null : target.tab === 'reconcile' ? 'unmatched' : target.tab === 'daybook' ? 'daybook' : 'balances';
+    target.kind !== 'tab' ? null : target.tab === 'reconcile' ? 'unmatched' : target.tab === 'daybook' ? 'daybook' : 'owing';
 
 const termLabel = (t: TermCollection) => `${t.termName}${t.yearName ? ` ${t.yearName}` : ''}`;
 
@@ -19,7 +21,7 @@ const termLabel = (t: TermCollection) => `${t.termName}${t.yearName ? ` ${t.year
  * that would lift it most, this term's collection against last term's, and
  * what is owed by class.
  */
-export function FeesOverview({ onGo }: { onGo: (tab: OverviewTab) => void }) {
+export function FeesOverview({ onGo }: { onGo: (tab: OverviewTab, focus?: OwingFocus) => void }) {
     const styles = useStyles();
     const { colors } = useTheme();
     const query = useApiQuery<Overview>(OVERVIEW_URL);
@@ -50,7 +52,7 @@ export function FeesOverview({ onGo }: { onGo: (tab: OverviewTab) => void }) {
                             key={item.id}
                             title={`${i + 1}. ${item.label}`}
                             subtitle={`${item.detail} ${item.fix}`}
-                            right={tab ? <Button size="sm" variant="secondary" label="Go" onPress={() => onGo(tab)} /> : null}
+                            right={tab ? <Button size="sm" variant="secondary" label="Go" onPress={() => onGo(tab, item.target.kind === 'tab' ? item.target.focus : undefined)} /> : null}
                         />
                     );
                 })}

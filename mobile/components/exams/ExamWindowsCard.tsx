@@ -172,7 +172,7 @@ export function ExamWindowsCard({ info, onSaved }: { info: ExamWindowsResponse; 
                         );
                     })}
                     <Text style={{ fontSize: 12, fontFamily: fonts.regular, color: colors.muted }}>
-                        CATs and your own exam types are always open. Set a class on its own, exam dates and locking a term on the website.
+                        CATs and your own exam types are always open. Set a class on its own and exam dates on the website.
                     </Text>
                 </View>
             ) : null}

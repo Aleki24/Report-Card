@@ -119,7 +119,7 @@ export type InvoiceAction = z.infer<typeof invoiceActionSchema>;
 
 export const STATE_COPY: Record<BillingState['kind'], { label: string; tone: 'good' | 'warn' | 'bad' | 'muted' }> = {
     none: { label: 'No invoice yet', tone: 'muted' },
-    free: { label: 'Free term', tone: 'good' },
+    free: { label: 'No charge', tone: 'good' },
     paid: { label: 'Paid', tone: 'good' },
     due: { label: 'Due', tone: 'warn' },
     overdue: { label: 'Overdue', tone: 'bad' },

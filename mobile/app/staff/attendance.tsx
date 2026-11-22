@@ -5,13 +5,19 @@ import { useManagedGradeStreams } from '@/lib/useSchoolData';
 import { errorMessage, pluralize, toISODate } from '@/lib/format';
 import { spacing, fonts, makeStyles, useTheme } from '@/lib/theme';
 import {
-    Button, ButtonRow, ChipSelect, DateStepper, EmptyState, ErrorBanner, ListCard, LoadingView, Notice, Screen, ScreenHeader, StatGrid, StatTile,
+    Button, ButtonRow, ChipSelect, DateStepper, EmptyState, ErrorBanner, ListCard, LoadingView, Notice, Screen, ScreenHeader, SegmentedTabs, StatGrid, StatTile,
 } from '@/components/ui';
+import { WholeSchool } from '@/components/attendance/WholeSchool';
+import { AttendanceReport } from '@/components/attendance/AttendanceReport';
+import { useCurrentUser } from '@/lib/UserContext';
+import { useTabParam } from '@/lib/useTabParam';
 import { RequireScreen } from '@/components/RequireScreen';
 import type { AttendanceNotifyResult, AttendanceStatus, ClassAttendanceRow } from '@/lib/types';
 import { confirmAlert } from '@/lib/confirm';
 
 type StatusColor = 'success' | 'danger' | 'warning' | 'info';
+type AttendanceTab = 'register' | 'school' | 'reports';
+const ATTENDANCE_TABS: readonly AttendanceTab[] = ['register', 'school', 'reports'];
 
 const STATUS_OPTIONS: { value: AttendanceStatus; label: string; color: StatusColor }[] = [
     { value: 'present', label: 'P', color: 'success' },
@@ -32,7 +38,16 @@ function AttendanceContent() {
     const { colors } = useTheme();
     const styles = useStyles();
     const api = useApi();
+    const { role } = useCurrentUser();
     const { streams, loading: streamsLoading, error: streamsError } = useManagedGradeStreams();
+    // As on the web: the whole school is for admins; reports for whoever keeps a register.
+    const tabs = [
+        { value: 'register' as const, label: 'Register' },
+        ...(role === 'ADMIN' ? [{ value: 'school' as const, label: 'Whole school' }] : []),
+        ...(role === 'ADMIN' || role === 'CLASS_TEACHER' ? [{ value: 'reports' as const, label: 'Reports' }] : []),
+    ];
+    const [tabParam, setTab] = useTabParam<AttendanceTab>(ATTENDANCE_TABS, 'register');
+    const tab = tabs.some((t) => t.value === tabParam) ? tabParam : 'register';
     const [streamId, setStreamId] = useState<string | null>(null);
     const [date, setDate] = useState(toISODate());
     const [rows, setRows] = useState<ClassAttendanceRow[]>([]);
@@ -132,18 +147,30 @@ function AttendanceContent() {
 
     if (streamsLoading) return <LoadingView />;
 
+    /** From the whole school: that class's register on that day. */
+    const openRegister = (id: string, day: string) => {
+        setStreamId(id);
+        setDate(day);
+        setTab('register');
+    };
+
     return (
         <Screen
             footer={
-                rows.length > 0 ? (
+                tab === 'register' && rows.length > 0 ? (
                     <Button block label={saving ? 'Saving…' : unsaved ? `Save register${changed ? ` (${changed} changed)` : ''}` : 'Register saved ✓'} onPress={save} loading={saving} disabled={!unsaved || loading} />
                 ) : undefined
             }
         >
-            <ScreenHeader title="Attendance" description="Take or review the daily register for a class." />
+            <ScreenHeader title="Attendance" />
             {streamsError ? <ErrorBanner message={streamsError} /> : null}
+            {tabs.length > 1 ? <SegmentedTabs tabs={tabs} value={tab} onChange={setTab} /> : null}
 
-            {streams.length === 0 ? (
+            {tab === 'school' ? (
+                <WholeSchool onOpen={openRegister} />
+            ) : tab === 'reports' ? (
+                <AttendanceReport streams={streams} initialStreamId={effectiveStreamId} />
+            ) : streams.length === 0 ? (
                 <EmptyState title="No classes assigned" description="Registers are kept by admins and each class's own teacher." />
             ) : (
                 <>

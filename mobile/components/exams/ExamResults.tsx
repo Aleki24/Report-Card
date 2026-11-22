@@ -2,7 +2,9 @@ import { useDownload } from '@/lib/useDownload';
 import React, { useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useApiQuery } from '@/lib/useApiQuery';
-import { PASS_MARK, errorMessage, fileSafe, formatPercent, pluralize, scoreColor } from '@/lib/format';
+import { errorMessage, fileSafe, formatPercent, pluralize, scoreColor } from '@/lib/format';
+import { useSchoolPassMark } from '@/lib/usePassMark';
+import { gradeSymbolRank } from '@shared/analytics';
 import { spacing, fonts, makeStyles, useTheme } from '@/lib/theme';
 import {
     Button, ButtonRow, Card, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView, Notice, ProgressBar, SearchField, StatGrid, StatTile,
@@ -26,13 +28,18 @@ export function ExamResults({ exam, onChanged, onEdit }: { exam: ExamSlot; onCha
         return sorted.map((m, i) => ({ ...m, rank: sorted.findIndex((o) => Number(o.percentage) === Number(m.percentage)) + 1, index: i }));
     }, [data]);
 
+    const passMark = useSchoolPassMark();
     const summary = useMemo(() => {
         if (ranked.length === 0) return null;
         const pcts = ranked.map((m) => Number(m.percentage));
         const mean = pcts.reduce((a, b) => a + b, 0) / pcts.length;
-        const passed = pcts.filter((p) => p >= PASS_MARK).length;
+        const passed = pcts.filter((p) => p >= passMark).length;
         const grades = new Map<string, number>();
-        for (const m of ranked) grades.set(m.grade_symbol || '—', (grades.get(m.grade_symbol || '—') ?? 0) + 1);
+        // As on the web: a mark with no grade is left out, not counted as one; best grade first.
+        for (const m of ranked) {
+            const g = (m.grade_symbol || '').trim();
+            if (g) grades.set(g, (grades.get(g) ?? 0) + 1);
+        }
         const sorted = [...pcts].sort((a, b) => a - b);
         const mid = Math.floor(sorted.length / 2);
         const median = sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
@@ -43,9 +50,9 @@ export function ExamResults({ exam, onChanged, onEdit }: { exam: ExamSlot; onCha
             passRate: (passed / pcts.length) * 100,
             highest: Math.max(...pcts),
             lowest: Math.min(...pcts),
-            grades: [...grades.entries()].sort((a, b) => b[1] - a[1]),
+            grades: [...grades.entries()].sort((a, b) => gradeSymbolRank(a[0]) - gradeSymbolRank(b[0])),
         };
-    }, [ranked]);
+    }, [ranked, passMark]);
 
     const visible = search.trim()
         ? ranked.filter((m) => `${m.student_name} ${m.admission_number}`.toLowerCase().includes(search.trim().toLowerCase()))
@@ -97,7 +104,7 @@ export function ExamResults({ exam, onChanged, onEdit }: { exam: ExamSlot; onCha
                 <>
                     <StatGrid>
                         <StatTile label="Mean" value={formatPercent(summary.mean, 1)} tone={scoreColor(colors, summary.mean)} />
-                        <StatTile label="Pass rate" value={formatPercent(summary.passRate)} sub={`at or above ${PASS_MARK}%`} />
+                        <StatTile label="Pass rate" value={formatPercent(summary.passRate)} sub={`at or above ${passMark}%`} />
                         <StatTile label="Highest" value={formatPercent(summary.highest, 1)} />
                         <StatTile label="Lowest" value={formatPercent(summary.lowest, 1)} />
                         <StatTile label="Median" value={formatPercent(summary.median, 1)} />

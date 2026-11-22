@@ -40,6 +40,7 @@ const PAGES: Readonly<Record<string, PageIdentity>> = {
     '/staff/users': { hue: 'rose', eyebrow: 'Administration' },
     '/staff/settings': { hue: 'slate', eyebrow: 'Administration' },
     '/staff/pending-schools': { hue: 'amber', eyebrow: 'Platform' },
+    '/staff/platform-billing': { hue: 'emerald', eyebrow: 'Platform' },
     '/staff/profile': { hue: 'blue', eyebrow: 'Account' },
     '/student/results': { hue: 'violet', eyebrow: 'Academics' },
     '/student/subjects': { hue: 'emerald', eyebrow: 'Academics' },
