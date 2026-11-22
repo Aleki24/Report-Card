@@ -1,7 +1,9 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ChevronRight, Hourglass } from 'lucide-react-native';
+import { ChevronRight, Hourglass, Receipt } from 'lucide-react-native';
+import { PLATFORM_BILLING_URL, type PlatformSchoolBilling } from '@shared/school-billing';
+import { formatKes } from '@shared/pricing';
 import { PENDING_SCHOOLS_URL, type PendingSchool } from '@shared/pending-schools';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { fonts, radius, spacing, makeStyles, useTheme } from '@/lib/theme';
@@ -40,6 +42,34 @@ export function PendingSchoolsNotice() {
     );
 }
 
+/**
+ * For the platform owner only (everyone else gets a 403 and this stays
+ * hidden): the schools with an unpaid Skulbase invoice, opening School billing.
+ */
+export function PlatformBillingNotice() {
+    const { colors } = useTheme();
+    const styles = useStyles();
+    const router = useRouter();
+    const { data } = useApiQuery<{ schools: PlatformSchoolBilling[] }>(PLATFORM_BILLING_URL);
+    if (!data) return null;
+    const unpaid = data.schools.filter((s) => s.state.kind === 'due' || s.state.kind === 'overdue' || s.state.kind === 'locked');
+    const owed = unpaid.reduce((n, s) => n + (s.state.kind === 'none' ? 0 : s.state.invoice.amount), 0);
+    return (
+        <Pressable
+            onPress={() => router.push('/staff/platform-billing')}
+            accessibilityRole="link"
+            style={({ pressed }) => [styles.notice, styles.billing, pressed && { opacity: 0.85 }]}
+        >
+            <View style={[styles.icon, styles.billingIcon]}><Receipt size={16} color={colors.success} /></View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.title}>School billing</Text>
+                <Text style={styles.names} numberOfLines={1}>{unpaid.length > 0 ? `${unpaid.length} unpaid · ${formatKes(owed)} owed` : 'Every school is paid up'}</Text>
+            </View>
+            <ChevronRight size={16} color={colors.primary} />
+        </Pressable>
+    );
+}
+
 const useStyles = makeStyles((colors) => ({
     notice: {
         flexDirection: 'row', alignItems: 'center', gap: spacing.md, borderRadius: radius.xxl, borderWidth: 1,
@@ -49,4 +79,6 @@ const useStyles = makeStyles((colors) => ({
     title: { fontSize: 14, fontFamily: fonts.semibold, color: colors.foreground },
     names: { fontSize: 12, fontFamily: fonts.regular, color: colors.muted, marginTop: 1 },
     review: { fontSize: 14, fontFamily: fonts.semibold, color: colors.primary },
+    billing: { borderColor: 'rgba(16,185,129,0.3)', backgroundColor: 'rgba(16,185,129,0.06)' },
+    billingIcon: { backgroundColor: 'rgba(16,185,129,0.15)' },
 }));

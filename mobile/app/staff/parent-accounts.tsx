@@ -17,6 +17,7 @@ import { errorMessage } from '@/lib/format';
 import { opsGet } from '@/lib/ops';
 import { spacing, useTheme } from '@/lib/theme';
 import { FEATURE_ICONS } from '@/lib/featureIcons';
+import { ClassParents } from '@/components/people/ClassParents';
 
 /** Link parents to learners; new parents get an invite code by SMS. */
 function ParentLinks() {
@@ -118,7 +119,10 @@ export default function ParentAccountsScreen() {
             screen="parent-accounts"
             title="Parent accounts"
             description="Give parents their own sign-in to follow each of their children."
-            tabs={[{ id: 'links', label: 'Parents', render: () => <ParentLinks /> }]}
+            tabs={[
+                { id: 'links', label: 'Parents', render: () => <ParentLinks /> },
+                { id: 'class', label: 'Whole class', render: () => <ClassParents /> },
+            ]}
         />
     );
 }

@@ -10,6 +10,9 @@ import type { ExamSlot, Term } from '@/lib/types';
 import { currentExamType, examTypeDates } from '@shared/exam-schedule';
 import { localToday } from '@shared/local-date';
 import { ExamWindowsCard } from './ExamWindowsCard';
+import { MarkingProgress } from './MarkingProgress';
+import { TermLockCard } from './TermLockCard';
+import { useRouter } from 'expo-router';
 
 /**
  * The web's step-by-step picker (① term → ② exam → class → subject), laid out
@@ -62,6 +65,7 @@ export function ExamPicker({
     const [pickAny, setPickAny] = useState(false);
     // Also read for results: the exam a class is marking is the one to show first.
     const open = useOpenExams(effectiveTermId);
+    const router = useRouter();
     const follow = followOpen && !pickAny && open.windows.size > 0;
 
     const types = useMemo(() => sortExamTypes(exams.map((e) => e.exam_type)), [exams]);
@@ -152,7 +156,26 @@ export function ExamPicker({
             />
 
             {manageOpen && open.data?.canOpen && open.data.termId === effectiveTermId && open.data.classes.length > 0 ? (
-                <ExamWindowsCard info={open.data} onSaved={() => { open.reload(); reload(); }} />
+                <>
+                    <ExamWindowsCard info={open.data} onSaved={() => { open.reload(); reload(); }} />
+                    {open.windows.size > 0 && open.data.termId ? (
+                        <MarkingProgress
+                            key={`progress-${effectiveTermId}-${[...open.windows].map(([g, t]) => `${g}:${t}`).sort().join(',')}`}
+                            termId={open.data.termId}
+                            termName={term?.name ?? 'This term'}
+                            onOpenExam={(examId) => router.setParams({ exam: examId, term: open.data?.termId ?? undefined, tab: 'entry' })}
+                        />
+                    ) : null}
+                </>
+            ) : null}
+            {open.data?.termId && open.data.termId === effectiveTermId ? (
+                <TermLockCard
+                    termId={open.data.termId}
+                    termName={term?.name ?? 'This term'}
+                    lock={open.data.lock}
+                    canLock={manageOpen && open.data.canOpen}
+                    onChange={open.reload}
+                />
             ) : null}
             {term && headerAction ? headerAction(term, reload) : null}
             {error ? <ErrorBanner message={error} onRetry={reload} /> : null}

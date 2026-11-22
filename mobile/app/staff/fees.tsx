@@ -17,8 +17,10 @@ import {
 import { RequireScreen } from '@/components/RequireScreen';
 import { FeeDetail, PAYMENT_STATUS_VARIANT } from '@/components/fees/FeeDetail';
 import { UnmatchedQueue } from '@/components/fees/UnmatchedQueue';
+import { WhoOwes } from '@/components/fees/WhoOwes';
+import { Collections } from '@/components/fees/Collections';
 import { DayBook } from '@/components/fees/DayBook';
-import { FeesOverview } from '@/components/fees/FeesOverview';
+import { FeesOverview, type OwingFocus } from '@/components/fees/FeesOverview';
 import type { FeePaymentStatus, FeeStatus, StaffFeeRecord, StudentListItem } from '@/lib/types';
 import { totalOwed } from '@shared/fees';
 
@@ -29,7 +31,7 @@ const STATUS_META: Record<FeeStatus, { label: string; variant: 'success' | 'warn
     OVERPAID: { label: 'Overpaid', variant: 'info' },
 };
 
-const TABS = ['overview', 'balances', 'payments', 'unmatched', 'daybook'] as const;
+const TABS = ['overview', 'balances', 'payments', 'owing', 'collections', 'unmatched', 'daybook'] as const;
 type Tab = (typeof TABS)[number];
 
 interface LedgerPayment {
@@ -67,22 +69,26 @@ function FeesContent() {
         { value: 'balances' as const, label: 'Balances' },
         { value: 'payments' as const, label: 'Payments' },
         // Matching Paybill money is fees.collect work: the bursar or accountant, not only an admin.
+        ...(finance ? [{ value: 'owing' as const, label: 'Who owes' }, { value: 'collections' as const, label: 'Collections' }] : []),
         ...(can('fees.collect') ? [{ value: 'unmatched' as const, label: 'Unmatched' }] : []),
         ...(finance ? [{ value: 'daybook' as const, label: 'Day book' }] : []),
     ];
     const tab: Tab = tabs.some((t) => t.value === picked) ? picked : 'balances';
+    // An overview fix opens Who owes on the families it is about.
+    const [owingFocus, setOwingFocus] = useState<OwingFocus | undefined>(undefined);
+    const choose = (next: Tab, focus?: OwingFocus) => {
+        setOwingFocus(focus);
+        setTab(next);
+    };
     return (
         <Screen>
-            <ScreenHeader
-                title="Fees"
-                description={can('fees.manage')
-                    ? 'Bill learners, record payments and follow up balances.'
-                    : can('fees.collect') ? 'Record payments and follow up balances.' : 'Fee balances for your class.'}
-            />
-            <ScrollTabs tabs={tabs} value={tab} onChange={setTab} />
-            {tab === 'overview' ? <FeesOverview onGo={setTab} />
+            <ScreenHeader title="Fees" />
+            <ScrollTabs tabs={tabs} value={tab} onChange={(next) => choose(next)} />
+            {tab === 'overview' ? <FeesOverview onGo={choose} />
                 : tab === 'balances' ? <Balances />
                 : tab === 'payments' ? <Payments />
+                : tab === 'owing' ? <WhoOwes key={owingFocus ?? 'all'} initialFocus={owingFocus} />
+                : tab === 'collections' ? <Collections />
                 : tab === 'unmatched' ? <UnmatchedQueue />
                 : <DayBook />}
         </Screen>
