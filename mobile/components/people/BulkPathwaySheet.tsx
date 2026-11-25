@@ -98,7 +98,7 @@ export function BulkPathwaySheet({ visible, onClose, onSaved, students, seniorSt
             submitLabel={clear ? `Clear ${pluralize(count, 'student')}` : `Assign ${pluralize(count, 'student')}`}
             submitting={saving}
         >
-            <Text style={styles.intro}>Move Senior School students (Grades 10–12) to a subject combination. Their subjects — three electives plus the compulsory core — update to match.</Text>
+            <Text style={styles.intro}>Their subjects update to match the combination.</Text>
             {error ? <ErrorBanner message={error} /> : null}
             <ChipSelect
                 label="Class"

@@ -144,7 +144,6 @@ function Offered({ structure, onChanged }: { structure: AcademicStructure | null
 
             <Card style={{ marginBottom: spacing.md }}>
                 <Text style={{ fontSize: 14, fontFamily: fonts.display, color: colors.foreground }}>Add a curriculum's standard subjects</Text>
-                <Text style={{ fontSize: 12, color: colors.muted, marginTop: 2 }}>Subjects come from the official catalogue with their real codes; ones you already offer are skipped.</Text>
                 <ButtonRow align="start">
                     {BANDS.map((b) => (
                         <Button key={b.value} size="sm" variant="secondary" icon={Plus} label={b.label} onPress={() => void addBand(b)} loading={busy === b.value} disabled={!!busy} />

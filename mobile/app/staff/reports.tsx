@@ -207,7 +207,6 @@ function DownloadPanel({ scope }: { scope: Scope }) {
             <TextField label="Custom title (optional)" value={title} onChangeText={setTitle} placeholder="e.g. End of Term 2 Report" />
             <Card>
                 <Text style={styles.cardTitle}>{scope.streamName} · {scope.termName}{scope.examType ? ` · ${examTypeLabel(scope.examType)}` : ''}</Text>
-                <Text style={styles.muted}>Files open in your share sheet, so you can save, print or send them.</Text>
                 <ButtonRow>
                     <Button variant="secondary" label="Mark sheet" onPress={markSheet} loading={busy === 'sheet'} disabled={!!busy} />
                     <Button label="Class report cards" onPress={classCards} loading={busy === 'cards'} disabled={!!busy} />

@@ -94,7 +94,7 @@ export function PublishList({ onChanged }: { onChanged?: () => void }) {
                 ) : null}
             </View>
 
-            <Text style={styles.help}>Releasing a subject lets learners and parents see its marks. Staff always see every mark, marks can still be corrected, and you can withdraw a subject at any time.</Text>
+            <Text style={styles.help}>Learners and parents see a subject once it is released. You can withdraw it any time.</Text>
             {message ? <Notice tone={message.tone} message={message.text} onDismiss={() => setMessage(null)} /> : null}
             {examsQuery.error ? <ErrorBanner message={examsQuery.error} onRetry={reload} /> : null}
 

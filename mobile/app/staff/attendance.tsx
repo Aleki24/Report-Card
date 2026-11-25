@@ -3,13 +3,14 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useApi, withQuery } from '@/lib/api';
 import { useManagedGradeStreams } from '@/lib/useSchoolData';
 import { errorMessage, pluralize, toISODate } from '@/lib/format';
-import { spacing, fonts, makeStyles, useTheme } from '@/lib/theme';
+import { rowCard, spacing, fonts, makeStyles, useTheme } from '@/lib/theme';
 import {
     Button, ButtonRow, ChipSelect, DateStepper, EmptyState, ErrorBanner, ListCard, LoadingView, Notice, Screen, ScreenHeader, SegmentedTabs, StatGrid, StatTile,
 } from '@/components/ui';
 import { WholeSchool } from '@/components/attendance/WholeSchool';
 import { AttendanceReport } from '@/components/attendance/AttendanceReport';
 import { useCurrentUser } from '@/lib/UserContext';
+import { router as nav } from 'expo-router';
 import { useTabParam } from '@/lib/useTabParam';
 import { RequireScreen } from '@/components/RequireScreen';
 import type { AttendanceNotifyResult, AttendanceStatus, ClassAttendanceRow } from '@/lib/types';
@@ -171,7 +172,7 @@ function AttendanceContent() {
             ) : tab === 'reports' ? (
                 <AttendanceReport streams={streams} initialStreamId={effectiveStreamId} />
             ) : streams.length === 0 ? (
-                <EmptyState title="No classes assigned" description="Registers are kept by admins and each class's own teacher." />
+                <EmptyState title="No classes assigned" />
             ) : (
                 <>
                     <ChipSelect options={streams.map((s) => ({ value: s.id, label: s.full_name }))} value={effectiveStreamId} onChange={setStreamId} />
@@ -199,7 +200,10 @@ function AttendanceContent() {
                         {loading ? (
                             <LoadingView />
                         ) : rows.length === 0 ? (
-                            <EmptyState title="No students in this class" />
+                            <EmptyState
+                                title="No students in this class"
+                                action={effectiveStreamId ? <Button variant="secondary" label="Add students" onPress={() => nav.push(`/staff/people?class=${effectiveStreamId}`)} /> : undefined}
+                            />
                         ) : (
                             <ListCard>
                                 {rows.map((r) => {
@@ -240,7 +244,7 @@ function AttendanceContent() {
 }
 
 const useStyles = makeStyles((colors) => ({
-    row: { flexDirection: 'row', alignItems: 'center', padding: spacing.md, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border, gap: spacing.sm },
+    row: { flexDirection: 'row', alignItems: 'center', padding: spacing.md, ...rowCard(colors), gap: spacing.sm },
     rowTitle: { fontSize: 13, fontFamily: fonts.bold, color: colors.foreground },
     rowSub: { fontFamily: fonts.regular, fontSize: 11, color: colors.muted, marginTop: 2 },
     statusRow: { flexDirection: 'row', gap: 6 },

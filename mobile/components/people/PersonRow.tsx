@@ -1,7 +1,7 @@
 import React from 'react';
 import { Image, Linking, Pressable, Text, View } from 'react-native';
 import { ChevronRight, MessageCircle, Phone } from 'lucide-react-native';
-import { fonts, makeStyles, radius, shadowFor, spacing, useTheme, type Hue } from '@/lib/theme';
+import { fonts, makeStyles, radius, rowCard, spacing, useTheme, type Hue } from '@/lib/theme';
 
 const HUES: readonly Hue[] = ['blue', 'violet', 'emerald', 'amber', 'rose', 'teal', 'orange', 'sky'];
 
@@ -104,7 +104,7 @@ export function GroupHeading({ title, count }: { title: string; count: number })
 
 const useStyles = makeStyles((colors) => ({
     // Each person on their own card, apart from the next: no dividing lines.
-    row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.md, marginBottom: spacing.sm, borderRadius: radius.xl, backgroundColor: colors.card, ...shadowFor(colors) },
+    row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.md, ...rowCard(colors) },
     main: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: spacing.md },
     last: {},
     nameRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },

@@ -2,7 +2,7 @@ import { ClerkProvider, useAuth } from '@clerk/clerk-expo';
 import { useSignOut } from '@/lib/useSignOut';
 import { tokenCache } from '@clerk/clerk-expo/token-cache';
 import { resourceCache } from '@clerk/clerk-expo/resource-cache';
-import { Stack, type ErrorBoundaryProps } from 'expo-router';
+import { Stack, router, type ErrorBoundaryProps } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useFonts } from 'expo-font';
 import { PlusJakartaSans_400Regular } from '@expo-google-fonts/plus-jakarta-sans/400Regular';
@@ -10,7 +10,8 @@ import { PlusJakartaSans_500Medium } from '@expo-google-fonts/plus-jakarta-sans/
 import { PlusJakartaSans_600SemiBold } from '@expo-google-fonts/plus-jakarta-sans/600SemiBold';
 import { PlusJakartaSans_700Bold } from '@expo-google-fonts/plus-jakarta-sans/700Bold';
 import { PlusJakartaSans_800ExtraBold } from '@expo-google-fonts/plus-jakarta-sans/800ExtraBold';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { TriangleAlert } from 'lucide-react-native';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
@@ -169,20 +170,36 @@ function MissingConfigScreen() {
     );
 }
 
-/** Shown instead of closing the app when rendering throws, so the error can be reported. */
+/**
+ * Shown instead of closing the app when a screen throws: a calm message and
+ * two ways on. The technical detail stays out of sight until asked for, so it
+ * can still be copied into a report.
+ */
 export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
     const styles = useStyles();
+    const { colors } = useTheme();
+    const [details, setDetails] = useState(false);
     useEffect(() => {
         SplashScreen.hideAsync().catch(() => {});
     }, []);
 
     return (
         <ScrollView contentContainerStyle={styles.errorScroll}>
-            <Text style={styles.title}>Something went wrong</Text>
-            <Text selectable style={styles.errorDetail}>{describeError(error)}</Text>
-            <Pressable onPress={() => void retry()} style={styles.retryButton}>
-                <Text style={styles.retryText}>Try again</Text>
+            <View style={styles.errorIcon}><TriangleAlert size={28} color={colors.warningText} /></View>
+            <Text style={styles.title}>This screen didn’t open</Text>
+            <Text style={styles.body}>Try again. If it keeps happening, go home and come back to it.</Text>
+            <View style={styles.errorActions}>
+                <Pressable onPress={() => void retry()} style={styles.retryButton} accessibilityRole="button">
+                    <Text style={styles.retryText}>Try again</Text>
+                </Pressable>
+                <Pressable onPress={() => router.replace('/')} style={styles.homeButton} accessibilityRole="button">
+                    <Text style={styles.homeText}>Go home</Text>
+                </Pressable>
+            </View>
+            <Pressable onPress={() => setDetails((d) => !d)} hitSlop={8} accessibilityRole="button">
+                <Text style={styles.detailsLink}>{details ? 'Hide details' : 'Show details'}</Text>
             </Pressable>
+            {details ? <Text selectable style={styles.errorDetail}>{describeError(error)}</Text> : null}
         </ScrollView>
     );
 }
@@ -228,7 +245,12 @@ const useStyles = makeStyles((colors) => ({
     signOutButton: { borderWidth: 1, borderColor: colors.danger, borderRadius: radius.md, paddingVertical: 12, paddingHorizontal: spacing.xl, marginTop: spacing.md },
     signOutText: { color: colors.danger, fontFamily: fonts.bold },
     errorScroll: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl, backgroundColor: colors.background, gap: spacing.md },
-    errorDetail: { fontSize: 12, color: colors.foreground, fontFamily: 'monospace' },
-    retryButton: { backgroundColor: colors.primary, borderRadius: radius.md, paddingVertical: 12, paddingHorizontal: spacing.xl },
+    errorIcon: { width: 56, height: 56, borderRadius: radius.xl, backgroundColor: colors.warningBg, alignItems: 'center', justifyContent: 'center' },
+    errorActions: { flexDirection: 'row', gap: spacing.sm, alignSelf: 'stretch', marginTop: spacing.sm },
+    errorDetail: { fontSize: 11, color: colors.muted, fontFamily: 'monospace', alignSelf: 'stretch' },
+    retryButton: { flex: 1, alignItems: 'center', backgroundColor: colors.primary, borderRadius: radius.lg, paddingVertical: 14 },
     retryText: { color: colors.white, fontFamily: fonts.bold },
+    homeButton: { flex: 1, alignItems: 'center', backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, paddingVertical: 14 },
+    homeText: { color: colors.foreground, fontFamily: fonts.bold },
+    detailsLink: { fontSize: 12, fontFamily: fonts.semibold, color: colors.muted, marginTop: spacing.sm },
 }));

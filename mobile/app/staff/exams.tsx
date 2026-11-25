@@ -104,7 +104,7 @@ function ExamsContent() {
             ) : tab === 'all' ? (
                 structure.loading ? <LoadingView />
                     : structure.data?.grade_streams?.length ? <Broadsheet streams={structure.data.grade_streams} />
-                    : <EmptyState title="No classes yet" description="Add classes in Classes, then their marks appear here side by side." />
+                    : <EmptyState title="No classes yet" action={role === 'ADMIN' ? <Button label="Add a class" onPress={() => router.push('/staff/classes')} /> : undefined} />
             ) : exam ? (
                 <>
                     <ButtonRow>

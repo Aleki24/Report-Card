@@ -25,8 +25,11 @@ import { OptionTiles, PickerField, SegmentedChoice, layoutFor, useInFilterGrid, 
 import { screenIconFor } from '@/lib/roles';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { KeyboardAvoidingView, KeyboardAwareScrollView } from 'react-native-keyboard-controller';
-import { ArrowLeft, ChevronLeft, ChevronRight, Inbox, RotateCcw, Search, X, type LucideIcon } from 'lucide-react-native';
-import { radius, spacing, fonts, makeStyles, useTheme, shadowFor, type Hue, type Palette } from '@/lib/theme';
+import {
+    ArrowLeft, Banknote, BarChart3, Briefcase, CalendarCheck, ChevronLeft, ChevronRight, CircleCheck, CircleDashed, CircleX, Clock, FileText,
+    GraduationCap, Inbox, Lock, Package, PhoneOff, RotateCcw, Search, Stethoscope, TrendingUp, UserX, UsersRound, Wallet, X, type LucideIcon,
+} from 'lucide-react-native';
+import { radius, rowCard, spacing, fonts, makeStyles, useTheme, shadowFor, type Hue, type Palette } from '@/lib/theme';
 import { formatDate, parseISODate, shiftISODate, toISODate } from '@/lib/format';
 import { ScreenRefreshProvider, useScreenRefreshRegistry } from '@/lib/screenRefresh';
 
@@ -240,11 +243,38 @@ export function StatGrid({ children }: { children: React.ReactNode }) {
     return <View style={styles.statGrid}>{children}</View>;
 }
 
+/**
+ * The icon a tile shows when the screen gives none, from what it counts, so
+ * tiles side by side always line up (a tile without an icon starts further left).
+ */
+const TILE_ICONS: readonly [RegExp, LucideIcon][] = [
+    [/phone/i, PhoneOff],
+    [/lock/i, Lock],
+    [/sick|sent home|referred/i, Stethoscope],
+    [/reorder|stock|expir|value on record|out now|to print/i, Package],
+    [/not marked|unmarked/i, CircleDashed],
+    [/absent/i, UserX],
+    [/late|awaiting|pending/i, Clock],
+    [/present|registers? taken/i, CircleCheck],
+    [/attendance|below/i, CalendarCheck],
+    [/inactive/i, UserX],
+    [/staff/i, Briefcase],
+    [/student|learner/i, GraduationCap],
+    [/account|parent|people/i, UsersRound],
+    [/received|collected|paid|payment|per day/i, Banknote],
+    [/billed|bill|owed|owing|owe|balance|amount|outstanding|awards|overdue|matched|structure|voided/i, Wallet],
+    [/mean|median|average|rate|highest|lowest|points|position|grade|change|overall|score/i, TrendingUp],
+    [/marks|exam|subject|class/i, FileText],
+    [/approv|released|completed/i, CircleCheck],
+    [/rejected/i, CircleX],
+];
+const iconForTile = (label: string): LucideIcon => TILE_ICONS.find(([test]) => test.test(label))?.[1] ?? BarChart3;
+
 export function StatTile({ label, value, sub, tone, icon, onPress }: { label: string; value: string | number; sub?: string; tone?: string; icon?: LucideIcon; onPress?: () => void }) {
     const styles = useStyles();
     const content = (
         <>
-            {icon ? <IconTile icon={icon} /> : null}
+            <IconTile icon={icon ?? iconForTile(label)} />
             <View style={styles.statBody}>
                 <Text style={styles.statLabel} numberOfLines={1}>{label}</Text>
                 <CountUp value={value} style={[styles.statValue, tone ? { color: tone } : null]} />
@@ -410,9 +440,31 @@ export function Button({
  * (Cancel · Save); `align="start"` for a set of choices (curriculum bands,
  * timetable sections) so a wrapped row doesn't leave ragged gaps on the left.
  */
-export function ButtonRow({ children, align = 'end' }: { children: React.ReactNode; align?: 'start' | 'end' }) {
+/** Children as a flat list, groups (`<>…</>`) and lists unpacked, gaps dropped. */
+function flatChildren(children: React.ReactNode): React.ReactNode[] {
+    return React.Children.toArray(children).flatMap((child) =>
+        React.isValidElement<{ children?: React.ReactNode }>(child) && child.type === React.Fragment ? flatChildren(child.props.children) : [child],
+    );
+}
+
+/**
+ * A row of buttons. By default they share the full width, so a screen's
+ * actions line up with the cards and fields around them instead of hugging
+ * one edge; they wrap onto a second line when there are many. `start` keeps
+ * them their own size from the left (a row of small choices).
+ */
+export function ButtonRow({ children, align = 'stretch' }: { children: React.ReactNode; align?: 'start' | 'stretch' | 'end' }) {
     const styles = useStyles();
-    return <View style={[styles.buttonRow, align === 'start' && { justifyContent: 'flex-start' }]}>{children}</View>;
+    if (align !== 'stretch') {
+        return <View style={[styles.buttonRow, { justifyContent: align === 'start' ? 'flex-start' : 'flex-end' }]}>{children}</View>;
+    }
+    return (
+        <View style={styles.buttonRow}>
+            {flatChildren(children).map((child, i) => (
+                <View key={React.isValidElement(child) && child.key != null ? child.key : i} style={styles.buttonCell}>{child}</View>
+            ))}
+        </View>
+    );
 }
 
 export function TextField({
@@ -680,8 +732,9 @@ const useStyles = makeStyles((colors) => ({
     sectionLabel: { fontSize: 11, fontFamily: fonts.bold, color: colors.muted, textTransform: 'uppercase', letterSpacing: 0.6 },
     card: { backgroundColor: colors.card, borderRadius: radius.xxl, borderWidth: 1, borderColor: colors.border, padding: spacing.lg, ...shadowFor(colors) },
     iconTile: { borderRadius: radius.xl, alignItems: 'center', justifyContent: 'center' },
-    listCard: { padding: 0, overflow: 'hidden' },
-    row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.md, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+    // A list is a stack of cards (see rowCard), not one card split by lines.
+    listCard: { padding: 0, backgroundColor: 'transparent', borderWidth: 0, shadowOpacity: 0, elevation: 0 },
+    row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.md, ...rowCard(colors) },
     rowTitle: { fontSize: 14, fontFamily: fonts.bold, color: colors.foreground },
     rowSub: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted, marginTop: 2 },
     rowMeta: { fontFamily: fonts.regular, fontSize: 11, color: colors.muted, marginTop: 4 },
@@ -711,6 +764,7 @@ const useStyles = makeStyles((colors) => ({
     buttonSm: { paddingVertical: 7, paddingHorizontal: spacing.md, minHeight: 36 },
     buttonText: { fontFamily: fonts.medium, fontSize: 14 },
     buttonRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', gap: spacing.sm, marginTop: spacing.md, marginBottom: spacing.xs },
+    buttonCell: { flexGrow: 1, flexBasis: 'auto' },
     field: { marginBottom: spacing.md },
     fieldLabel: { fontSize: 12, fontFamily: fonts.bold, color: colors.muted, marginBottom: 6 },
     fieldError: { fontFamily: fonts.regular, fontSize: 12, color: colors.danger, marginTop: 4 },

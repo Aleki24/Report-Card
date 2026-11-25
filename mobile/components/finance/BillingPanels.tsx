@@ -61,7 +61,6 @@ export function Invoicing({ canManage }: { canManage: boolean }) {
             {structures === 0 ? (
                 <Card style={{ marginBottom: spacing.md, borderColor: colors.warningBorder, backgroundColor: colors.warningBg }}>
                     <Text style={{ fontFamily: fonts.bold, fontSize: 14, color: colors.foreground }}>Set up fee structures first</Text>
-                    <Text style={{ fontFamily: fonts.regular, fontSize: 13, color: colors.muted, marginTop: 2 }}>Each class level needs a structure (its vote heads and amounts) before a term can be billed.</Text>
                     <ButtonRow><Button label="Add fee structures" onPress={() => router.setParams({ tab: 'structures' })} /></ButtonRow>
                 </Card>
             ) : null}

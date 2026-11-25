@@ -1,12 +1,12 @@
 import React, { useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { router as nav, useLocalSearchParams } from 'expo-router';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { withQuery } from '@/lib/api';
 import { useGradeStreams } from '@/lib/useSchoolData';
 import { examTypeLabel } from '@/lib/academics';
 import { toneColorFor, formatPercent, passRateTone, pluralize, scoreColor } from '@/lib/format';
-import { spacing, fonts, makeStyles, useTheme } from '@/lib/theme';
+import { rowCard, spacing, fonts, makeStyles, useTheme } from '@/lib/theme';
 import {
     Button, Card, ChipSelect, FilterGrid, EmptyState, ErrorBanner, ListCard, ListRow, LoadingView, ProgressBar,
     Screen, ScreenHeader, SectionLabel, StatGrid, StatTile,
@@ -56,7 +56,7 @@ function SchoolOverview({ onSelect }: { onSelect: (id: string) => void }) {
     if (error) return <ErrorBanner message={error} onRetry={reload} />;
     const withMarks = (data?.classes ?? []).filter((c) => c.mark_count > 0);
     if (!data || withMarks.length === 0) {
-        return <EmptyState title="No marks recorded yet" description="Once exams are marked, each class will appear here." />;
+        return <EmptyState title="No marks recorded yet" action={<Button label="Enter marks" onPress={() => nav.push('/staff/exams')} />} />;
     }
     const s = data.summary;
     return (
@@ -190,7 +190,7 @@ function ClassView({ streamId }: { streamId: string }) {
 }
 
 const useStyles = makeStyles((colors) => ({
-    classRow: { padding: spacing.md, gap: 6, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+    classRow: { padding: spacing.md, gap: 6, ...rowCard(colors) },
     classHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
     className: { flex: 1, fontSize: 14, fontFamily: fonts.bold, color: colors.primary },
     rate: { fontSize: 14, fontFamily: fonts.display },

@@ -52,8 +52,9 @@ export default function SettingsScreen() {
 
 function SettingsContent() {
     const [tab, setTab] = useTabParam<Tab>(SETTINGS_TABS, 'school');
+    const [footer, setFooter] = useState<React.ReactNode>(null);
     return (
-        <Screen>
+        <Screen footer={tab === 'school' ? footer : undefined}>
             <ScreenHeader title="Settings" />
             <ChipSelect
                 options={[
@@ -68,7 +69,7 @@ function SettingsContent() {
                 value={tab}
                 onChange={setTab}
             />
-            {tab === 'school' ? <SchoolTab /> : tab === 'calendar' ? <CalendarTab /> : tab === 'grading' ? <GradingTab />
+            {tab === 'school' ? <SchoolTab setFooter={setFooter} /> : tab === 'calendar' ? <CalendarTab /> : tab === 'grading' ? <GradingTab />
                 : tab === 'payments' ? <PaymentsTab /> : tab === 'modules' ? <ModulesPanel /> : tab === 'subscription' ? <Subscription /> : <DutiesPanel />}
         </Screen>
     );
@@ -76,7 +77,7 @@ function SettingsContent() {
 
 // ── School profile ─────────────────────────────────────────
 
-function SchoolTab() {
+function SchoolTab({ setFooter }: { setFooter: (footer: React.ReactNode) => void }) {
     const { colors } = useTheme();
     const api = useApi();
     const { data, loading, error, reload } = useApiQuery<SchoolProfile>('/api/school/data?type=school_profile');
@@ -96,6 +97,14 @@ function SchoolTab() {
         latest.current = data ?? latest.current;
         if (data) setForm({ ...data, ...edits.current });
     }, [data]);
+
+    // Unsaved changes show a Save bar pinned to the bottom, in reach from anywhere in the form.
+    const dirty = !!form && !!data && (Object.keys(edits.current) as (keyof SchoolProfile)[]).some((k) => edits.current[k] !== data[k]);
+    const saveRef = useRef<() => void>(() => undefined);
+    useEffect(() => {
+        setFooter(dirty ? <Button block label="Save profile" onPress={() => saveRef.current()} loading={saving} /> : null);
+    }, [dirty, saving, setFooter]);
+    useEffect(() => () => setFooter(null), [setFooter]);
 
     if (loading || !form) return error ? <ErrorBanner message={error} onRetry={reload} /> : <LoadingView />;
     const set = <K extends keyof SchoolProfile>(k: K, v: SchoolProfile[K]) => {
@@ -134,6 +143,8 @@ function SchoolTab() {
         }
     };
 
+    saveRef.current = () => void save();
+
     const uploadLogo = async () => {
         setUploading(true);
         try {
@@ -171,9 +182,6 @@ function SchoolTab() {
                 <TextField label="Email" value={form.email ?? ''} onChangeText={(v) => set('email', v)} keyboardType="email-address" autoCapitalize="none" />
                 <TextField label="Motto (printed on report cards)" value={form.motto ?? ''} onChangeText={(v) => set('motto', v)} />
                 <TextField label="Principal’s name (printed on the signature line)" value={form.principal_name ?? ''} onChangeText={(v) => set('principal_name', v)} placeholder="e.g. Mrs. Jane Wanjiku" />
-                <ButtonRow>
-                    <Button label="Save profile" onPress={() => void save()} loading={saving} />
-                </ButtonRow>
             </Card>
             <SignatureCard
                 target="principal"
@@ -378,7 +386,6 @@ function GradingTab() {
             {overall.length > 0 ? (
                 <Card style={{ marginBottom: spacing.md }}>
                     <ChipSelect label="Overall grade (points) system" wrap options={overall.map((s) => ({ value: s.id, label: s.name }))} value={profile.data?.overall_grading_system_id ?? null} onChange={(id) => void setOverall(id)} />
-                    <Text style={{ fontSize: 12, color: colors.muted }}>Used for the mean grade on 8-4-4 report cards. Each subject's scale is set under Subjects.</Text>
                 </Card>
             ) : null}
             {levels.map((level) => {
@@ -413,7 +420,6 @@ function GradingTab() {
             })}
             <View style={{ marginTop: spacing.md }}>
                 <Button icon={Plus} label="New grading system" onPress={() => setCreating(true)} block />
-                <Text style={{ fontSize: 12, color: colors.muted, marginTop: spacing.sm }}>Built-in systems are shared templates; make your own to change the bands.</Text>
             </View>
             {creating ? <NewGradingSystemSheet levels={levels} subjects={subjects} onClose={() => setCreating(false)} onSaved={() => { setCreating(false); structure.reload(); }} /> : null}
         </View>

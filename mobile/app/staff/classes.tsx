@@ -140,7 +140,7 @@ function ClassesContent() {
 
     return (
         <Screen onRefresh={overview.refresh} refreshing={overview.refreshing}>
-            <ScreenHeader title="Classes" description="Every class your school runs, with its learners and class teacher." />
+            <ScreenHeader title="Classes" action={!adding ? <Button size="sm" icon={Plus} label="Add" onPress={() => setAdding(true)} /> : undefined} />
             {overview.error ? <ErrorBanner message={overview.error} onRetry={overview.reload} /> : null}
             {message ? <Notice tone={message.tone} message={message.text} onDismiss={() => setMessage(null)} /> : null}
 
@@ -160,15 +160,14 @@ function ClassesContent() {
                         <Button label="Add class" onPress={add} loading={busy} />
                     </ButtonRow>
                 </Card>
-            ) : (
+            ) : classes.length > 0 ? (
                 <ButtonRow>
-                    {classes.length > 0 ? <Button variant="secondary" label="Promote students" onPress={() => router.push('/staff/promotion')} /> : null}
-                    <Button icon={Plus} label="Add class" onPress={() => setAdding(true)} />
+                    <Button variant="secondary" label="Promote students" onPress={() => router.push('/staff/promotion')} />
                 </ButtonRow>
-            )}
+            ) : null}
 
             {classes.length > 6 ? <SearchField value={search} onChangeText={setSearch} placeholder="Find a class or class teacher" /> : null}
-            {classes.length === 0 ? <EmptyState title="No classes yet" description="Add your first class above." /> : null}
+            {classes.length === 0 && !adding ? <EmptyState title="No classes yet" action={<Button icon={Plus} label="Add class" onPress={() => setAdding(true)} />} /> : null}
             {classes.length > 0 && shown.length === 0 ? (
                 <EmptyState
                     icon={Search}
@@ -209,9 +208,6 @@ function ClassesContent() {
                     </View>
                 );
             })}
-            <Text style={{ fontSize: 12, color: colors.muted, marginTop: spacing.md }}>
-                Change a class’s class teacher from its card, or a teacher’s class under Users.
-            </Text>
             {changingTeacher ? (
                 <ChangeClassTeacherSheet
                     cls={changingTeacher}

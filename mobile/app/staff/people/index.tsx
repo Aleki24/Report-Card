@@ -49,6 +49,8 @@ function PeopleContent() {
     const params = useLocalSearchParams<{ tab?: string; search?: string; class?: string }>();
     const isAdmin = role === 'ADMIN';
     const [tab, setTab] = useState<Tab>(isAdmin && (params.tab === 'teachers' || params.tab === 'parents') ? params.tab : 'students');
+    // The tab's one main action sits in the header, as on every screen.
+    const [adding, setAdding] = useState(false);
 
     // Tab screens stay mounted, so a later deep link (?tab=teachers) must switch tabs too.
     useEffect(() => {
@@ -58,7 +60,7 @@ function PeopleContent() {
 
     return (
         <Screen>
-            <ScreenHeader title="People" />
+            <ScreenHeader title="People" action={tab === 'students' && !adding ? <Button size="sm" icon={Plus} label="Add" onPress={() => setAdding(true)} /> : undefined} />
             {isAdmin ? (
                 <SegmentedTabs
                     tabs={[
@@ -70,12 +72,12 @@ function PeopleContent() {
                     onChange={setTab}
                 />
             ) : null}
-            {tab === 'students' ? <StudentsSection /> : tab === 'teachers' ? <TeachersSection /> : <ParentsSection />}
+            {tab === 'students' ? <StudentsSection adding={adding} setAdding={setAdding} /> : tab === 'teachers' ? <TeachersSection /> : <ParentsSection />}
         </Screen>
     );
 }
 
-function StudentsSection() {
+function StudentsSection({ adding, setAdding }: { adding: boolean; setAdding: (adding: boolean) => void }) {
     const { colors } = useTheme();
     const styles = useStyles();
     const router = useRouter();
@@ -110,7 +112,6 @@ function StudentsSection() {
     // From the "No guardian phone" tile: only the learners nobody can text.
     const [noPhone, setNoPhone] = useState(false);
     const [limit, setLimit] = useState(PAGE);
-    const [adding, setAdding] = useState(false);
     const [importing, setImporting] = useState(false);
     const [created, setCreated] = useState<AddStudentResult | null>(null);
     const [imported, setImported] = useState<CreatedCredential[]>([]);
@@ -186,10 +187,9 @@ function StudentsSection() {
                 />
             ) : (
                 <ActionBar>
-                    <View style={{ flex: 1 }}><Button icon={Plus} label="Add student" onPress={() => setAdding(true)} /></View>
-                    <Button variant="secondary" icon={Upload} label="Import" onPress={() => setImporting(true)} />
+                    <View style={{ flex: 1 }}><Button variant="secondary" icon={Upload} label="Import" onPress={() => setImporting(true)} /></View>
                     {role === 'ADMIN' && hasPathways && seniorStreams.length > 0 ? (
-                        <Button variant="secondary" icon={Route} label="Pathways" onPress={() => setAssigning(true)} />
+                        <View style={{ flex: 1 }}><Button variant="secondary" icon={Route} label="Pathways" onPress={() => setAssigning(true)} /></View>
                     ) : null}
                 </ActionBar>
             )}

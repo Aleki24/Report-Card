@@ -162,7 +162,6 @@ export function CombinationsPanel({ structure, minGroupSize, onChanged }: { stru
             >
                 {form ? (
                     <>
-                        {!editingId ? <Text style={{ fontSize: 12, color: colors.muted, marginBottom: spacing.md }}>A custom combination is for one your school runs that is not on the Ministry list.</Text> : null}
                         <TextField label="Code *" value={form.code} onChangeText={(v) => setForm({ ...form, code: v.toUpperCase() })} autoCapitalize="characters" placeholder="SPORTS" />
                         <TextField label="Name *" value={form.name} onChangeText={(v) => setForm({ ...form, name: v })} placeholder="e.g. Sports Science" />
                         <ChipSelect label="Pathway *" wrap options={PATHWAY_ORDER.map((p) => ({ value: p, label: PATHWAYS[p].label }))} value={form.pathway} onChange={(p) => setForm({ ...form, pathway: p, track: '' })} />
