@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { PhoneOff, Plus, Route, Upload, UserCog, UsersRound, X } from 'lucide-react-native';
-import { Pressable, Text } from 'react-native';
+import { GraduationCap, PhoneOff, Plus, Route, Upload, UserCog, UsersRound, X } from 'lucide-react-native';
+import { Pressable, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCurrentUser } from '@/lib/UserContext';
 import { useApiQuery } from '@/lib/useApiQuery';
@@ -165,9 +165,9 @@ function StudentsSection() {
                 <StatTile icon={UsersRound} label="Learners" value={activeCount} sub={`in ${pluralize(classCount, 'class', 'classes')}`} />
                 <StatTile
                     icon={PhoneOff}
-                    label="No guardian phone"
+                    label="No phone"
                     value={withoutPhone}
-                    sub={withoutPhone > 0 ? (noPhone ? 'showing them' : 'tap to see them') : 'everyone reachable'}
+                    sub={withoutPhone > 0 ? (noPhone ? 'showing them' : 'tap to see them') : 'every guardian reachable'}
                     tone={withoutPhone > 0 ? colors.warning : colors.success}
                     onPress={withoutPhone > 0 ? () => { setNoPhone((v) => !v); setStatus('ACTIVE'); } : undefined}
                 />
@@ -185,13 +185,13 @@ function StudentsSection() {
                     }}
                 />
             ) : (
-                <ButtonRow>
-                    <Button icon={Plus} label="Add student" onPress={() => setAdding(true)} />
-                    <Button size="sm" variant="secondary" icon={Upload} label="Import" onPress={() => setImporting(true)} />
+                <ActionBar>
+                    <View style={{ flex: 1 }}><Button icon={Plus} label="Add student" onPress={() => setAdding(true)} /></View>
+                    <Button variant="secondary" icon={Upload} label="Import" onPress={() => setImporting(true)} />
                     {role === 'ADMIN' && hasPathways && seniorStreams.length > 0 ? (
-                        <Button size="sm" variant="secondary" icon={Route} label="Pathways" onPress={() => setAssigning(true)} />
+                        <Button variant="secondary" icon={Route} label="Pathways" onPress={() => setAssigning(true)} />
                     ) : null}
-                </ButtonRow>
+                </ActionBar>
             )}
             {pathwayNotice ? <Notice tone="success" message={pathwayNotice} onDismiss={() => setPathwayNotice(null)} /> : null}
             {assigning ? (
@@ -291,6 +291,12 @@ function StudentsSection() {
     );
 }
 
+/** The tab's actions across the full width, in line with the tiles and search below. */
+function ActionBar({ children }: { children: React.ReactNode }) {
+    const styles = useStyles();
+    return <View style={styles.actions}>{children}</View>;
+}
+
 /** Staff grouped by what they do, leaders first. */
 const ROLE_ORDER: readonly UserRole[] = ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER'];
 const roleRank = (role: UserRole) => {
@@ -327,11 +333,11 @@ function TeachersSection() {
             {error ? <ErrorBanner message={error} onRetry={refresh} /> : null}
             <StatGrid>
                 <StatTile icon={UsersRound} label="Staff" value={active.length} sub={staff.length > active.length ? `${staff.length - active.length} inactive` : undefined} />
-                <StatTile label="Teaching" value={teaching} sub={active.length > teaching ? `${active.length - teaching} with no class or subject` : 'everyone has a class or subject'} tone={active.length > teaching ? colors.warning : colors.success} />
+                <StatTile icon={GraduationCap} label="Teaching" value={teaching} sub={active.length > teaching ? `${active.length - teaching} not assigned` : 'everyone assigned'} tone={active.length > teaching ? colors.warning : colors.success} />
             </StatGrid>
-            <ButtonRow>
-                <Button size="sm" variant="secondary" icon={UserCog} label="Accounts & roles" onPress={() => router.push('/staff/users')} />
-            </ButtonRow>
+            <ActionBar>
+                <View style={{ flex: 1 }}><Button variant="secondary" icon={UserCog} label="Accounts & roles" onPress={() => router.push('/staff/users')} /></View>
+            </ActionBar>
             <SearchField value={search} onChangeText={setSearch} placeholder="Search name, subject or class" />
             {groups.length === 0 ? (
                 <EmptyState title="No staff found" />
@@ -383,9 +389,9 @@ function ParentsSection() {
                 <StatTile icon={UsersRound} label="Parents" value={parents.length} sub={`${pluralize(children, 'child', 'children')} linked`} />
                 <StatTile icon={PhoneOff} label="No phone" value={noPhone} sub={noPhone > 0 ? 'cannot get SMS' : 'everyone reachable'} tone={noPhone > 0 ? colors.warning : colors.success} />
             </StatGrid>
-            <ButtonRow>
-                <Button size="sm" variant="secondary" icon={Plus} label="Link a class's parents" onPress={() => router.push('/staff/parent-accounts?tab=class')} />
-            </ButtonRow>
+            <ActionBar>
+                <View style={{ flex: 1 }}><Button variant="secondary" icon={Plus} label="Link a class's parents" onPress={() => router.push('/staff/parent-accounts?tab=class')} /></View>
+            </ActionBar>
             <SearchField value={search} onChangeText={setSearch} placeholder="Search parents or their children" />
             {filtered.length === 0 ? (
                 <EmptyState title="No parents found" />
@@ -409,6 +415,7 @@ function ParentsSection() {
 }
 
 const useStyles = makeStyles((colors) => ({
+    actions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.sm, marginBottom: spacing.md },
     count: { fontSize: 12, fontFamily: fonts.medium, color: colors.muted, marginBottom: spacing.sm },
     filterChip: {
         flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 6, marginBottom: spacing.sm,

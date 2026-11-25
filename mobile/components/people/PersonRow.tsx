@@ -51,7 +51,7 @@ export function PersonRow({ name, detail, tags, uri, phone, badge, onPress, last
     const { colors } = useTheme();
     const styles = useStyles();
     const shownTags = (tags ?? []).filter((t): t is string => !!t);
-    const body = (
+    const main = (
         <>
             <PersonAvatar name={name} uri={uri} />
             <View style={{ flex: 1, minWidth: 0 }}>
@@ -66,6 +66,17 @@ export function PersonRow({ name, detail, tags, uri, phone, badge, onPress, last
                     </View>
                 ) : null}
             </View>
+            {!phone && onPress ? <ChevronRight size={18} color={colors.muted} /> : null}
+        </>
+    );
+    // The call buttons sit beside the tappable part, never inside it (a button may not hold another).
+    return (
+        <View style={[styles.row, last && styles.last]}>
+            {onPress ? (
+                <Pressable onPress={onPress} style={({ pressed }) => [styles.main, pressed && { opacity: 0.6 }]} accessibilityRole="button" accessibilityLabel={name}>
+                    {main}
+                </Pressable>
+            ) : <View style={styles.main}>{main}</View>}
             {phone ? (
                 <View style={styles.contact}>
                     <Pressable onPress={() => void Linking.openURL(`tel:${phone}`)} hitSlop={6} style={[styles.contactBtn, { backgroundColor: colors.primarySoft }]} accessibilityRole="button" accessibilityLabel={`Call ${name}`}>
@@ -75,14 +86,9 @@ export function PersonRow({ name, detail, tags, uri, phone, badge, onPress, last
                         <MessageCircle size={16} color={colors.success} />
                     </Pressable>
                 </View>
-            ) : onPress ? <ChevronRight size={18} color={colors.muted} /> : null}
-        </>
+            ) : null}
+        </View>
     );
-    return onPress ? (
-        <Pressable onPress={onPress} style={({ pressed }) => [styles.row, last && styles.last, pressed && { backgroundColor: colors.mutedBg }]} accessibilityRole="button" accessibilityLabel={name}>
-            {body}
-        </Pressable>
-    ) : <View style={[styles.row, last && styles.last]}>{body}</View>;
 }
 
 /** A small heading between groups of people, e.g. a class name and its count. */
@@ -97,7 +103,8 @@ export function GroupHeading({ title, count }: { title: string; count: number })
 }
 
 const useStyles = makeStyles((colors) => ({
-    row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.md, paddingHorizontal: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border },
+    row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.md, paddingHorizontal: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border },
+    main: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: spacing.md },
     last: { borderBottomWidth: 0 },
     nameRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
     name: { flexShrink: 1, fontSize: 15, fontFamily: fonts.bold, color: colors.foreground },
