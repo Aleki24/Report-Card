@@ -1,7 +1,7 @@
 import React from 'react';
 import { Image, Linking, Pressable, Text, View } from 'react-native';
 import { ChevronRight, MessageCircle, Phone } from 'lucide-react-native';
-import { fonts, makeStyles, radius, spacing, useTheme, type Hue } from '@/lib/theme';
+import { fonts, makeStyles, radius, shadowFor, spacing, useTheme, type Hue } from '@/lib/theme';
 
 const HUES: readonly Hue[] = ['blue', 'violet', 'emerald', 'amber', 'rose', 'teal', 'orange', 'sky'];
 
@@ -103,9 +103,10 @@ export function GroupHeading({ title, count }: { title: string; count: number })
 }
 
 const useStyles = makeStyles((colors) => ({
-    row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.md, paddingHorizontal: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border },
+    // Each person on their own card, apart from the next: no dividing lines.
+    row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.md, marginBottom: spacing.sm, borderRadius: radius.xl, backgroundColor: colors.card, ...shadowFor(colors) },
     main: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-    last: { borderBottomWidth: 0 },
+    last: {},
     nameRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
     name: { flexShrink: 1, fontSize: 15, fontFamily: fonts.bold, color: colors.foreground },
     detail: { fontSize: 12, lineHeight: 17, fontFamily: fonts.regular, color: colors.muted, marginTop: 2 },
@@ -113,7 +114,7 @@ const useStyles = makeStyles((colors) => ({
     tag: { fontSize: 11, fontFamily: fonts.semibold, color: colors.muted, backgroundColor: colors.mutedBg, borderRadius: radius.sm, paddingHorizontal: 7, paddingVertical: 2, overflow: 'hidden', maxWidth: 200 },
     contact: { flexDirection: 'row', gap: 6 },
     contactBtn: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-    group: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.md, paddingVertical: 8, backgroundColor: colors.elevated, borderBottomWidth: 1, borderBottomColor: colors.border },
-    groupTitle: { fontSize: 12, fontFamily: fonts.bold, color: colors.foreground, letterSpacing: 0.3 },
-    groupCount: { fontSize: 11, fontFamily: fonts.bold, color: colors.muted },
+    group: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.xs, marginTop: spacing.sm, marginBottom: spacing.sm },
+    groupTitle: { fontSize: 13, fontFamily: fonts.bold, color: colors.foreground, letterSpacing: 0.3 },
+    groupCount: { fontSize: 11, fontFamily: fonts.bold, color: colors.muted, backgroundColor: colors.mutedBg, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2, overflow: 'hidden' },
 }));

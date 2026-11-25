@@ -16,7 +16,7 @@ import { roleLabel } from '@/lib/roles';
 import { fonts, makeStyles, spacing, useTheme } from '@/lib/theme';
 import { GroupHeading, PersonRow } from '@/components/people/PersonRow';
 import {
-    Badge, Button, ButtonRow, ChipSelect, FilterGrid, EmptyState, ErrorBanner, ListCard, LoadingView, Notice,
+    Badge, Button, ButtonRow, ChipSelect, FilterGrid, EmptyState, ErrorBanner, LoadingView, Notice,
     Screen, ScreenHeader, SearchField, SegmentedTabs, StatGrid, StatTile,
 } from '@/components/ui';
 import { RequireScreen } from '@/components/RequireScreen';
@@ -261,7 +261,7 @@ function StudentsSection() {
             ) : (
                 <>
                     <Text style={styles.count}>{pluralize(filtered.length, 'student')}</Text>
-                    <ListCard>
+                    <View>
                         {groups.map(([className, list]) => (
                             <React.Fragment key={className}>
                                 {!stream ? <GroupHeading title={className} count={list.length} /> : null}
@@ -279,7 +279,7 @@ function StudentsSection() {
                                 ))}
                             </React.Fragment>
                         ))}
-                    </ListCard>
+                    </View>
                     {filtered.length > limit ? (
                         <ButtonRow>
                             <Button variant="ghost" label={`Show ${Math.min(PAGE, filtered.length - limit)} more`} onPress={() => setLimit((l) => l + PAGE)} />
@@ -342,7 +342,7 @@ function TeachersSection() {
             {groups.length === 0 ? (
                 <EmptyState title="No staff found" />
             ) : (
-                <ListCard>
+                <View>
                     {groups.map(([group, list]) => (
                         <React.Fragment key={group}>
                             <GroupHeading title={group} count={list.length} />
@@ -361,7 +361,7 @@ function TeachersSection() {
                             ))}
                         </React.Fragment>
                     ))}
-                </ListCard>
+                </View>
             )}
         </>
     );
@@ -396,7 +396,7 @@ function ParentsSection() {
             {filtered.length === 0 ? (
                 <EmptyState title="No parents found" />
             ) : (
-                <ListCard>
+                <View>
                     {filtered.map((p, i) => (
                         <PersonRow
                             key={p.id}
@@ -408,7 +408,7 @@ function ParentsSection() {
                             last={i === filtered.length - 1}
                         />
                     ))}
-                </ListCard>
+                </View>
             )}
         </>
     );
