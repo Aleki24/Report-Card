@@ -8,7 +8,7 @@ import { useGradeStreams, useTerms } from '@/lib/useSchoolData';
 import { useCurrentUser } from '@/lib/UserContext';
 import { askConfirm } from '@/lib/confirm';
 import { errorMessage, formatCurrency, formatDate } from '@/lib/format';
-import { fonts, makeStyles, spacing, useTheme } from '@/lib/theme';
+import { rowCard, fonts, makeStyles, spacing, useTheme } from '@/lib/theme';
 import {
     Badge, Button, ButtonRow, ChipSelect, EmptyState, ErrorBanner, ListCard, LoadingView, Notice, ScrollTabs, StatGrid, StatTile, TextField, type BadgeVariant,
 } from '@/components/ui';
@@ -177,7 +177,7 @@ export function WhoOwes({ initialFocus }: { initialFocus?: Exclude<Focus, 'all' 
 }
 
 const useStyles = makeStyles((colors) => ({
-    item: { borderBottomWidth: 1, borderBottomColor: colors.border },
+    item: { ...rowCard(colors) },
     row: { padding: spacing.md, paddingBottom: spacing.xs, gap: 6 },
     head: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
     name: { fontSize: 14, fontFamily: fonts.bold, color: colors.foreground },

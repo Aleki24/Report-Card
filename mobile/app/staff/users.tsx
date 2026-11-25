@@ -114,7 +114,7 @@ function UsersContent() {
 
     return (
         <Screen onRefresh={refresh} refreshing={refreshing}>
-            <ScreenHeader title="Users" description="Invite staff, set roles and classes, and manage access." />
+            <ScreenHeader title="Users" action={!inviting ? <Button size="sm" icon={Plus} label="Invite" onPress={() => setInviting(true)} /> : undefined} />
             {error ? <ErrorBanner message={error} onRetry={refresh} /> : null}
             {message ? <Notice tone={message.tone} message={message.text} onDismiss={() => setMessage(null)} /> : null}
 
@@ -138,7 +138,6 @@ function UsersContent() {
             ) : (
                 <ButtonRow>
                     <Button variant="secondary" label="Print invite codes" onPress={printCodes} loading={busy === 'print'} />
-                    <Button icon={Plus} label="Invite user" onPress={() => setInviting(true)} />
                 </ButtonRow>
             )}
 
@@ -245,7 +244,6 @@ function InviteForm({ nextSequence, onCancel, onDone }: { nextSequence: number; 
                 />
             ) : null}
             <TextField label="Sequence number (for the username)" value={sequence} onChangeText={setSequence} keyboardType="number-pad" />
-            <Text style={{ fontSize: 12, color: colors.muted, marginBottom: spacing.sm }}>Students are added from People, which also creates their invite code.</Text>
             <ButtonRow>
                 <Button variant="secondary" label="Cancel" onPress={onCancel} />
                 <Button label="Invite" onPress={submit} loading={saving} />

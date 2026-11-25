@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { withQuery } from '@/lib/api';
-import { fonts, makeStyles, spacing, useTheme } from '@/lib/theme';
+import { rowCard, fonts, makeStyles, spacing, useTheme } from '@/lib/theme';
 import { ChipSelect, EmptyState, ErrorBanner, ListCard, LoadingView, SectionLabel, StatGrid, StatTile, ToggleRow } from '@/components/ui';
 import { statusColor } from './AttendanceBar';
 import { addDays, formatIsoDate, localIsoDate } from '@shared/dates';
@@ -120,7 +120,7 @@ export function AttendanceReport({ streams, initialStreamId }: { streams: readon
 }
 
 const useStyles = makeStyles((colors) => ({
-    row: { padding: spacing.md, gap: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border },
+    row: { padding: spacing.md, gap: spacing.sm, ...rowCard(colors) },
     head: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
     name: { fontSize: 14, fontFamily: fonts.bold, color: colors.foreground },
     sub: { fontSize: 12, fontFamily: fonts.regular, color: colors.muted },

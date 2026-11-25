@@ -129,7 +129,7 @@ function ElectiveTable({ data, onApply }: { data: ElectivePlacementResponse; onA
 
     return (
         <View>
-            <Text style={{ fontSize: 12, color: colors.muted, marginBottom: spacing.md }}>Tick the electives each student takes — pre-filled from the marks already recorded (• marks a subject the student has marks in).</Text>
+            <Text style={{ fontSize: 12, color: colors.muted, marginBottom: spacing.md }}>Tick each student’s electives. • has marks.</Text>
             {data.learners.map((l) => {
                 const set = picked[l.studentId] ?? new Set<string>();
                 const marked = new Set(l.markedSubjectIds);

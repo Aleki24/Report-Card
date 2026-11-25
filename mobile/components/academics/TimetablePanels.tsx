@@ -135,7 +135,7 @@ function FillFreePeriods({ config, onSaved }: { config: TimetableConfig; onSaved
         <Card style={{ marginBottom: spacing.sm }}>
             <ToggleRow
                 label="Fill free periods with extra lessons"
-                description="A class's free periods get extra lessons of its own subjects (maths, languages and sciences first), and a shorter elective takes every period of its option block. Only where the teacher and any room are free, so nobody is booked twice."
+                description="Extra lessons of the class's own subjects, only where teacher and room are free."
                 value={config.rules.fill_free_periods}
                 onValueChange={(v) => void toggle(v)}
             />
@@ -266,7 +266,7 @@ export function TimetableBuilder({ plan, onChanged }: { plan?: TimetablePlan | n
         return (
             <View>
                 {fillToggle}
-                <EmptyState title="No drafts yet." description="When every part is ready, generate one with the button at the top." />
+                <EmptyState title="No drafts yet" />
             </View>
         );
     }
@@ -328,7 +328,7 @@ export function TimetableBuilder({ plan, onChanged }: { plan?: TimetablePlan | n
                         <Button size="sm" variant="ghost" label="Cancel" onPress={() => setSelected(null)} />
                     </ButtonRow>
                 </Card>
-            ) : <Text style={{ fontSize: 12, fontFamily: fonts.regular, color: colors.muted, marginVertical: spacing.sm }}>Tap a lesson to move or pin it. Pinned lessons keep their slots when you reshuffle.</Text>}
+            ) : <Text style={{ fontSize: 12, fontFamily: fonts.regular, color: colors.muted, marginVertical: spacing.sm }}>Tap a lesson to move or pin it.</Text>}
             {config && active && classLessons.length > 0 ? (
                 <TimetableGrid config={config} lessons={classLessons} mode="class" selectedId={selected?.id} onCellPress={onCell} hintAt={hintAt} />
             ) : null}

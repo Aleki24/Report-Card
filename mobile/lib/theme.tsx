@@ -193,6 +193,14 @@ export const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24 };
 export const radius = { sm: 6, md: 8, lg: 10, xl: 14, xxl: 18, xxxl: 24 };
 
 /** A soft lift for cards; dark mode leans on borders instead, so its shadow is nearly gone. */
+/**
+ * One item of a list on its own card, apart from the next, so nothing in a
+ * list is split by thin lines. Lists stack these with a small gap.
+ */
+export function rowCard(colors: Palette) {
+    return { backgroundColor: colors.card, borderRadius: radius.xl, marginBottom: spacing.sm, ...shadowFor(colors) };
+}
+
 export function shadowFor(colors: Palette) {
     return {
         shadowColor: colors.shadow,

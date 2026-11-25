@@ -47,7 +47,6 @@ export function AppearancePicker() {
     return (
         <View style={styles.card}>
             <Text style={styles.title}>Appearance</Text>
-            <Text style={styles.subtitle}>Dark mode is easier on the eyes when marking at night.</Text>
             <View style={styles.row}>
                 {OPTIONS.map(({ value, label, icon: Icon }) => {
                     const active = preference === value;

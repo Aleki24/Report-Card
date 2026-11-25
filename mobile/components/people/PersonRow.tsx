@@ -1,7 +1,7 @@
 import React from 'react';
 import { Image, Linking, Pressable, Text, View } from 'react-native';
 import { ChevronRight, MessageCircle, Phone } from 'lucide-react-native';
-import { fonts, makeStyles, radius, spacing, useTheme, type Hue } from '@/lib/theme';
+import { fonts, makeStyles, radius, rowCard, spacing, useTheme, type Hue } from '@/lib/theme';
 
 const HUES: readonly Hue[] = ['blue', 'violet', 'emerald', 'amber', 'rose', 'teal', 'orange', 'sky'];
 
@@ -51,7 +51,7 @@ export function PersonRow({ name, detail, tags, uri, phone, badge, onPress, last
     const { colors } = useTheme();
     const styles = useStyles();
     const shownTags = (tags ?? []).filter((t): t is string => !!t);
-    const body = (
+    const main = (
         <>
             <PersonAvatar name={name} uri={uri} />
             <View style={{ flex: 1, minWidth: 0 }}>
@@ -66,6 +66,17 @@ export function PersonRow({ name, detail, tags, uri, phone, badge, onPress, last
                     </View>
                 ) : null}
             </View>
+            {!phone && onPress ? <ChevronRight size={18} color={colors.muted} /> : null}
+        </>
+    );
+    // The call buttons sit beside the tappable part, never inside it (a button may not hold another).
+    return (
+        <View style={[styles.row, last && styles.last]}>
+            {onPress ? (
+                <Pressable onPress={onPress} style={({ pressed }) => [styles.main, pressed && { opacity: 0.6 }]} accessibilityRole="button" accessibilityLabel={name}>
+                    {main}
+                </Pressable>
+            ) : <View style={styles.main}>{main}</View>}
             {phone ? (
                 <View style={styles.contact}>
                     <Pressable onPress={() => void Linking.openURL(`tel:${phone}`)} hitSlop={6} style={[styles.contactBtn, { backgroundColor: colors.primarySoft }]} accessibilityRole="button" accessibilityLabel={`Call ${name}`}>
@@ -75,14 +86,9 @@ export function PersonRow({ name, detail, tags, uri, phone, badge, onPress, last
                         <MessageCircle size={16} color={colors.success} />
                     </Pressable>
                 </View>
-            ) : onPress ? <ChevronRight size={18} color={colors.muted} /> : null}
-        </>
+            ) : null}
+        </View>
     );
-    return onPress ? (
-        <Pressable onPress={onPress} style={({ pressed }) => [styles.row, last && styles.last, pressed && { backgroundColor: colors.mutedBg }]} accessibilityRole="button" accessibilityLabel={name}>
-            {body}
-        </Pressable>
-    ) : <View style={[styles.row, last && styles.last]}>{body}</View>;
 }
 
 /** A small heading between groups of people, e.g. a class name and its count. */
@@ -97,8 +103,10 @@ export function GroupHeading({ title, count }: { title: string; count: number })
 }
 
 const useStyles = makeStyles((colors) => ({
-    row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.md, paddingHorizontal: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border },
-    last: { borderBottomWidth: 0 },
+    // Each person on their own card, apart from the next: no dividing lines.
+    row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.md, ...rowCard(colors) },
+    main: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+    last: {},
     nameRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
     name: { flexShrink: 1, fontSize: 15, fontFamily: fonts.bold, color: colors.foreground },
     detail: { fontSize: 12, lineHeight: 17, fontFamily: fonts.regular, color: colors.muted, marginTop: 2 },
@@ -106,7 +114,7 @@ const useStyles = makeStyles((colors) => ({
     tag: { fontSize: 11, fontFamily: fonts.semibold, color: colors.muted, backgroundColor: colors.mutedBg, borderRadius: radius.sm, paddingHorizontal: 7, paddingVertical: 2, overflow: 'hidden', maxWidth: 200 },
     contact: { flexDirection: 'row', gap: 6 },
     contactBtn: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-    group: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.md, paddingVertical: 8, backgroundColor: colors.elevated, borderBottomWidth: 1, borderBottomColor: colors.border },
-    groupTitle: { fontSize: 12, fontFamily: fonts.bold, color: colors.foreground, letterSpacing: 0.3 },
-    groupCount: { fontSize: 11, fontFamily: fonts.bold, color: colors.muted },
+    group: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.xs, marginTop: spacing.sm, marginBottom: spacing.sm },
+    groupTitle: { fontSize: 13, fontFamily: fonts.bold, color: colors.foreground, letterSpacing: 0.3 },
+    groupCount: { fontSize: 11, fontFamily: fonts.bold, color: colors.muted, backgroundColor: colors.mutedBg, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2, overflow: 'hidden' },
 }));

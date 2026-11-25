@@ -77,7 +77,6 @@ export function CompareTerms({ years, terms, streams, initialStreamId, initialTe
 
     return (
         <>
-            <Text style={styles.intro}>The class’s average over every exam it sat each term, overall and by subject.</Text>
             <ChipSelect label="Class" options={streams.map((s) => ({ value: s.id, label: s.full_name }))} value={streamId} onChange={setStreamId} />
             <ChipSelect label="From" options={termOptions} value={baseTermId} onChange={setBaseTermId} />
             <ChipSelect label="To" options={termOptions} value={compareTermId} onChange={setCompareTermId} />

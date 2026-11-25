@@ -12,7 +12,8 @@ import { localToday } from '@shared/local-date';
 import { ExamWindowsCard } from './ExamWindowsCard';
 import { MarkingProgress } from './MarkingProgress';
 import { TermLockCard } from './TermLockCard';
-import { useRouter } from 'expo-router';
+import { router as nav, useRouter } from 'expo-router';
+import { useCurrentUser } from '@/lib/UserContext';
 
 /**
  * The web's step-by-step picker (① term → ② exam → class → subject), laid out
@@ -141,7 +142,7 @@ export function ExamPicker({
     if (termsLoading) return <LoadingView />;
     if (termsError) return <ErrorBanner message={termsError} onRetry={reloadTerms} />;
     if (terms.length === 0) {
-        return <EmptyState title="No terms set up" description="Ask your administrator to add terms in Settings." />;
+        return <NoTerms />;
     }
 
     const term = terms.find((t) => t.id === effectiveTermId) ?? null;
@@ -306,4 +307,12 @@ export function StatusBadge({ status }: { status: ExamSlot['status'] }) {
     if (status === 'APPROVED') return <Badge label="Released" variant="success" />;
     if (status === 'PENDING_APPROVAL') return <Badge label="Pending" variant="warning" />;
     return <Badge label="Draft" />;
+}
+
+/** No terms yet: whoever runs the school adds them; anyone else is told who can. */
+function NoTerms() {
+    const { can } = useCurrentUser();
+    return can('school.manage')
+        ? <EmptyState title="No terms set up" action={<Button label="Add terms" onPress={() => nav.push('/staff/settings?tab=calendar')} />} />
+        : <EmptyState title="No terms set up" description="Ask your administrator to add them." />;
 }

@@ -3,7 +3,7 @@ import { Pressable, Text, View } from 'react-native';
 import { ChevronRight } from 'lucide-react-native';
 import { useApiQuery } from '@/lib/useApiQuery';
 import { withQuery } from '@/lib/api';
-import { fonts, makeStyles, spacing, useTheme } from '@/lib/theme';
+import { rowCard, fonts, makeStyles, spacing, useTheme } from '@/lib/theme';
 import { Badge, DateStepper, EmptyState, ErrorBanner, ListCard, LoadingView, StatGrid, StatTile } from '@/components/ui';
 import { AttendanceBar } from './AttendanceBar';
 import { addWeekdays, isWeekday, localIsoDate } from '@shared/dates';
@@ -85,7 +85,7 @@ export function WholeSchool({ onOpen }: { onOpen: (streamId: string, date: strin
 }
 
 const useStyles = makeStyles((colors) => ({
-    row: { padding: spacing.md, gap: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border },
+    row: { padding: spacing.md, gap: spacing.sm, ...rowCard(colors) },
     head: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
     name: { fontSize: 14, fontFamily: fonts.bold, color: colors.foreground },
     sub: { fontSize: 12, fontFamily: fonts.regular, color: colors.muted },

@@ -83,7 +83,7 @@ export function TaughtTogether({ onChange }: { onChange: () => void }) {
                 <Link2 size={18} color={colors.primary} />
                 <Text style={styles.title}>Subjects taught at the same time</Text>
             </View>
-            <Text style={styles.help}>Learners take one subject from each group, so its subjects share a slot. Add your school’s own option groups here.</Text>
+            <Text style={styles.help}>Subjects in a group share a slot.</Text>
 
             <Text style={styles.label}>Every school</Text>
             {builtIn.map((r) => (

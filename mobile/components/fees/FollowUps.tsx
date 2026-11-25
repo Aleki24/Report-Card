@@ -99,7 +99,7 @@ export function FollowUps({ studentId }: { studentId: string }) {
             {query.loading && !query.data ? <LoadingView /> : null}
             {query.error && !query.data ? <ErrorBanner message={query.error} onRetry={query.reload} /> : null}
             {query.data && query.data.length === 0 && !adding ? (
-                <EmptyState title="No follow-ups yet" description="Note each call, and write down promises to pay: Skulbase checks them against the payments." />
+                <EmptyState title="No follow-ups yet" />
             ) : null}
             {(query.data ?? []).map((item) => (
                 <ListRow

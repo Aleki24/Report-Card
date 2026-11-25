@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Image, Text, View } from 'react-native';
-import { SIGNATURES_URL, SIGNATURE_PHOTO_MAX_BYTES, SIGNATURE_TIPS, type SignatureRecord, type SignatureTarget } from '@shared/signatures';
+import { SIGNATURES_URL, SIGNATURE_PHOTO_MAX_BYTES, type SignatureRecord, type SignatureTarget } from '@shared/signatures';
 import { Button, ButtonRow, Card, ErrorBanner, LoadingView, Notice, SectionLabel } from '@/components/ui';
 import { ApiError, pickPhoto, useApi, withQuery } from '@/lib/api';
 import { askConfirm } from '@/lib/confirm';
@@ -13,7 +13,7 @@ import { useApiQuery } from '@/lib/useApiQuery';
  * print, replaced from a photo (the server removes the paper and crops it),
  * or removed. `target` is `me`, `principal` or a staff member's id.
  */
-export function SignatureCard({ target, title, description }: { target: SignatureTarget; title: string; description: string }) {
+export function SignatureCard({ target, title }: { target: SignatureTarget; title: string; description?: string }) {
     const styles = useStyles();
     const api = useApi();
     const path = withQuery(SIGNATURES_URL, { target });
@@ -59,7 +59,6 @@ export function SignatureCard({ target, title, description }: { target: Signatur
     return (
         <Card style={{ marginBottom: spacing.lg }}>
             <SectionLabel>{title}</SectionLabel>
-            <Text style={styles.note}>{description}</Text>
             {query.error && !record ? <ErrorBanner message={query.error} onRetry={query.reload} /> : null}
             {query.loading && !record ? <LoadingView /> : (
                 <View style={styles.preview} accessibilityLabel={record?.image ? `${title}, on file` : `${title}, none yet`}>
@@ -78,7 +77,7 @@ export function SignatureCard({ target, title, description }: { target: Signatur
                 <Button size="sm" variant="secondary" label="Choose photo" onPress={() => void upload('library')} disabled={busy} />
                 {record?.image ? <Button size="sm" variant="ghost" label="Remove" onPress={() => void remove()} disabled={busy} /> : null}
             </ButtonRow>
-            <Text style={styles.note}>{SIGNATURE_TIPS}</Text>
+            <Text style={styles.note}>Dark pen on white paper, close up.</Text>
         </Card>
     );
 }

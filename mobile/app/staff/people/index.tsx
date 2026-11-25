@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Plus } from 'lucide-react-native';
-import { Text } from 'react-native';
+import { GraduationCap, PhoneOff, Plus, Route, Upload, UserCog, UsersRound, X } from 'lucide-react-native';
+import { Pressable, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCurrentUser } from '@/lib/UserContext';
 import { useApiQuery } from '@/lib/useApiQuery';
@@ -16,12 +16,13 @@ import { roleLabel } from '@/lib/roles';
 import { fonts, makeStyles, spacing, useTheme } from '@/lib/theme';
 import { GroupHeading, PersonRow } from '@/components/people/PersonRow';
 import {
-    Badge, Button, ButtonRow, Card, ChipSelect, FilterGrid, EmptyState, ErrorBanner, ListCard, LoadingView, Notice,
-    Screen, ScreenHeader, SearchField, SegmentedTabs,
+    Badge, Button, ButtonRow, ChipSelect, FilterGrid, EmptyState, ErrorBanner, LoadingView, Notice,
+    Screen, ScreenHeader, SearchField, SegmentedTabs, StatGrid, StatTile,
 } from '@/components/ui';
 import { RequireScreen } from '@/components/RequireScreen';
 import { EMPTY_STUDENT, StudentForm, type AddStudentResult } from '@/components/people/StudentForm';
 import type { StudentListItem, TeacherListItem } from '@/lib/types';
+import type { UserRole } from '@/lib/roles';
 
 type Tab = 'students' | 'teachers' | 'parents';
 
@@ -48,6 +49,8 @@ function PeopleContent() {
     const params = useLocalSearchParams<{ tab?: string; search?: string; class?: string }>();
     const isAdmin = role === 'ADMIN';
     const [tab, setTab] = useState<Tab>(isAdmin && (params.tab === 'teachers' || params.tab === 'parents') ? params.tab : 'students');
+    // The tab's one main action sits in the header, as on every screen.
+    const [adding, setAdding] = useState(false);
 
     // Tab screens stay mounted, so a later deep link (?tab=teachers) must switch tabs too.
     useEffect(() => {
@@ -57,7 +60,7 @@ function PeopleContent() {
 
     return (
         <Screen>
-            <ScreenHeader title="People" description={isAdmin ? 'Students, staff and parents at your school.' : 'The learners in your class.'} />
+            <ScreenHeader title="People" action={tab === 'students' && !adding ? <Button size="sm" icon={Plus} label="Add" onPress={() => setAdding(true)} /> : undefined} />
             {isAdmin ? (
                 <SegmentedTabs
                     tabs={[
@@ -69,13 +72,14 @@ function PeopleContent() {
                     onChange={setTab}
                 />
             ) : null}
-            {tab === 'students' ? <StudentsSection /> : tab === 'teachers' ? <TeachersSection /> : <ParentsSection />}
+            {tab === 'students' ? <StudentsSection adding={adding} setAdding={setAdding} /> : tab === 'teachers' ? <TeachersSection /> : <ParentsSection />}
         </Screen>
     );
 }
 
-function StudentsSection() {
+function StudentsSection({ adding, setAdding }: { adding: boolean; setAdding: (adding: boolean) => void }) {
     const { colors } = useTheme();
+    const styles = useStyles();
     const router = useRouter();
     const { role } = useCurrentUser();
     // A class teacher's People is their own class (as on the web), and they
@@ -105,8 +109,9 @@ function StudentsSection() {
     const [stream, setStream] = useState<string>(classParam ?? '');
     useEffect(() => { if (classParam) setStream(classParam); }, [classParam]);
     const [status, setStatus] = useState<'ACTIVE' | 'INACTIVE' | 'ALL'>('ACTIVE');
+    // From the "No guardian phone" tile: only the learners nobody can text.
+    const [noPhone, setNoPhone] = useState(false);
     const [limit, setLimit] = useState(PAGE);
-    const [adding, setAdding] = useState(false);
     const [importing, setImporting] = useState(false);
     const [created, setCreated] = useState<AddStudentResult | null>(null);
     const [imported, setImported] = useState<CreatedCredential[]>([]);
@@ -120,20 +125,25 @@ function StudentsSection() {
             // There is no INACTIVE status; "inactive" is anything not ACTIVE.
             if (status === 'INACTIVE' && s.status === 'ACTIVE') return false;
             if (pathway && (pathway === 'UNASSIGNED' ? !!s.pathway : s.pathway !== pathway)) return false;
+            if (noPhone && s.guardian_phone?.trim()) return false;
             return !q || `${fullName(s.users)} ${s.admission_number ?? ''} ${s.guardian_phone ?? ''}`.toLowerCase().includes(q);
         });
-    }, [students, search, stream, status, pathway]);
+    }, [students, search, stream, status, pathway, noPhone]);
 
     // Learners under their class, classes in order, those without one last.
     const groups = useMemo(() => {
         const by = new Map<string, StudentListItem[]>();
-        for (const s of filtered.slice(0, limit)) {
+        const byName = [...filtered].sort((a, b) => fullName(a.users).localeCompare(fullName(b.users)));
+        for (const s of byName.slice(0, limit)) {
             const key = s.grade_streams?.full_name ?? 'No class';
             by.set(key, [...(by.get(key) ?? []), s]);
         }
         return [...by.entries()].sort(([a], [b]) => (a === 'No class' ? 1 : b === 'No class' ? -1 : a.localeCompare(b, undefined, { numeric: true })));
     }, [filtered, limit]);
-    const activeCount = students.filter((s) => s.status === 'ACTIVE').length;
+    const active = students.filter((s) => s.status === 'ACTIVE');
+    const activeCount = active.length;
+    const classCount = new Set(active.map((s) => s.current_grade_stream_id).filter(Boolean)).size;
+    const withoutPhone = active.filter((s) => !s.guardian_phone?.trim()).length;
 
     if (loading) return <LoadingView />;
 
@@ -152,6 +162,18 @@ function StudentsSection() {
                 />
             ) : null}
 
+            <StatGrid>
+                <StatTile icon={UsersRound} label="Learners" value={activeCount} sub={`in ${pluralize(classCount, 'class', 'classes')}`} />
+                <StatTile
+                    icon={PhoneOff}
+                    label="No phone"
+                    value={withoutPhone}
+                    sub={withoutPhone > 0 ? (noPhone ? 'showing them' : 'tap to see them') : 'every guardian reachable'}
+                    tone={withoutPhone > 0 ? colors.warning : colors.success}
+                    onPress={withoutPhone > 0 ? () => { setNoPhone((v) => !v); setStatus('ACTIVE'); } : undefined}
+                />
+            </StatGrid>
+
             {adding ? (
                 <StudentForm
                     initial={{ ...EMPTY_STUDENT, grade_stream_id: stream || (streams.length === 1 ? streams[0].id : null) }}
@@ -164,13 +186,12 @@ function StudentsSection() {
                     }}
                 />
             ) : (
-                <ButtonRow>
+                <ActionBar>
+                    <View style={{ flex: 1 }}><Button variant="secondary" icon={Upload} label="Import" onPress={() => setImporting(true)} /></View>
                     {role === 'ADMIN' && hasPathways && seniorStreams.length > 0 ? (
-                        <Button variant="secondary" label="Pathways" onPress={() => setAssigning(true)} />
+                        <View style={{ flex: 1 }}><Button variant="secondary" icon={Route} label="Pathways" onPress={() => setAssigning(true)} /></View>
                     ) : null}
-                    <Button variant="secondary" label="Import CSV / Excel" onPress={() => setImporting(true)} />
-                    <Button icon={Plus} label="Add student" onPress={() => setAdding(true)} />
-                </ButtonRow>
+                </ActionBar>
             )}
             {pathwayNotice ? <Notice tone="success" message={pathwayNotice} onDismiss={() => setPathwayNotice(null)} /> : null}
             {assigning ? (
@@ -229,12 +250,18 @@ function StudentsSection() {
                 onChange={setStatus}
             />
 
+            {noPhone ? (
+                <Pressable onPress={() => setNoPhone(false)} accessibilityRole="button" accessibilityLabel="Show everyone, not only learners without a guardian phone" style={styles.filterChip}>
+                    <Text style={styles.filterChipText}>Without a guardian phone</Text>
+                    <X size={14} color={colors.warningText} />
+                </Pressable>
+            ) : null}
             {filtered.length === 0 ? (
                 <EmptyState title="No students found" />
             ) : (
                 <>
-                    <Text style={{ fontSize: 12, color: colors.muted, marginBottom: spacing.sm }}>{pluralize(filtered.length, 'student')}</Text>
-                    <ListCard>
+                    <Text style={styles.count}>{pluralize(filtered.length, 'student')}</Text>
+                    <View>
                         {groups.map(([className, list]) => (
                             <React.Fragment key={className}>
                                 {!stream ? <GroupHeading title={className} count={list.length} /> : null}
@@ -252,7 +279,7 @@ function StudentsSection() {
                                 ))}
                             </React.Fragment>
                         ))}
-                    </ListCard>
+                    </View>
                     {filtered.length > limit ? (
                         <ButtonRow>
                             <Button variant="ghost" label={`Show ${Math.min(PAGE, filtered.length - limit)} more`} onPress={() => setLimit((l) => l + PAGE)} />
@@ -264,71 +291,112 @@ function StudentsSection() {
     );
 }
 
+/** The tab's actions across the full width, in line with the tiles and search below. */
+function ActionBar({ children }: { children: React.ReactNode }) {
+    const styles = useStyles();
+    return <View style={styles.actions}>{children}</View>;
+}
+
+/** Staff grouped by what they do, leaders first. */
+const ROLE_ORDER: readonly UserRole[] = ['ADMIN', 'CLASS_TEACHER', 'SUBJECT_TEACHER'];
+const roleRank = (role: UserRole) => {
+    const i = ROLE_ORDER.indexOf(role);
+    return i === -1 ? ROLE_ORDER.length : i;
+};
+
 function TeachersSection() {
     const { colors } = useTheme();
     const router = useRouter();
     const { data, loading, error, refresh } = useApiQuery<TeacherListItem[]>('/api/school/data?type=teachers');
     const [search, setSearch] = useState('');
 
+    const staff = useMemo(() => data ?? [], [data]);
+    const groups = useMemo(() => {
+        const q = search.trim().toLowerCase();
+        const shown = staff
+            .filter((t) => !q || `${fullName(t.profile)} ${t.profile.job_title ?? ''} ${t.subjects} ${t.classes}`.toLowerCase().includes(q))
+            .sort((a, b) => roleRank(a.profile.role) - roleRank(b.profile.role) || fullName(a.profile).localeCompare(fullName(b.profile)));
+        const by = new Map<string, TeacherListItem[]>();
+        for (const t of shown) {
+            const key = roleLabel(t.profile.role);
+            by.set(key, [...(by.get(key) ?? []), t]);
+        }
+        return [...by.entries()];
+    }, [staff, search]);
+
     if (loading) return <LoadingView />;
-    const q = search.trim().toLowerCase();
-    const teachers = (data ?? []).filter((t) => !q || `${fullName(t.profile)} ${t.subjects} ${t.classes}`.toLowerCase().includes(q));
+    const active = staff.filter((t) => t.profile.is_active);
+    const teaching = active.filter((t) => t.stats.subjectCount > 0 || t.stats.classCount > 0).length;
 
     return (
         <>
             {error ? <ErrorBanner message={error} onRetry={refresh} /> : null}
-            <Card style={{ marginBottom: spacing.md }}>
-                <Text style={{ fontSize: 12, color: colors.muted }}>New staff join with an invite code. Create accounts and assign roles under Users.</Text>
-                <ButtonRow>
-                    <Button size="sm" variant="secondary" label="Open Users" onPress={() => router.push('/staff/users')} />
-                </ButtonRow>
-            </Card>
+            <StatGrid>
+                <StatTile icon={UsersRound} label="Staff" value={active.length} sub={staff.length > active.length ? `${staff.length - active.length} inactive` : undefined} />
+                <StatTile icon={GraduationCap} label="Teaching" value={teaching} sub={active.length > teaching ? `${active.length - teaching} not assigned` : 'everyone assigned'} tone={active.length > teaching ? colors.warning : colors.success} />
+            </StatGrid>
+            <ActionBar>
+                <View style={{ flex: 1 }}><Button variant="secondary" icon={UserCog} label="Accounts & roles" onPress={() => router.push('/staff/users')} /></View>
+            </ActionBar>
             <SearchField value={search} onChangeText={setSearch} placeholder="Search name, subject or class" />
-            {teachers.length === 0 ? (
+            {groups.length === 0 ? (
                 <EmptyState title="No staff found" />
             ) : (
-                <ListCard>
-                    {teachers.map((t, i) => (
-                        <PersonRow
-                            key={t.id}
-                            name={fullName(t.profile)}
-                            uri={t.profile.avatar_url}
-                            detail={t.profile.job_title ?? roleLabel(t.profile.role)}
-                            tags={[t.subjects, t.classes]}
-                            badge={t.profile.is_active ? undefined : <Badge label="Inactive" variant="danger" />}
-                            last={i === teachers.length - 1}
-                            onPress={() => router.push(`/staff/people/${t.id}?type=teacher`)}
-                        />
+                <View>
+                    {groups.map(([group, list]) => (
+                        <React.Fragment key={group}>
+                            <GroupHeading title={group} count={list.length} />
+                            {list.map((t, i) => (
+                                <PersonRow
+                                    key={t.id}
+                                    name={fullName(t.profile)}
+                                    uri={t.profile.avatar_url}
+                                    detail={t.profile.job_title ?? null}
+                                    tags={[t.classes, t.subjects]}
+                                    phone={t.profile.phone}
+                                    badge={t.profile.is_active ? undefined : <Badge label="Inactive" variant="danger" />}
+                                    last={i === list.length - 1}
+                                    onPress={() => router.push(`/staff/people/${t.id}?type=teacher`)}
+                                />
+                            ))}
+                        </React.Fragment>
                     ))}
-                </ListCard>
+                </View>
             )}
         </>
     );
 }
 
 function ParentsSection() {
-    const styles = useStyles();
+    const { colors } = useTheme();
+    const router = useRouter();
     const { data, loading, error, refresh } = useApiQuery<Parent[]>('/api/school/data?type=parents');
     const [search, setSearch] = useState('');
 
     if (loading) return <LoadingView />;
     const parents = data ?? [];
     const q = search.trim().toLowerCase();
-    const filtered = parents.filter(
-        (p) => !q || p.name.toLowerCase().includes(q) || p.phone.includes(q) || p.email.toLowerCase().includes(q) || p.students.some((s) => `${s.first_name} ${s.last_name}`.toLowerCase().includes(q)),
-    );
+    const filtered = parents
+        .filter((p) => !q || p.name.toLowerCase().includes(q) || p.phone.includes(q) || p.email.toLowerCase().includes(q) || p.students.some((s) => `${s.first_name} ${s.last_name}`.toLowerCase().includes(q)))
+        .sort((a, b) => a.name.localeCompare(b.name));
+    const children = parents.reduce((n, p) => n + p.students.length, 0);
+    const noPhone = parents.filter((p) => !p.phone).length;
 
     return (
         <>
             {error ? <ErrorBanner message={error} onRetry={refresh} /> : null}
-            <Text style={styles.summary}>
-                {pluralize(parents.length, 'parent')} · {pluralize(parents.reduce((a, p) => a + p.students.length, 0), 'child', 'children')} linked · {parents.filter((p) => p.phone).length} with a phone
-            </Text>
+            <StatGrid>
+                <StatTile icon={UsersRound} label="Parents" value={parents.length} sub={`${pluralize(children, 'child', 'children')} linked`} />
+                <StatTile icon={PhoneOff} label="No phone" value={noPhone} sub={noPhone > 0 ? 'cannot get SMS' : 'everyone reachable'} tone={noPhone > 0 ? colors.warning : colors.success} />
+            </StatGrid>
+            <ActionBar>
+                <View style={{ flex: 1 }}><Button variant="secondary" icon={Plus} label="Link a class's parents" onPress={() => router.push('/staff/parent-accounts?tab=class')} /></View>
+            </ActionBar>
             <SearchField value={search} onChangeText={setSearch} placeholder="Search parents or their children" />
             {filtered.length === 0 ? (
-                <EmptyState title="No parents found" description="Parents come from each student's guardian details." />
+                <EmptyState title="No parents found" />
             ) : (
-                <ListCard>
+                <View>
                     {filtered.map((p, i) => (
                         <PersonRow
                             key={p.id}
@@ -336,15 +404,22 @@ function ParentsSection() {
                             detail={p.email || null}
                             tags={p.students.map((c) => `${c.first_name} ${c.last_name}${c.grade_stream ? ` · ${c.grade_stream.full_name}` : ''}`)}
                             phone={p.phone || null}
+                            badge={p.phone ? undefined : <Badge label="No phone" variant="warning" />}
                             last={i === filtered.length - 1}
                         />
                     ))}
-                </ListCard>
+                </View>
             )}
         </>
     );
 }
 
 const useStyles = makeStyles((colors) => ({
-    summary: { fontSize: 12, fontFamily: fonts.medium, color: colors.muted, marginBottom: spacing.md },
+    actions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.sm, marginBottom: spacing.md },
+    count: { fontSize: 12, fontFamily: fonts.medium, color: colors.muted, marginBottom: spacing.sm },
+    filterChip: {
+        flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 6, marginBottom: spacing.sm,
+        paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, backgroundColor: colors.warningBg, borderWidth: 1, borderColor: colors.warningBorder,
+    },
+    filterChipText: { fontSize: 12, fontFamily: fonts.semibold, color: colors.warningText },
 }));
