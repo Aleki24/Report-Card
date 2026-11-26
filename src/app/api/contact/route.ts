@@ -3,6 +3,8 @@ import { sendEmail } from '@/lib/email';
 import { rateLimitShared } from '@/lib/rate-limit';
 import { escapeHtml } from '@/lib/html';
 import { CONTACT_DETAILS, contactSchema } from '@/lib/contact';
+import { sendSMS } from '@/lib/sms';
+import { platformOwnerPhones } from '@/lib/school-approval';
 
 const CONTACT_INBOX = CONTACT_DETAILS.email;
 
@@ -20,7 +22,7 @@ export async function POST(request: NextRequest) {
         }
         // Typed by an anonymous visitor and placed in an HTML email, so every
         // value is escaped below.
-        const { name, email, schoolName, message } = parsed.data;
+        const { name, email, phone, schoolName, message } = parsed.data;
 
         await sendEmail({
             to: CONTACT_INBOX,
@@ -31,12 +33,19 @@ export async function POST(request: NextRequest) {
                 <h1 style="color: #1a1a2e; font-size: 20px;">New contact form submission</h1>
                 <p><strong>Name:</strong> ${escapeHtml(name)}</p>
                 <p><strong>Email:</strong> ${escapeHtml(email)}</p>
+                ${phone ? `<p><strong>Phone:</strong> ${escapeHtml(phone)}</p>` : ''}
                 ${schoolName ? `<p><strong>School:</strong> ${escapeHtml(schoolName)}</p>` : ''}
                 <p><strong>Message:</strong></p>
                 <p style="white-space: pre-wrap;">${escapeHtml(message)}</p>
               </div>
             `,
         });
+
+        // A text too, so an enquiry is seen at once. Best effort: the email is the record.
+        const excerpt = message.length > 90 ? `${message.slice(0, 90)}…` : message;
+        const sms = `Skulbase enquiry from ${name}${schoolName ? ` (${schoolName})` : ''}, ${phone || email}: "${excerpt}"`;
+        const texts = await Promise.allSettled(platformOwnerPhones().map(to => sendSMS(to, sms)));
+        for (const t of texts) if (t.status === 'rejected' || !t.value.success) console.warn('contact form SMS not sent:', t.status === 'rejected' ? t.reason : t.value.error);
 
         return NextResponse.json({ success: true });
     } catch (err: unknown) {
