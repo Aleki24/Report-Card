@@ -19,6 +19,7 @@ export default function ContactScreen() {
     const [values, setValues] = useState<Required<ContactInput>>({
         name: profile ? `${profile.first_name} ${profile.last_name}`.trim() : '',
         email: profile?.email ?? '',
+        phone: '',
         schoolName: user?.schoolName ?? '',
         message: '',
     });
@@ -70,6 +71,7 @@ export default function ContactScreen() {
                     {error ? <ErrorBanner message={error} /> : null}
                     <TextField label="Full name" value={values.name} onChangeText={set('name')} placeholder="John Kamau" autoCapitalize="words" error={errors.name} />
                     <TextField label="Email address" value={values.email} onChangeText={set('email')} placeholder="john@school.ac.ke" keyboardType="email-address" autoCapitalize="none" error={errors.email} />
+                    <TextField label="Phone (optional)" value={values.phone} onChangeText={set('phone')} placeholder="0712 345 678" keyboardType="phone-pad" error={errors.phone} />
                     <TextField label="School (optional)" value={values.schoolName} onChangeText={set('schoolName')} placeholder="Nairobi Academy" autoCapitalize="words" error={errors.schoolName} />
                     <TextField label="Message" value={values.message} onChangeText={set('message')} placeholder="Tell us about your school and what you need." multiline error={errors.message} />
                     <View style={{ marginTop: spacing.sm }}>
