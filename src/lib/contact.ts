@@ -6,7 +6,7 @@ export const contactSchema = z.object({
   email: z.string().trim().email('Enter a valid email address.').max(200),
   /** Optional: a number to call or WhatsApp back. */
   phone: z.string().trim().max(20, 'Keep the phone number under 20 characters.')
-    .refine(v => v === '' || /^\+?[\d\s()-]{9,20}$/.test(v), 'Enter a valid phone number.')
+    .refine(v => v === '' || (/^\+?[\d\s()-]+$/.test(v) && (v.match(/\d/g)?.length ?? 0) >= 9), 'Enter a valid phone number.')
     .optional().default(''),
   schoolName: z.string().trim().max(160, 'Keep the school name under 160 characters.').optional().default(''),
   message: z.string().trim().min(10, 'Tell us a little more (at least 10 characters).').max(4000, 'Keep your message under 4,000 characters.'),
