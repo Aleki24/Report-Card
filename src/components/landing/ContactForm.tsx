@@ -5,7 +5,7 @@ import { CheckCircle2, Loader2, Send } from 'lucide-react';
 import { FormField, FormGrid, InputField, TextareaField } from '@/components/ui/FormField';
 import { contactSchema, type ContactField, type ContactInput } from '@/lib/contact';
 
-const EMPTY: Required<ContactInput> = { name: '', email: '', schoolName: '', message: '' };
+const EMPTY: Required<ContactInput> = { name: '', email: '', phone: '', schoolName: '', message: '' };
 
 type Errors = Partial<Record<ContactField, string>>;
 
@@ -88,10 +88,13 @@ export function ContactForm() {
         <FormField label="Email address" htmlFor="contact-email" required error={errors.email} span="half">
           <InputField {...field('email')} type="email" autoComplete="email" placeholder="john@school.ac.ke" maxLength={200} />
         </FormField>
-        <FormField label="School name" htmlFor="contact-schoolName" error={errors.schoolName} span="full">
+        <FormField label="Phone (optional)" htmlFor="contact-phone" error={errors.phone} span="half">
+          <InputField {...field('phone')} type="tel" autoComplete="tel" inputMode="tel" placeholder="0712 345 678" maxLength={20} />
+        </FormField>
+        <FormField label="School name" htmlFor="contact-schoolName" error={errors.schoolName} span="half">
           <InputField {...field('schoolName')} autoComplete="organization" placeholder="Nairobi Academy" maxLength={160} />
         </FormField>
-        <FormField label="Message" htmlFor="contact-message" required error={errors.message} hint="Tell us about your school and what you need." span="full">
+        <FormField label="Message" htmlFor="contact-message" required error={errors.message} span="full">
           <TextareaField {...field('message')} rows={6} className="resize-y" maxLength={4000} />
         </FormField>
       </FormGrid>

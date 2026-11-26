@@ -9,6 +9,7 @@ import JoinGuideSection from '@/components/landing/JoinGuideSection';
 import RolesSection from '@/components/landing/RolesSection';
 import FaqSection from '@/components/landing/FaqSection';
 import CTASection from '@/components/landing/CTASection';
+import ContactSection from '@/components/landing/ContactSection';
 import { MarketingShell } from '@/components/landing/ui/MarketingShell';
 
 export default function Home() {
@@ -25,7 +26,7 @@ export default function Home() {
       }
     >
       {/* Order tells the buying story: promise → pain → proof → social proof → breadth →
-          ease → who it serves → objections → ask. */}
+          ease → who it serves → objections → talk to us → ask. */}
       <HeroSection />
       <ProblemSolutionSection />
       <ShowcaseSection />
@@ -35,6 +36,7 @@ export default function Home() {
       <RolesSection />
       <JoinGuideSection />
       <FaqSection />
+      <ContactSection />
       <CTASection />
     </MarketingShell>
   );
